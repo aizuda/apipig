@@ -1,0 +1,63 @@
+{
+  "name": "@tabtab/ui",
+  "version": "0.0.1",
+  "description": "ApiPig UI Component Library",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "import": "./dist/vite.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "stub": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@internationalized/date": "catalog:",
+    "@lucide/vue": "catalog:",
+    "@tabtab/utils": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/vue-table": "catalog:",
+    "@unovis/vue": "catalog:",
+    "@vee-validate/zod": "catalog:",
+    "@vueuse/core": "catalog:",
+    "class-variance-authority": "catalog:",
+    "embla-carousel": "catalog:",
+    "embla-carousel-vue": "catalog:",
+    "reka-ui": "catalog:",
+    "vaul-vue": "catalog:",
+    "vee-validate": "catalog:",
+    "vue-input-otp": "catalog:",
+    "vue-sonner": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tabtab/typescript-config": "workspace:*",
+    "@tsdown/css": "catalog:",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "unplugin-vue": "^7.1.1",
+    "vue-tsc": "catalog:"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.0.0 || ^5.0.0"
+  }
+}

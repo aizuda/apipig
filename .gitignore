@@ -1,0 +1,26 @@
+.idea/
+.vscode/
+.fleet/
+.qoder/
+.gocache/
+.nezha/
+.claude/
+.pnpm-store/
+.tmp/
+logs/
+bin/
+dist/
+upload/
+*.db
+*.exe
+latest_log
+.bin
+.DS_Store
+config.yaml
+
+# front-end
+*.local
+.cursorrules
+node_modules
+.auto-import.json
+pnpm-lock.yaml

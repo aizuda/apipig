@@ -1,0 +1,22 @@
+{
+  "name": "@tabtab/styles",
+  "version": "0.0.1",
+  "private": true,
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css": "./src/css/global.css"
+  },
+  "scripts": {
+    "build": "echo 'No build needed'"
+  },
+  "dependencies": {
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:",
+    "vue-sonner": "catalog:"
+  }
+}

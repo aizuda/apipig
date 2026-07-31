@@ -1,0 +1,15 @@
+{
+  "extends": "@tabtab/typescript-config/vue",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "composite": true,
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/env.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

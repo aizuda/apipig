@@ -1,0 +1,64 @@
+/**
+ * Layout 布局变量
+ * 定义布局组件的尺寸和间距
+ */
+
+:root {
+  /* 组件高度变量 */
+  --layout-header-height: 3.5rem;
+  --layout-header-height-compact: 3rem;
+  --layout-footer-height: 2.5rem;
+  --layout-tabs-height: 2.25rem;
+
+  /* 侧边栏宽度变量 */
+  --layout-sidebar-width: 14.5rem;
+  --layout-sidebar-width-collapsed: 4rem;
+  --layout-double-sidebar-icon-width: 4rem;
+  --layout-double-sidebar-menu-width: 16rem;
+
+  /* Sidebar collapsed state variables */
+  --sidebar-collapsed-padding: 0.375rem;
+  --sidebar-collapsed-icon-size: 1.25rem;
+  --sidebar-collapsed-button-size: 2.5rem;
+  --sidebar-indicator-width: 3px;
+
+  /* Layout spacing variables */
+  --layout-spacing-xs: 0.25rem;
+  --layout-spacing-sm: 0.5rem;
+  --layout-spacing-md: 0.75rem;
+  --layout-spacing-lg: 1rem;
+  --layout-spacing-xl: 1.5rem;
+
+  /* Glass effect variables */
+  --glass-opacity: 0.8;
+  --glass-blur: 12px;
+
+  /* Shadow effect variables */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-elevated: 0 4px 6px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
+
+  /* 渐变效果变量 */
+  --layout-gradient-primary-opacity: 3%;
+  --layout-gradient-muted-opacity: 10%;
+  --layout-gradient-height-sm: 2rem;
+  --layout-gradient-height-md: 4rem;
+  --layout-gradient-height-lg: 8rem;
+
+  /* 边框透明度 */
+  --layout-border-opacity: 30%;
+  --layout-border-gradient-opacity: 40%;
+
+  /* 毛玻璃效果 */
+  --layout-glass-bg-opacity: 80%;
+  --layout-glass-bg-fallback-opacity: 70%;
+  --layout-glass-blur: 12px;
+}
+
+[data-variant='compact'] {
+  --layout-header-height: var(--layout-header-height-compact);
+}
+
+/* Sidebar collapsed state styles */
+[data-collapsed='true'] {
+  --sidebar-collapsed-padding: 0.25rem;
+}

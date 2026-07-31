@@ -1,0 +1,72 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+*.local
+
+# Turborepo
+.turbo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.prod
+
+# Test coverage
+coverage
+*.lcov
+
+# Vite cache
+node_modules/.vite
+node_modules/.vitest
+
+# tsdown cache
+.tsdown
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Vite
+*.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# Package manager locks (pnpm uses pnpm-lock.yaml)
+# Keep pnpm-lock.yaml for reproducibility
+.trae/documents/*
+.trae/specs/*
+.trae/plans/*

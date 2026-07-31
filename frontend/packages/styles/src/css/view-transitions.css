@@ -1,0 +1,26 @@
+/**
+ * View Transitions API 样式
+ * 用于实现主题切换时的圆形扩散动画效果
+ * 
+ * 工作原理：
+ * 1. View Transitions API 创建旧页面和新页面的快照
+ * 2. 通过 clipPath 动画实现圆形扩散效果
+ * 
+ * 浏览器支持：
+ * - Chrome 111+
+ * - Edge 111+
+ * - Safari 18+
+ * - Firefox 暂不支持（会自动降级为直接切换）
+ * 
+ * @see https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API
+ */
+
+@layer utilities {
+  /* 减少动画模式 - 尊重用户的动画偏好设置 */
+  .reduce-motion,
+  .reduce-motion * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

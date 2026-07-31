@@ -1,0 +1,10 @@
+{
+  "name": "@tabtab/dev-cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@clack/prompts": "^0.10.0",
+    "glob": "^11.0.0"
+  }
+}

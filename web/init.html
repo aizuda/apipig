@@ -1,0 +1,2267 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>APIPIG 初始化向导</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --bg-soft: #ffffff;
+        --panel: rgba(255, 255, 255, 0.86);
+        --panel-strong: rgba(255, 255, 255, 0.94);
+        --line: rgba(148, 163, 184, 0.2);
+        --line-strong: rgba(95, 132, 245, 0.22);
+        --text: #0f172a;
+        --muted: #5f6f86;
+        --primary: #4f7cf7;
+        --primary-strong: #2b59cf;
+        --primary-soft: rgba(79, 124, 247, 0.12);
+        --success: #0f766e;
+        --danger: #b42318;
+        --warning: #b45309;
+        --shadow: 0 26px 54px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          "Avenir Next", "Segoe UI Variable Display", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(79, 124, 247, 0.16), transparent 34%),
+          radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 26%),
+          linear-gradient(180deg, #f7f9fd 0%, #ffffff 32%, #fbfcff 100%);
+        overflow-x: hidden;
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        z-index: 0;
+        border-radius: 50%;
+        pointer-events: none;
+        filter: blur(14px);
+      }
+
+      body::before {
+        top: -180px;
+        left: -140px;
+        width: 420px;
+        height: 420px;
+        background: radial-gradient(circle, rgba(79, 124, 247, 0.2), transparent 72%);
+      }
+
+      body::after {
+        right: -180px;
+        top: 90px;
+        width: 460px;
+        height: 460px;
+        background: radial-gradient(circle, rgba(14, 165, 233, 0.14), transparent 70%);
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1220px, calc(100% - 40px));
+        margin: 28px auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1.18fr) minmax(360px, 0.82fr);
+        gap: 24px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .left-card {
+        overflow: hidden;
+      }
+
+      .hero {
+        padding: 30px 32px 24px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58)),
+          radial-gradient(circle at top right, rgba(79, 124, 247, 0.12), transparent 35%);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid rgba(79, 124, 247, 0.18);
+        color: var(--primary-strong);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+      }
+
+      h1 {
+        margin: 20px 0 12px;
+        font-size: clamp(26px, 2.9vw, 36px);
+        line-height: 1.08;
+        letter-spacing: -0.04em;
+        color: #18306d;
+      }
+
+      .subtext {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.9;
+      }
+
+      code {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(79, 124, 247, 0.1);
+        color: var(--primary-strong);
+        font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      .facts {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .fact {
+        min-width: 0;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(79, 124, 247, 0.12);
+      }
+
+      .fact strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #18306d;
+        font-size: 13px;
+      }
+
+      .fact span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .path {
+        margin-top: 18px;
+        padding: 15px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px dashed rgba(79, 124, 247, 0.26);
+        color: #31465e;
+        font-size: 14px;
+      }
+
+      .content {
+        padding: 26px 32px 32px;
+      }
+
+      .panel-title {
+        margin: 0 0 18px;
+        font-size: 18px;
+        color: #12213f;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .full {
+        grid-column: 1 / -1;
+      }
+
+      .section-label {
+        margin: 8px 0 0;
+        padding-top: 8px;
+        border-top: 1px solid rgba(148, 163, 184, 0.12);
+        color: #17306f;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 16px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--text);
+        outline: none;
+        font: inherit;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease,
+          transform 0.2s ease;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: rgba(79, 124, 247, 0.52);
+        box-shadow: 0 0 0 4px rgba(79, 124, 247, 0.12);
+      }
+
+      input::placeholder {
+        color: #94a3b8;
+      }
+
+      .field-hint {
+        display: block;
+        margin-top: 7px;
+        color: #7a8aa3;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .password-field {
+        position: relative;
+      }
+
+      .password-field input {
+        padding-right: 84px;
+      }
+
+      .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        transform: translateY(-50%);
+        min-width: 0;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(79, 124, 247, 0.12);
+        color: var(--primary-strong);
+        box-shadow: none;
+        font-size: 12px;
+      }
+
+      .password-toggle:hover {
+        transform: translateY(-50%);
+        background: rgba(79, 124, 247, 0.18);
+      }
+
+      .switches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.74);
+      }
+
+      .switch input {
+        width: 18px;
+        height: 18px;
+        margin: 0;
+      }
+
+      .actions {
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      button,
+      .button-link {
+        border: 0;
+        border-radius: 999px;
+        padding: 13px 22px;
+        min-width: min(340px, 100%);
+        background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease,
+          opacity 0.18s ease,
+          background 0.18s ease;
+        box-shadow: 0 18px 34px rgba(43, 89, 207, 0.24);
+      }
+
+      button:hover,
+      .button-link:hover {
+        transform: translateY(-2px);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.62;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .hint {
+        display: block;
+        width: 100%;
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+        text-align: left;
+      }
+
+      .status {
+        display: none;
+        margin-top: 20px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.75;
+        white-space: pre-line;
+      }
+
+      .status.show {
+        display: block;
+      }
+
+      .status.error {
+        background: rgba(180, 35, 24, 0.06);
+        border: 1px solid rgba(180, 35, 24, 0.18);
+        color: var(--danger);
+      }
+
+      .status.success {
+        background: rgba(15, 118, 110, 0.08);
+        border: 1px solid rgba(15, 118, 110, 0.18);
+        color: var(--success);
+      }
+
+      .stack {
+        display: grid;
+        gap: 24px;
+      }
+
+      .side-card {
+        padding: 24px;
+      }
+
+      .side-card p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      pre {
+        margin: 0;
+        min-height: 300px;
+        padding: 18px;
+        border-radius: 20px;
+        background: #0f172a;
+        color: #dbeafe;
+        overflow: auto;
+        font-size: 13px;
+        line-height: 1.68;
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+      }
+
+      .tagline {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .agreement-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: rgba(180, 83, 9, 0.1);
+        color: var(--warning);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .agreement-summary {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .summary-item {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9));
+        border: 1px solid rgba(79, 124, 247, 0.12);
+      }
+
+      .summary-item strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+        color: #17306f;
+      }
+
+      .summary-item span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .agreement-scroll {
+        max-height: 360px;
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(255, 255, 255, 0.78);
+        overflow: auto;
+      }
+
+      .agreement-doc {
+        display: grid;
+        gap: 16px;
+      }
+
+      .agreement-doc section {
+        padding: 16px 16px 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+      }
+
+      .agreement-doc h3 {
+        margin: 0 0 8px;
+        color: #17306f;
+        font-size: 15px;
+      }
+
+      .agreement-doc p {
+        margin: 0;
+        color: #43536a;
+        font-size: 14px;
+        line-height: 1.85;
+      }
+
+      .agreement-tools {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .button-link.secondary {
+        min-width: 0;
+        justify-self: start;
+        background: rgba(79, 124, 247, 0.1);
+        color: var(--primary-strong);
+        box-shadow: none;
+      }
+
+      .button-link.secondary:hover {
+        background: rgba(79, 124, 247, 0.16);
+      }
+
+      .consent-box {
+        padding: 16px 18px;
+        border-radius: 20px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(255, 255, 255, 0.86);
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease,
+          background 0.2s ease;
+      }
+
+      .consent-box.ready {
+        border-color: rgba(15, 118, 110, 0.24);
+        background: rgba(240, 253, 250, 0.9);
+        box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.06);
+      }
+
+      .consent-box.blocked {
+        border-color: rgba(180, 83, 9, 0.18);
+      }
+
+      .consent-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        cursor: pointer;
+      }
+
+      .consent-check input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        flex: 0 0 auto;
+      }
+
+      .consent-check strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #12213f;
+        font-size: 14px;
+      }
+
+      .consent-check span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .agreement-hint {
+        margin-top: 10px;
+        color: var(--warning);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .agreement-hint.ready {
+        color: var(--success);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 1080px) {
+        .shell {
+          grid-template-columns: 1fr;
+          width: calc(100% - 28px);
+        }
+
+        .stack {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .hero,
+        .content,
+        .side-card {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        .facts {
+          flex-direction: column;
+        }
+
+        button,
+        .button-link {
+          min-width: 100%;
+        }
+
+        .agreement-header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+    <style>
+      :root {
+        color-scheme: light;
+        --background: #ffffff;
+        --foreground: #171717;
+        --card: #ffffff;
+        --card-foreground: #171717;
+        --primary: #475fd7;
+        --primary-hover: #3d52c2;
+        --primary-foreground: #ffffff;
+        --secondary: #f5f5f6;
+        --muted: #f5f5f6;
+        --muted-foreground: #667085;
+        --border: #e6e8ec;
+        --input: #dfe3e8;
+        --ring: rgba(71, 95, 215, 0.2);
+        --destructive: #dc2626;
+        --success-color: #059669;
+        --radius: 10px;
+        --page-background: #f7f8fa;
+        --shadow-subtle: 0 1px 2px rgba(16, 24, 40, 0.04);
+        --shadow-card: 0 12px 32px rgba(16, 24, 40, 0.07);
+        --bg: var(--page-background);
+        --bg-soft: var(--background);
+        --panel: var(--card);
+        --panel-strong: var(--card);
+        --line: var(--border);
+        --line-strong: rgba(71, 95, 215, 0.28);
+        --text: var(--foreground);
+        --primary-strong: var(--primary);
+        --primary-soft: rgba(71, 95, 215, 0.08);
+        --success: var(--success-color);
+        --danger: var(--destructive);
+        --warning: #d97706;
+        --shadow: var(--shadow-card);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --background: #17181c;
+        --foreground: #f7f7f8;
+        --card: #202126;
+        --card-foreground: #f7f7f8;
+        --primary: #8293ef;
+        --primary-hover: #91a0f5;
+        --primary-foreground: #ffffff;
+        --secondary: #292b31;
+        --muted: #292b31;
+        --muted-foreground: #a6adbb;
+        --border: rgba(255, 255, 255, 0.1);
+        --input: rgba(255, 255, 255, 0.15);
+        --ring: rgba(130, 147, 239, 0.22);
+        --destructive: #f87171;
+        --success-color: #34d399;
+        --page-background: #111216;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+        --shadow-card: 0 18px 44px rgba(0, 0, 0, 0.24);
+        --primary-soft: rgba(130, 147, 239, 0.12);
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        min-width: 320px;
+        background:
+          linear-gradient(rgba(71, 95, 215, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(71, 95, 215, 0.025) 1px, transparent 1px),
+          var(--page-background);
+        background-size: 40px 40px;
+        color: var(--foreground);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      body::before,
+      body::after {
+        display: none;
+      }
+
+      .skip-link {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 100;
+        padding: 10px 14px;
+        border-radius: var(--radius);
+        color: var(--primary-foreground);
+        background: var(--primary);
+        transform: translateY(-140%);
+        transition: transform 0.2s ease;
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .app-header {
+        position: relative;
+        z-index: 5;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--background) 88%, transparent);
+        backdrop-filter: blur(16px);
+      }
+
+      .header-inner {
+        width: min(1320px, calc(100% - 40px));
+        min-height: 68px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 40px;
+        height: 40px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius);
+        color: #fff;
+        background: linear-gradient(135deg, #475fd7, #6f82e8);
+        box-shadow: 0 8px 20px rgba(71, 95, 215, 0.24);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .brand-copy strong,
+      .brand-copy span {
+        display: block;
+      }
+
+      .brand-copy strong {
+        color: var(--foreground);
+        font-size: 15px;
+        letter-spacing: 0.02em;
+      }
+
+      .brand-copy span {
+        margin-top: 2px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .service-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--muted-foreground);
+        background: var(--background);
+        font-size: 12px;
+        box-shadow: var(--shadow-subtle);
+      }
+
+      .service-state::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+      }
+
+      .theme-toggle {
+        width: auto;
+        min-width: 84px;
+        min-height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 11px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--foreground);
+        background: var(--background);
+        box-shadow: var(--shadow-subtle);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .theme-toggle:hover {
+        color: var(--primary);
+        border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+        background: var(--secondary);
+        transform: none;
+        box-shadow: var(--shadow-subtle);
+      }
+
+      .theme-toggle svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .theme-icon-moon,
+      :root[data-theme="dark"] .theme-icon-sun {
+        display: none;
+      }
+
+      :root[data-theme="dark"] .theme-icon-moon {
+        display: block;
+      }
+
+      .progress-bar {
+        width: min(1320px, calc(100% - 40px));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 1px solid var(--border);
+      }
+
+      .progress-step {
+        position: relative;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .progress-step + .progress-step {
+        justify-content: center;
+      }
+
+      .progress-step:last-child {
+        justify-content: flex-end;
+      }
+
+      .progress-step::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        background: transparent;
+      }
+
+      .progress-step.active {
+        color: var(--primary);
+        font-weight: 700;
+      }
+
+      .progress-step.completed {
+        color: var(--primary);
+      }
+
+      .progress-step.active::after {
+        background: var(--primary);
+      }
+
+      .progress-step.completed::after {
+        background: color-mix(in srgb, var(--primary) 42%, transparent);
+      }
+
+      .step-number {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        color: var(--muted-foreground);
+        background: var(--secondary);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .progress-step.active .step-number {
+        color: var(--primary-foreground);
+        border-color: var(--primary);
+        background: var(--primary);
+      }
+
+      .progress-step.completed .step-number {
+        color: var(--primary);
+        border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+        background: var(--primary-soft);
+      }
+
+      .shell {
+        width: min(1320px, calc(100% - 40px));
+        margin: 24px auto 40px;
+        grid-template-columns: minmax(0, 1.42fr) minmax(340px, 0.78fr);
+        gap: 20px;
+        align-items: start;
+      }
+
+      .shell > *,
+      .left-card,
+      .content,
+      .stack,
+      .side-card,
+      .grid,
+      .grid > * {
+        min-width: 0;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) + 2px);
+        background: var(--card);
+        box-shadow: var(--shadow-card);
+        backdrop-filter: none;
+      }
+
+      .left-card {
+        overflow: clip;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 34px 36px 30px;
+        color: #fff;
+        border-bottom: 0;
+        background: linear-gradient(135deg, #475fd7 0%, #536cdd 52%, #7485e6 100%);
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom right, #000, transparent 82%);
+        pointer-events: none;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        top: -130px;
+        right: -80px;
+        width: 360px;
+        height: 360px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        filter: blur(12px);
+        pointer-events: none;
+      }
+
+      .hero > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      .eyebrow {
+        min-height: 28px;
+        padding: 0 11px;
+        color: rgba(255, 255, 255, 0.92);
+        border-color: rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: none;
+        backdrop-filter: blur(8px);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+
+      h1 {
+        max-width: 720px;
+        margin: 18px 0 12px;
+        color: #fff;
+        font-size: clamp(28px, 3vw, 40px);
+        line-height: 1.18;
+        letter-spacing: -0.035em;
+      }
+
+      .subtext {
+        max-width: 780px;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .hero code {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .facts {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .fact {
+        padding: 13px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.07);
+        backdrop-filter: blur(8px);
+      }
+
+      .fact strong {
+        color: #fff;
+        font-size: 12px;
+      }
+
+      .fact span {
+        color: rgba(255, 255, 255, 0.66);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .path {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: var(--radius);
+        color: rgba(255, 255, 255, 0.72);
+        background: rgba(12, 23, 76, 0.14);
+        font-size: 12px;
+      }
+
+      .path strong {
+        color: #fff;
+        overflow-wrap: anywhere;
+      }
+
+      .content {
+        padding: 30px 36px 36px;
+      }
+
+      .panel-title {
+        margin: 0 0 6px;
+        color: var(--card-foreground);
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+
+      .form-intro {
+        margin: 0 0 24px;
+        color: var(--muted-foreground);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .grid {
+        gap: 18px;
+      }
+
+      .section-label {
+        margin: 12px 0 0;
+        padding: 14px 0 2px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-top: 1px solid var(--border);
+        color: var(--foreground);
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .section-label:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      .section-label::before {
+        content: attr(data-step);
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        color: var(--primary);
+        background: var(--primary-soft);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      label {
+        margin-bottom: 7px;
+        color: var(--foreground);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      input,
+      select,
+      textarea {
+        min-height: 43px;
+        padding: 0 12px;
+        border: 1px solid var(--input);
+        border-radius: var(--radius);
+        color: var(--foreground);
+        background: var(--background);
+        box-shadow: var(--shadow-subtle);
+        font-size: 13px;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+      }
+
+      input:hover,
+      select:hover,
+      textarea:hover {
+        border-color: color-mix(in srgb, var(--primary) 28%, var(--input));
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--primary);
+        background: var(--background);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+
+      input::placeholder {
+        color: color-mix(in srgb, var(--muted-foreground) 72%, transparent);
+      }
+
+      .field-hint,
+      .hint {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .password-toggle {
+        right: 5px;
+        min-width: 48px;
+        min-height: 32px;
+        padding: 0 9px;
+        border-radius: 7px;
+        color: var(--muted-foreground);
+        background: var(--secondary);
+        font-size: 11px;
+      }
+
+      .password-toggle:hover {
+        color: var(--primary);
+        background: var(--primary-soft);
+        transform: none;
+        box-shadow: none;
+      }
+
+      .switches {
+        gap: 10px;
+      }
+
+      .switch {
+        min-height: 46px;
+        padding: 0 13px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--muted-foreground);
+        background: var(--secondary);
+        transition: border-color 0.16s ease, background 0.16s ease;
+      }
+
+      .switch:hover {
+        border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+        background: var(--primary-soft);
+      }
+
+      .switch input,
+      .consent-check input {
+        accent-color: var(--primary);
+      }
+
+      .actions {
+        margin-top: 10px;
+        padding: 18px;
+        display: grid;
+        grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+        align-items: center;
+        gap: 16px;
+        border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border));
+        border-radius: calc(var(--radius) + 2px);
+        background: linear-gradient(135deg, var(--primary-soft), transparent 72%);
+      }
+
+      #submit-btn,
+      .button-link {
+        min-height: 43px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #submit-btn {
+        color: var(--primary-foreground);
+        background: var(--primary);
+        box-shadow: 0 8px 18px rgba(71, 95, 215, 0.18);
+      }
+
+      #submit-btn:hover:not(:disabled) {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(71, 95, 215, 0.24);
+      }
+
+      #submit-btn:disabled {
+        color: var(--muted-foreground);
+        background: var(--muted);
+        box-shadow: none;
+      }
+
+      .status {
+        border-radius: var(--radius);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .status.error {
+        color: var(--destructive);
+        border-color: color-mix(in srgb, var(--destructive) 24%, var(--border));
+        background: color-mix(in srgb, var(--destructive) 7%, var(--background));
+      }
+
+      .status.success {
+        color: var(--success-color);
+        border-color: color-mix(in srgb, var(--success-color) 24%, var(--border));
+        background: color-mix(in srgb, var(--success-color) 7%, var(--background));
+      }
+
+      .stack {
+        position: sticky;
+        top: 18px;
+        gap: 16px;
+      }
+
+      .side-card {
+        padding: 22px;
+      }
+
+      .side-card p {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      pre {
+        width: 100%;
+        max-height: 280px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: #d8defb;
+        background: #161a2b;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        font-size: 11px;
+        line-height: 1.65;
+        overflow-x: auto;
+      }
+
+      .tagline {
+        border-radius: var(--radius);
+        color: var(--muted-foreground);
+        background: var(--secondary);
+        font-size: 12px;
+      }
+
+      .agreement-header {
+        align-items: flex-start;
+      }
+
+      .badge {
+        border-color: color-mix(in srgb, var(--warning) 24%, var(--border));
+        border-radius: 999px;
+        color: var(--warning);
+        background: color-mix(in srgb, var(--warning) 8%, var(--background));
+        font-size: 10px;
+      }
+
+      .agreement-summary {
+        gap: 8px;
+      }
+
+      .summary-item {
+        position: relative;
+        padding: 11px 12px 11px 36px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--secondary);
+      }
+
+      .summary-item::before {
+        content: "✓";
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 16px;
+        height: 16px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: var(--primary);
+        background: var(--primary-soft);
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .summary-item strong {
+        color: var(--foreground);
+        font-size: 11px;
+      }
+
+      .summary-item span {
+        color: var(--muted-foreground);
+        font-size: 11px;
+        line-height: 1.55;
+      }
+
+      .agreement-scroll {
+        max-height: 240px;
+        border-color: var(--border);
+        border-radius: var(--radius);
+        background: var(--background);
+        scrollbar-color: color-mix(in srgb, var(--muted-foreground) 32%, transparent) transparent;
+        scrollbar-width: thin;
+      }
+
+      .agreement-doc {
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+
+      .agreement-doc section {
+        border-bottom-color: var(--border);
+      }
+
+      .agreement-doc h3 {
+        color: var(--foreground);
+      }
+
+      .agreement-doc p {
+        color: var(--muted-foreground);
+      }
+
+      .agreement-tools {
+        gap: 10px;
+      }
+
+      .button-link.secondary {
+        border-color: var(--border);
+        color: var(--foreground);
+        background: var(--background);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      .button-link.secondary:hover {
+        color: var(--primary);
+        border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+        background: var(--primary-soft);
+      }
+
+      .consent-box {
+        border-radius: var(--radius);
+      }
+
+      .consent-box.ready {
+        border-color: color-mix(in srgb, var(--success-color) 30%, var(--border));
+        background: color-mix(in srgb, var(--success-color) 7%, var(--background));
+      }
+
+      .consent-box.blocked {
+        border-color: color-mix(in srgb, var(--warning) 26%, var(--border));
+        background: color-mix(in srgb, var(--warning) 6%, var(--background));
+      }
+
+      .consent-check {
+        align-items: flex-start;
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+
+      .consent-check strong {
+        color: var(--foreground);
+      }
+
+      .agreement-hint {
+        color: var(--warning);
+        font-size: 11px;
+      }
+
+      .agreement-hint.ready {
+        color: var(--success-color);
+      }
+
+      @media (max-width: 1080px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .stack {
+          position: static;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 760px) {
+        .header-inner,
+        .progress-bar,
+        .shell {
+          width: min(1320px, calc(100% - 24px));
+        }
+
+        .header-inner {
+          min-height: 62px;
+        }
+
+        .brand {
+          min-width: 0;
+        }
+
+        .header-actions {
+          flex: 0 0 auto;
+        }
+
+        .brand-copy span,
+        .service-state,
+        .theme-label,
+        .progress-step span:last-child {
+          display: none;
+        }
+
+        .theme-toggle {
+          min-width: 38px;
+          width: 38px;
+          padding: 0;
+        }
+
+        .progress-step {
+          min-height: 40px;
+        }
+
+        .progress-step + .progress-step {
+          justify-content: center;
+        }
+
+        .progress-step:last-child {
+          justify-content: flex-end;
+        }
+
+        .shell {
+          margin-top: 14px;
+        }
+
+        .hero,
+        .content,
+        .side-card {
+          padding: 22px;
+        }
+
+        h1 {
+          font-size: 27px;
+          overflow-wrap: anywhere;
+        }
+
+        .facts,
+        .stack,
+        .grid,
+        .actions {
+          grid-template-columns: 1fr;
+        }
+
+        .facts {
+          gap: 8px;
+        }
+
+        .actions {
+          align-items: stretch;
+        }
+
+        #submit-btn {
+          width: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#setup-form">跳到初始化表单</a>
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand" aria-label="APIPIG 初始化中心">
+          <div class="brand-mark" aria-hidden="true">AI</div>
+          <div class="brand-copy">
+            <strong>APIPIG</strong>
+            <span>初始化配置中心</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <div class="service-state">初始化服务运行中</div>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换明暗主题">
+            <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+            </svg>
+            <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"></path>
+            </svg>
+            <span id="theme-label" class="theme-label">深色模式</span>
+          </button>
+        </div>
+      </div>
+      <div class="progress-bar" aria-label="初始化步骤">
+        <div class="progress-step active"><span class="step-number">1</span><span>填写基础配置</span></div>
+        <div class="progress-step"><span class="step-number">2</span><span>阅读并确认协议</span></div>
+        <div class="progress-step"><span class="step-number">3</span><span>创建并启动系统</span></div>
+      </div>
+    </header>
+    <main class="shell">
+      <section class="card left-card">
+        <div class="hero">
+          <div class="eyebrow">首次启动 · 安全初始化模式</div>
+          <h1>欢迎使用 APIPIG，几分钟内完成系统初始化</h1>
+          <p class="subtext">
+            当前实例尚未检测到有效配置。请依次完成运行参数、数据库和管理员设置，系统会自动校验连接、
+            生成安全密钥并写入 <code>config.yaml</code> 与 <code>logger.json</code>。
+          </p>
+
+          <div class="facts">
+            <div class="fact">
+              <strong>初始化结果</strong>
+              <span>写入配置文件、建表、创建管理员账号并初始化菜单资源。</span>
+            </div>
+            <div class="fact">
+              <strong>安全策略</strong>
+              <span>JWT / AES 等密钥将在初始化时自动生成，不会直接从页面回显。</span>
+            </div>
+            <div class="fact">
+              <strong>前置要求</strong>
+              <span>请先阅读右侧协议并勾选同意，未同意前不会允许开始初始化。</span>
+            </div>
+          </div>
+
+          <div class="path">目标写入位置：<strong id="config-path">加载中...</strong></div>
+        </div>
+
+        <div class="content">
+          <h2 class="panel-title">初始化表单</h2>
+          <p class="form-intro">建议保留默认值快速体验；生产环境请使用独立数据库与高强度管理员密码。</p>
+          <form id="setup-form" class="grid">
+            <div class="full section-label" data-step="01">运行参数</div>
+
+            <div>
+              <label for="port">应用端口</label>
+              <input id="port" name="port" type="number" min="1" max="65535" value="9527" />
+            </div>
+
+            <div>
+              <label for="dbType">数据库类型</label>
+              <select id="dbType" name="dbType">
+                <option value="sqlite">SQLite</option>
+                <option value="mysql">MySQL</option>
+                <option value="postgresql">PostgreSQL</option>
+              </select>
+            </div>
+
+            <div class="full section-label" data-step="02">数据库连接</div>
+
+            <div id="sqlite-block" class="full">
+              <label for="sqlitePath">SQLite 路径 / DSN</label>
+              <input
+                id="sqlitePath"
+                name="sqlitePath"
+                type="text"
+                value="apipig.db?_busy_timeout=30000"
+              />
+              <span class="field-hint">默认会在当前目录创建数据库文件，也可以填写绝对路径或完整 DSN。</span>
+            </div>
+
+            <div id="network-db-block" class="full grid hidden">
+              <div>
+                <label for="host">数据库主机</label>
+                <input id="host" name="host" type="text" placeholder="127.0.0.1" />
+              </div>
+
+              <div>
+                <label for="databasePort">数据库端口</label>
+                <input id="databasePort" name="databasePort" type="text" />
+              </div>
+
+              <div>
+                <label for="dbName">数据库名称</label>
+                <input id="dbName" name="dbName" type="text" placeholder="apipig" />
+              </div>
+
+              <div>
+                <label for="username">数据库用户名</label>
+                <input id="username" name="username" type="text" />
+              </div>
+
+              <div class="full">
+                <label for="password">数据库密码</label>
+                <div class="password-field">
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="请输入数据库密码"
+                  />
+                  <button
+                    class="password-toggle"
+                    type="button"
+                    data-password-toggle
+                    data-target="password"
+                    aria-label="显示数据库密码"
+                  >
+                    查看
+                  </button>
+                </div>
+              </div>
+
+              <div class="full">
+                <label for="dbConfig">数据库高级参数</label>
+                <input id="dbConfig" name="dbConfig" type="text" />
+              </div>
+            </div>
+
+            <div>
+              <label for="maxIdleConns">最大空闲连接</label>
+              <input id="maxIdleConns" name="maxIdleConns" type="number" min="1" value="10" />
+            </div>
+
+            <div>
+              <label for="maxOpenConns">最大打开连接</label>
+              <input id="maxOpenConns" name="maxOpenConns" type="number" min="1" value="100" />
+            </div>
+
+            <div>
+              <label for="logMode">Gorm 日志级别</label>
+              <select id="logMode" name="logMode">
+                <option value="silent">silent</option>
+                <option value="error" selected>error</option>
+                <option value="warn">warn</option>
+                <option value="info">info</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="allowOrigins">允许跨域</label>
+              <input id="allowOrigins" name="allowOrigins" type="text" value="*" />
+            </div>
+
+            <div class="full section-label" data-step="03">管理员配置</div>
+
+            <div>
+              <label for="adminUsername">管理员账号</label>
+              <input
+                id="adminUsername"
+                name="adminUsername"
+                type="text"
+                autocomplete="username"
+                value="admin"
+              />
+            </div>
+
+            <div>
+              <label for="adminPassword">管理员密码</label>
+              <div class="password-field">
+                <input
+                  id="adminPassword"
+                  name="adminPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="请输入管理员密码"
+                />
+                <button
+                  class="password-toggle"
+                  type="button"
+                  data-password-toggle
+                  data-target="adminPassword"
+                  aria-label="显示管理员密码"
+                >
+                  查看
+                </button>
+              </div>
+            </div>
+
+            <div class="full section-label" data-step="04">功能开关</div>
+
+            <div class="full">
+              <label>启动开关</label>
+              <div class="switches">
+                <label class="switch">
+                  <input id="enableSwagger" name="enableSwagger" type="checkbox" />
+                  <span>启用 Swagger</span>
+                </label>
+                <label class="switch">
+                  <input id="printRoute" name="printRoute" type="checkbox" />
+                  <span>打印路由日志</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="full actions">
+              <button id="submit-btn" type="submit" disabled>请先同意协议</button>
+              <span class="hint">
+                初始化会先校验数据库连接，再执行建表、管理员写入和菜单资源初始化。右侧勾选协议后按钮才会解锁。
+              </span>
+            </div>
+          </form>
+
+          <div id="status" class="status" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <aside class="stack">
+        <section class="card side-card">
+          <h2 class="panel-title">config.yaml 预览</h2>
+          <p>预览会跟随表单实时更新。真正写入文件时，安全密钥会替换为自动生成的实际值。</p>
+          <pre id="preview-content">正在加载默认配置...</pre>
+          <div class="tagline">初始化成功后请重启程序，再访问 <code>/</code> 进入正式首页。</div>
+        </section>
+
+        <section id="agreement-card" class="card side-card">
+          <div class="agreement-header">
+            <div>
+              <h2 class="panel-title">初始化前请先阅读协议</h2>
+              <p>请认真阅读以下软件使用协议内容。</p>
+            </div>
+            <span class="badge">必读协议</span>
+          </div>
+
+          <div class="agreement-summary">
+            <div class="summary-item">
+              <strong>仅限企业内部使用</strong>
+              <span>该系统用于企业内部大模型 API 治理、权限控制、调用审计、密钥与用量管理。</span>
+            </div>
+            <div class="summary-item">
+              <strong>禁止对外开放 AI 服务</strong>
+              <span>不得对外商用、二次分发、转租转授权或向第三方提供 API 服务。</span>
+            </div>
+            <div class="summary-item">
+              <strong>违规责任由使用方承担</strong>
+              <span>若违反约定对外提供服务或未按监管要求合规运营，相关风险与责任由使用方自行承担。</span>
+            </div>
+          </div>
+
+          <div class="agreement-scroll">
+            <article class="agreement-doc">
+              <section>
+                <h3>1. 软件用途说明</h3>
+                <p>
+                  本软件为<strong>企业内部私有化部署工具</strong>，核心用途仅为<strong>解决企业内部 AI
+                  大模型 API 治理、接口权限管控、调用审计、密钥及用量管理</strong>，仅限企业内部业务使用。
+                </p>
+              </section>
+
+              <section>
+                <h3>2. 使用严格限制</h3>
+                <p>
+                  本软件<strong>严禁用于向外部第三方、社会公众开放或提供大模型 AI
+                  服务</strong>，禁止对外商用、二次分发、转租转授权、对外提供 API 服务等行为。
+                </p>
+              </section>
+
+              <section>
+                <h3>3. 违规责任自担</h3>
+                <p>
+                  若使用方违反约定擅自将本软件对外提供 AI 服务、违规运营、未按监管要求备案及合规运营，
+                  由此产生的全部合规风险、行政处罚、民事赔偿、法律责任均由<strong>使用方自行全额承担</strong>，
+                  与软件开发商无关。
+                </p>
+              </section>
+
+              <section>
+                <h3>4. 无过错不追责</h3>
+                <p>
+                  我方仅提供标准工具软件，已尽软件开发商合理注意义务；<strong>无合谋、无协助违规、无明知放任他人违规使用的情形</strong>，
+                  不构成共同违法、帮助违法或连带法律责任。
+                </p>
+              </section>
+
+              <section>
+                <h3>5. 使用确认</h3>
+                <p>
+                  安装、部署及使用本软件，即表示已完整阅读、充分理解并自愿同意本免责申明全部条款。
+                </p>
+              </section>
+            </article>
+          </div>
+
+          <div class="agreement-tools">
+            <a
+              id="download-agreement"
+              class="button-link secondary"
+              href="#"
+              download="大模型AI管理平台-合规免责申明.txt"
+            >
+              下载免责申明
+            </a>
+
+            <div id="consent-box" class="consent-box blocked">
+              <label class="consent-check" for="agreementAccepted">
+                <input id="agreementAccepted" name="agreementAccepted" type="checkbox" />
+                <span>
+                  <strong>我已完整阅读并同意上述《合规免责申明》</strong>
+                  勾选后才允许写入配置并执行初始化。该确认用于显式阻断未阅读协议时的误操作。
+                </span>
+              </label>
+              <div id="agreement-hint" class="agreement-hint">
+                请先勾选同意协议，然后才能开始初始化。
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <script>
+      const form = document.getElementById("setup-form");
+      const preview = document.getElementById("preview-content");
+      const statusBox = document.getElementById("status");
+      const submitBtn = document.getElementById("submit-btn");
+      const configPath = document.getElementById("config-path");
+      const sqliteBlock = document.getElementById("sqlite-block");
+      const networkDbBlock = document.getElementById("network-db-block");
+      const agreementCheckbox = document.getElementById("agreementAccepted");
+      const consentBox = document.getElementById("consent-box");
+      const agreementHint = document.getElementById("agreement-hint");
+      const downloadAgreement = document.getElementById("download-agreement");
+      const themeToggle = document.getElementById("theme-toggle");
+      const themeLabel = document.getElementById("theme-label");
+      const progressSteps = Array.from(document.querySelectorAll(".progress-step"));
+
+      let setupVersion = "1.0.0";
+      let restartPolling = false;
+      let submitPhase = "idle";
+
+      const agreementPlainText = [
+        "大模型AI管理平台 — 合规免责申明",
+        "",
+        "1. 软件用途说明",
+        "本软件为企业内部私有化部署工具，核心用途仅为解决企业内部AI大模型API治理、接口权限管控、调用审计、密钥及用量管理，仅限企业内部业务使用。",
+        "",
+        "2. 使用严格限制",
+        "本软件严禁用于向外部第三方、社会公众开放或提供大模型AI服务，禁止对外商用、二次分发、转租转授权、对外提供API服务等行为。",
+        "",
+        "3. 违规责任自担",
+        "若使用方违反约定擅自将本软件对外提供AI服务、违规运营、未按监管要求备案及合规运营，由此产生的全部合规风险、行政处罚、民事赔偿、法律责任均由使用方自行全额承担，与软件开发商无关。",
+        "",
+        "4. 无过错不追责",
+        "我方仅提供标准工具软件，已尽软件开发商合理注意义务；无合谋、无协助违规、无明知放任他人违规使用的情形，不构成共同违法、帮助违法或连带法律责任。",
+        "",
+        "5. 使用确认",
+        "安装、部署及使用本软件，即表示已完整阅读、充分理解并自愿同意本免责申明全部条款。"
+      ].join("\n");
+
+      const dbDefaults = {
+        sqlite: { databasePort: "", dbConfig: "", username: "" },
+        mysql: {
+          databasePort: "3306",
+          dbConfig: "charset=utf8mb4&parseTime=True&loc=Local",
+          username: "root"
+        },
+        postgresql: {
+          databasePort: "5432",
+          dbConfig: "sslmode=disable TimeZone=Asia/Shanghai",
+          username: "postgres"
+        }
+      };
+
+      function normalizeThemeMode(value) {
+        return String(value || "system").replace(/^"|"$/g, "");
+      }
+
+      function applyTheme(mode) {
+        const normalized = normalizeThemeMode(mode);
+        const resolved = normalized === "system"
+          ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+          : normalized;
+        document.documentElement.dataset.theme = resolved === "dark" ? "dark" : "light";
+        themeLabel.textContent = resolved === "dark" ? "浅色模式" : "深色模式";
+        themeToggle.setAttribute("aria-pressed", resolved === "dark" ? "true" : "false");
+      }
+
+      function initTheme() {
+        applyTheme(localStorage.getItem("theme-mode") || "system");
+        themeToggle.addEventListener("click", () => {
+          const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+          localStorage.setItem("theme-mode", nextTheme);
+          applyTheme(nextTheme);
+        });
+      }
+
+      function setStatus(message, type) {
+        statusBox.textContent = message;
+        statusBox.className = "status show " + type;
+      }
+
+      function clearStatus() {
+        statusBox.className = "status";
+        statusBox.textContent = "";
+      }
+
+      function updateSubmitState() {
+        const agreed = agreementCheckbox.checked;
+        const disabled = submitPhase !== "idle" || !agreed;
+        submitBtn.disabled = disabled;
+
+        if (submitPhase === "submitting") {
+          submitBtn.textContent = "初始化中...";
+        } else if (submitPhase === "restarting") {
+          submitBtn.textContent = "等待服务重启...";
+        } else if (submitPhase === "complete") {
+          submitBtn.textContent = "初始化已完成";
+        } else {
+          submitBtn.textContent = agreed ? "开始初始化" : "请先同意协议";
+        }
+
+        const currentStep = submitPhase === "submitting" || submitPhase === "restarting" || submitPhase === "complete"
+          ? 3
+          : (agreed ? 2 : 1);
+        progressSteps.forEach((step, index) => {
+          const stepNumber = index + 1;
+          step.classList.toggle("active", stepNumber === currentStep);
+          step.classList.toggle("completed", stepNumber < currentStep);
+        });
+
+        consentBox.classList.toggle("ready", agreed);
+        consentBox.classList.toggle("blocked", !agreed);
+        agreementHint.classList.toggle("ready", agreed);
+        agreementHint.textContent = agreed
+          ? "协议已确认，可以开始初始化。"
+          : "请先勾选同意协议，然后才能开始初始化。";
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      function buildProbeURL(targetURL) {
+        const probeURL = new URL(targetURL, window.location.href);
+        probeURL.searchParams.set("init_probe", Date.now());
+        return probeURL;
+      }
+
+      async function probeRestartTarget(targetURL) {
+        const probeURL = buildProbeURL(targetURL);
+        const isCrossOrigin = probeURL.origin !== window.location.origin;
+
+        if (isCrossOrigin) {
+          await fetch(probeURL.toString(), {
+            method: "GET",
+            mode: "no-cors",
+            cache: "no-store"
+          });
+          return true;
+        }
+
+        const response = await fetch(probeURL.toString(), {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache"
+          }
+        });
+
+        if (!response.ok) {
+          return false;
+        }
+
+        const text = await response.text();
+        return !text.includes('id="setup-form"');
+      }
+
+      async function waitForServerRestart(redirectPath = "/", timeoutMs = 120000) {
+        if (restartPolling) return;
+        restartPolling = true;
+        submitPhase = "restarting";
+        updateSubmitState();
+
+        const startedAt = Date.now();
+
+        while (Date.now() - startedAt < timeoutMs) {
+          try {
+            if (await probeRestartTarget(redirectPath)) {
+              window.location.replace(redirectPath);
+              return;
+            }
+          } catch (error) {
+            // service may be shutting down or restarting
+          }
+
+          await sleep(1500);
+        }
+
+        restartPolling = false;
+        submitPhase = "complete";
+        updateSubmitState();
+        setStatus(
+          `配置已写入，但未在预期时间内检测到服务自动恢复。请确认后台已重启后访问 ${redirectPath}。`,
+          "success"
+        );
+      }
+
+      function readState() {
+        return {
+          version: setupVersion,
+          port: Number(document.getElementById("port").value || 0),
+          dbType: document.getElementById("dbType").value,
+          sqlitePath: document.getElementById("sqlitePath").value.trim(),
+          host: document.getElementById("host").value.trim(),
+          databasePort: document.getElementById("databasePort").value.trim(),
+          dbName: document.getElementById("dbName").value.trim(),
+          username: document.getElementById("username").value.trim(),
+          password: document.getElementById("password").value,
+          dbConfig: document.getElementById("dbConfig").value.trim(),
+          adminUsername: document.getElementById("adminUsername").value.trim(),
+          adminPassword: document.getElementById("adminPassword").value,
+          maxIdleConns: Number(document.getElementById("maxIdleConns").value || 0),
+          maxOpenConns: Number(document.getElementById("maxOpenConns").value || 0),
+          logMode: document.getElementById("logMode").value,
+          enableSwagger: document.getElementById("enableSwagger").checked,
+          printRoute: document.getElementById("printRoute").checked,
+          allowOrigins: document.getElementById("allowOrigins").value.trim()
+        };
+      }
+
+      function applyState(state) {
+        if (state.version) {
+          setupVersion = state.version;
+        }
+
+        Object.keys(state).forEach((key) => {
+          const element = document.getElementById(key);
+          if (!element) return;
+
+          if (element.type === "checkbox") {
+            element.checked = Boolean(state[key]);
+            return;
+          }
+
+          element.value = state[key] ?? "";
+        });
+
+        syncDBFields(false);
+        renderPreview();
+      }
+
+      function syncDBFields(applyDefaults = true) {
+        const dbType = document.getElementById("dbType").value;
+        const isSQLite = dbType === "sqlite";
+        sqliteBlock.classList.toggle("hidden", !isSQLite);
+        networkDbBlock.classList.toggle("hidden", isSQLite);
+
+        if (!applyDefaults) return;
+
+        const defaults = dbDefaults[dbType];
+        if (!defaults) return;
+
+        document.getElementById("databasePort").value = defaults.databasePort;
+        document.getElementById("dbConfig").value = defaults.dbConfig;
+        document.getElementById("username").value = defaults.username;
+      }
+
+      function previewDatabase(state) {
+        if (state.dbType === "sqlite") {
+          return `database:\n  sqlite-path: ${state.sqlitePath || "apipig.db?_busy_timeout=30000"}\n  max-idle-conns: ${state.maxIdleConns || 10}\n  max-open-conns: ${state.maxOpenConns || 100}\n  log-mode: ${state.logMode || "error"}`;
+        }
+
+        return `database:\n  host: ${state.host || "127.0.0.1"}\n  port: ${state.databasePort || (state.dbType === "mysql" ? "3306" : "5432")}\n  db-name: ${state.dbName || "apipig"}\n  username: ${state.username || (state.dbType === "mysql" ? "root" : "postgres")}\n  password: ${state.password ? "\"******\"" : "\"\""}\n  config: ${state.dbConfig || (state.dbType === "mysql" ? "charset=utf8mb4&parseTime=True&loc=Local" : "sslmode=disable TimeZone=Asia/Shanghai")}\n  max-idle-conns: ${state.maxIdleConns || 10}\n  max-open-conns: ${state.maxOpenConns || 100}\n  log-mode: ${state.logMode || "error"}`;
+      }
+
+      function renderPreview() {
+        const state = readState();
+        const yaml = [
+          `version: ${state.version || "1.0.0"}`,
+          "system:",
+          `  port: ${state.port || 9527}`,
+          `  db-type: ${state.dbType || "sqlite"}`,
+          "  context-path: \"\"",
+          `  print-route: ${state.printRoute ? "true" : "false"}`,
+          `  enable-swagger: ${state.enableSwagger ? "true" : "false"}`,
+          `  allow-origins: ${state.allowOrigins || "*"}`,
+          "jwt:",
+          "  signing-key: <auto-generated>",
+          "  expires-time: 30",
+          "  private-key: |",
+          "    <auto-generated-rsa-private-key>",
+          "  public-key: |",
+          "    <auto-generated-rsa-public-key>",
+          previewDatabase(state)
+        ].join("\n");
+
+        preview.textContent = yaml;
+      }
+
+      function initAgreementDownload() {
+        const blob = new Blob([agreementPlainText], { type: "text/plain;charset=utf-8" });
+        downloadAgreement.href = URL.createObjectURL(blob);
+      }
+
+      function bindPasswordToggles() {
+        document.querySelectorAll("[data-password-toggle]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const targetId = button.getAttribute("data-target");
+            const input = document.getElementById(targetId);
+            if (!input) return;
+
+            const isHidden = input.type === "password";
+            input.type = isHidden ? "text" : "password";
+            button.textContent = isHidden ? "隐藏" : "查看";
+            button.setAttribute("aria-label", `${isHidden ? "隐藏" : "显示"}${input.name}密码`);
+          });
+        });
+      }
+
+      function validateLoginPassword(password) {
+        if (!password || password.length < 6) {
+          return "登录密码至少需要 6 位";
+        }
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasDigit = /\d/.test(password);
+        const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+        const types = [hasLetter, hasDigit, hasSpecial].filter(Boolean).length;
+        if (types < 2) {
+          return "登录密码必须包含字母、数字、特殊字符中的至少两种";
+        }
+        return "";
+      }
+      async function loadMeta() {
+        try {
+          const response = await fetch("/api/init/meta");
+          const result = await response.json();
+
+          if (result.code !== "1") {
+            throw new Error(result.msg || "加载初始化信息失败");
+          }
+
+          configPath.textContent = result.data.configPath;
+          applyState(result.data.defaults || {});
+        } catch (error) {
+          setStatus(error.message || "加载初始化页面失败", "error");
+        }
+      }
+
+      form.addEventListener("input", renderPreview);
+      form.addEventListener("change", (event) => {
+        if (event.target && event.target.id === "dbType") {
+          syncDBFields(true);
+        }
+        renderPreview();
+      });
+
+      agreementCheckbox.addEventListener("change", updateSubmitState);
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        if (!agreementCheckbox.checked) {
+          setStatus("请先阅读并同意《合规免责申明》后再执行初始化。", "error");
+          updateSubmitState();
+          return;
+        }
+
+
+        const adminPassword = document.getElementById("adminPassword").value;
+        const passwordError = validateLoginPassword(adminPassword);
+        if (passwordError) {
+          setStatus(passwordError, "error");
+          updateSubmitState();
+          return;
+        }
+        clearStatus();
+        submitPhase = "submitting";
+        updateSubmitState();
+
+        try {
+          const response = await fetch("/api/init/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(readState())
+          });
+          const result = await response.json();
+
+          if (result.code !== "1") {
+            throw new Error(result.msg || "初始化失败");
+          }
+
+          const data = result.data || {};
+          const redirectPath = data.redirectPath || "/";
+          const adminName = readState().adminUsername || "admin";
+          const restartError = data.restartError ? `\n自动重启失败：${data.restartError}` : "";
+
+          if (data.autoRestart) {
+            setStatus(
+              `${result.msg}\n写入路径：${data.configPath}\n管理员账号：${adminName}\n后台正在重启并重新加载配置，服务恢复后将自动跳转到 ${redirectPath}${restartError}`,
+              "success"
+            );
+            await waitForServerRestart(redirectPath);
+            return;
+          }
+
+          submitPhase = "complete";
+          updateSubmitState();
+          setStatus(
+            `${result.msg}\n写入路径：${data.configPath}\n管理员账号：${adminName}\n请手动重启后台程序后访问 ${redirectPath}${restartError}`,
+            "success"
+          );
+        } catch (error) {
+          submitPhase = "idle";
+          updateSubmitState();
+          setStatus(error.message || "初始化失败", "error");
+        }
+      });
+
+      syncDBFields(false);
+      initTheme();
+      renderPreview();
+      initAgreementDownload();
+      bindPasswordToggles();
+      updateSubmitState();
+      loadMeta();
+    </script>
+  </body>
+</html>

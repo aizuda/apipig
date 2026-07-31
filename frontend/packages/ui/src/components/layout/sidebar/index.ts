@@ -1,0 +1,13 @@
+export { default as LayoutSidebarUserAvatar } from './LayoutSidebarUserAvatar.vue'
+export { default as LayoutSidebarLogo } from './LayoutSidebarLogo.vue'
+export { default as LayoutSidebarFooter } from './LayoutSidebarFooter.vue'
+export { default as LayoutSidebarApp } from './LayoutSidebarApp.vue'
+export { default as LayoutSidebarDesktop } from './LayoutSidebarDesktop.vue'
+export { default as LayoutSidebarMobile } from './LayoutSidebarMobile.vue'
+export { default as LayoutSidebarItem } from './LayoutSidebarItem.vue'
+export { default as LayoutSidebarSubMenu } from './LayoutSidebarSubMenu.vue'
+export { default as LayoutSidebarMenuItemRecursive } from './LayoutSidebarMenuItemRecursive.vue'
+export { defaultSidebarConfig, type SidebarConfig, type LayoutSidebarMenuItem } from './config'
+
+export { default as SidebarResizable } from './LayoutSidebarDesktop.vue'
+export { default as LayoutSidebarMenuItemComponent } from './LayoutSidebarItem.vue'

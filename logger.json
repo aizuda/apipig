@@ -1,0 +1,12 @@
+{
+  "level": "error",
+  "encoding": "json",
+  "outputPaths": ["stdout", "./logs/apipig.log"],
+  "encoderConfig": {
+    "messageKey": "message",
+    "levelKey": "level",
+    "timeKey": "time",
+    "levelEncoder": "lowercase",
+    "timeEncoder": "iso8601"
+  }
+}

@@ -1,0 +1,6887 @@
+definitions:
+  model.AlertRule:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      deviceId:
+        description: 设备ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      level:
+        description: 告警级别
+        type: string
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 产品ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      rule:
+        description: 触发条件规则
+        type: string
+      silenceTime:
+        description: 静默时间（单位/秒）
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      trigger:
+        description: 触发方式 1、设备数据触发 2、设备事件触发 3、设备状态触发
+        type: integer
+      type:
+        description: 类型 1、设备告警 2、系统告警
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Certificate:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      privateKey:
+        description: 证书私钥
+        type: string
+      publicKey:
+        description: 证书公钥
+        type: string
+      remark:
+        description: 备注
+        type: string
+      standard:
+        description: 证书标准
+        type: string
+      status:
+        description: 状态 1，正常 2，禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Configure:
+    properties:
+      category:
+        description: 分类
+        type: string
+      content:
+        description: 内容
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      keyword:
+        description: 关键字
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      title:
+        description: 标题
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.DataRelay:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      dataResourceId:
+        description: 数据资源 ID
+        type: string
+      freezeTime:
+        description: 冻结时间
+        type: integer
+      functionType:
+        description: 功能类型，多个英文逗号分割
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      status:
+        description: 状态 1、正常 2、禁用 3、冻结
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.DataResource:
+    properties:
+      content:
+        description: 资源内容
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      health:
+        description: 健康情况 1，验证成功 2，验证失败
+        type: integer
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      type:
+        description: 资源类型
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Department:
+    properties:
+      code:
+        description: 编码
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      headId:
+        description: 主管ID
+        type: string
+      headName:
+        description: 主管名称
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      pid:
+        description: 父ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Device:
+    properties:
+      activeTime:
+        description: 激活时间
+        type: integer
+      address:
+        description: 所在地址
+        type: string
+      clientId:
+        description: 客户端 ID
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      firmwareVersion:
+        description: 固件版本号
+        type: integer
+      groupId:
+        description: 设备分组 ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      ip:
+        description: 接入IP
+        type: string
+      latitude:
+        description: 维度
+        type: string
+      longitude:
+        description: 经度
+        type: string
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      onlineTime:
+        description: 最近在线时间
+        type: integer
+      pgId:
+        description: 协议网关 ID
+        type: string
+      pics:
+        description: 图片
+        type: string
+      pid:
+        description: 父级设备 ID
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      secretKey:
+        description: 密钥
+        type: string
+      signal:
+        description: 信号强度
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，未知 2，在线 3，离线 4，未激活 5，禁用
+        type: integer
+      storage:
+        description: 已发起存储 1，否 2，是
+        type: integer
+      tag:
+        description: 标签
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.DeviceGroup:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      latitude:
+        description: 维度
+        type: string
+      longitude:
+        description: 经度
+        type: string
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，正常 2，禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Dict:
+    properties:
+      code:
+        description: 编码
+        type: string
+      content:
+        description: 内容
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Firmware:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      fileSize:
+        description: 文件大小，单位 MB
+        type: integer
+      fileType:
+        description: 文件类型
+        type: string
+      fileUrl:
+        description: 文件地址
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+      version:
+        description: 版本号
+        type: integer
+    type: object
+  model.MessageChannel:
+    properties:
+      content:
+        description: 配置参数 json
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      type:
+        description: 类型 1，短信 2，邮件 3，钉钉 2，企业微信 3，飞书
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.MessageTemplate:
+    properties:
+      channelId:
+        description: 消息通道ID
+        type: string
+      content:
+        description: 模板内容
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ModelEvent:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      eventType:
+        description: 事件类型 1，信息 2，警告 3，故障
+        type: integer
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      outputParams:
+        description: 输出参数
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ModelProperty:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      dataSpec:
+        description: 数据定义 json
+        type: string
+      dataType:
+        description: 数据类型 int（整数型）float（浮点型）enum（枚举）bool（布尔）struct（结构体）date（日期）array（数组）text（字符串）
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+      type:
+        description: 读写类型 1，读 2，读写
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ModelService:
+    properties:
+      callType:
+        description: 调用方式 1，同步 2，异步
+        type: integer
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      inputParams:
+        description: 输入参数
+        type: string
+      name:
+        description: 名称
+        type: string
+      outputParams:
+        description: 输出参数
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.NoticeConfigure:
+    properties:
+      configure:
+        description: 配置
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      template:
+        description: 模板
+        type: string
+      type:
+        description: 类型 mail 邮件  qyWx 企业微信 dingDing 钉钉
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.NoticeGroup:
+    properties:
+      addressee:
+        description: 收件人
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      noticeConfigureId:
+        description: 通知配置ID
+        type: string
+      noticeConfigureType:
+        description: 通知配置类型
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Product:
+    properties:
+      accessToken:
+        description: 访问票据
+        type: string
+      authMethod:
+        description: 认证方式 1，证书 2，Basic 3，AccessToken
+        type: integer
+      authPassword:
+        description: 认证密码
+        type: string
+      authUsername:
+        description: 认证用户名
+        type: string
+      categoryId:
+        description: 产品分类 ID
+        type: string
+      certificateId:
+        description: 证书ID
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      dataFormat:
+        description: 数据格式 1，透传/自定义 2，JSON
+        type: integer
+      factory:
+        description: 工厂
+        type: string
+      freeze:
+        description: 产生数据冻结 1，否 2，是
+        type: integer
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      network:
+        description: 网络类型
+        type: string
+      nodeType:
+        description: 节点类型 1，直接设备 2，网关设备 3，网关子设备
+        type: integer
+      num:
+        description: 编号
+        type: string
+      pics:
+        description: 图片
+        type: string
+      platform:
+        description: 云平台
+        type: string
+      protocol:
+        description: 接入协议
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，未发布 2，已发布
+        type: integer
+      storageType:
+        description: 存储类型 1，列存储 2，行存储
+        type: integer
+      tag:
+        description: 标签
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ProductCategory:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      tag:
+        description: 标识
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ProtocolGateway:
+    properties:
+      config:
+        description: 网关配置
+        type: integer
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      document:
+        description: 说明文档
+        type: string
+      icon:
+        description: 图标
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      protocol:
+        description: 协议
+        type: string
+      remark:
+        description: 描述
+        type: string
+      secretKey:
+        description: 密钥
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，正常 2，禁用 3，在线 4，离线
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+      version:
+        description: 版本
+        type: string
+    type: object
+  model.Resource:
+    properties:
+      alias:
+        description: 别名
+        type: string
+      code:
+        description: 编码
+        type: string
+      color:
+        description: 颜色
+        type: string
+      component:
+        description: 视图
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      hidden:
+        description: 隐藏菜单
+        type: boolean
+      icon:
+        description: 图标
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      keepAlive:
+        description: 保留查询参数
+        type: boolean
+      parentRoute:
+        description: 上级路由
+        type: string
+      path:
+        description: 文件路径
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      query:
+        description: 查询携带参数
+        type: string
+      redirect:
+        description: 重定向
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      title:
+        description: 名称
+        type: string
+      type:
+        description: 类型 1，菜单 2，iframe 3，外链 4，按钮
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.ResourceApi:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      method:
+        description: 请求方法 get post 等
+        type: string
+      resource_id:
+        description: 资源 ID
+        type: string
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+      url:
+        description: 接口地址
+        type: string
+    type: object
+  model.Role:
+    properties:
+      alias:
+        description: 别名
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.RuleEngine:
+    properties:
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      dataResourceId:
+        description: 数据资源ID
+        type: string
+      dataResourceType:
+        description: 数据资源类型
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      rule:
+        description: 规则
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.Scene:
+    properties:
+      actions:
+        description: 执行动作
+        type: string
+      conditions:
+        description: 触发条件
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      jobId:
+        description: 执行任务ID
+        type: integer
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+    type: object
+  model.User:
+    properties:
+      avatar:
+        description: 用户头像
+        type: string
+      createdAt:
+        description: 创建时间
+        type: integer
+      createdBy:
+        description: 创建人
+        type: string
+      createdId:
+        description: 创建人ID
+        type: string
+      email:
+        description: 邮箱
+        type: string
+      emailVerified:
+        description: 邮箱是否验证 1、否 2、是
+        type: integer
+      id:
+        description: 主键ID
+        type: string
+      jobNum:
+        description: 工号
+        type: string
+      loginTime:
+        description: 最后登录时间
+        type: integer
+      nickName:
+        description: 昵称
+        type: string
+      phone:
+        description: 手机号
+        type: string
+      phoneVerified:
+        description: 手机号是否验证 1、否 2、是
+        type: integer
+      pwdTime:
+        description: 修改密码时间
+        type: integer
+      realName:
+        description: 真实名称
+        type: string
+      sex:
+        description: 性别 1、男 2、女
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      updatedAt:
+        description: 更新时间
+        type: integer
+      updatedBy:
+        description: 更新人
+        type: string
+      username:
+        description: 账号
+        type: string
+    type: object
+  request.AlertMessagePageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.AlertMessageProcessParams:
+    properties:
+      id:
+        description: 主键ID
+        type: string
+      processResult:
+        description: 处理结果
+        type: string
+    required:
+    - id
+    - processResult
+    type: object
+  request.AlertRuleCreateParams:
+    properties:
+      id:
+        description: 主键ID
+        type: string
+      level:
+        description: 告警级别
+        type: string
+      name:
+        description: 名称
+        type: string
+      noticeGroupIds:
+        description: 通知组ID集合
+        items:
+          type: integer
+        type: array
+      remark:
+        description: 备注
+        type: string
+      rule:
+        description: 规则
+        type: string
+      silenceTime:
+        description: 静默时间（单位/秒）
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      type:
+        description: 类型 1、设备告警 2、系统告警
+        type: integer
+    required:
+    - level
+    - name
+    - noticeGroupIds
+    - rule
+    - type
+    type: object
+  request.AlertRulePageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productId:
+        description: 所属产品 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.AssignDepartmentsParams:
+    properties:
+      departmentIds:
+        description: 部门ID列表
+        items:
+          type: string
+        type: array
+      userIds:
+        description: 用户ID列表
+        items:
+          type: string
+        type: array
+    required:
+    - departmentIds
+    - userIds
+    type: object
+  request.AssignRolesParams:
+    properties:
+      roleIds:
+        description: 角色ID列表
+        items:
+          type: string
+        type: array
+      userIds:
+        description: 用户ID列表
+        items:
+          type: string
+        type: array
+    required:
+    - roleIds
+    - userIds
+    type: object
+  request.CertificateCreateParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      privateKey:
+        description: 证书私钥
+        type: string
+      publicKey:
+        description: 证书公钥
+        type: string
+      remark:
+        description: 备注
+        type: string
+      standard:
+        description: 证书标准
+        type: string
+      status:
+        description: 状态 1，正常 2，禁用
+        type: integer
+    required:
+    - name
+    - standard
+    type: object
+  request.CertificatePageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.CertificateParams:
+    properties:
+      name:
+        type: string
+    type: object
+  request.ConfigureCreateParams:
+    properties:
+      category:
+        description: 分类
+        type: string
+      content:
+        description: 内容
+        type: string
+      keyword:
+        description: 关键字
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      title:
+        description: 标题
+        type: string
+    type: object
+  request.ConfigurePageParams:
+    properties:
+      category:
+        description: 分类
+        type: string
+      keyword:
+        description: 关键字
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      title:
+        description: 标题
+        type: string
+    type: object
+  request.DataRelayCreateParams:
+    properties:
+      dataResourceId:
+        description: 数据资源ID
+        type: string
+      functionType:
+        description: 功能类型，多个英文逗号分割
+        type: string
+      productId:
+        description: 产品ID
+        type: string
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    required:
+    - dataResourceId
+    - functionType
+    - productId
+    - status
+    type: object
+  request.DataRelayPageParams:
+    properties:
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productName:
+        description: 产品名称
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.DataResourceByTypeParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      type:
+        description: 资源类型 http mqtt tcp
+        type: string
+    required:
+    - type
+    type: object
+  request.DataResourceCreateParams:
+    properties:
+      content:
+        description: 资源内容
+        type: string
+      health:
+        description: 健康情况 1，验证成功 2，验证失败
+        type: integer
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      type:
+        description: 资源类型 http mqtt tcp
+        type: string
+    required:
+    - content
+    - name
+    - type
+    type: object
+  request.DataResourcePageParams:
+    properties:
+      health:
+        description: 健康情况 1，验证成功 2，验证失败
+        type: integer
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      type:
+        description: 资源类型
+        type: string
+    type: object
+  request.DepartmentCreateParams:
+    properties:
+      code:
+        description: 编码
+        type: string
+      headId:
+        description: 主管ID
+        type: string
+      headName:
+        description: 主管名称
+        type: string
+      name:
+        description: 名称
+        type: string
+      pid:
+        description: 父ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    required:
+    - name
+    - pid
+    type: object
+  request.DepartmentPageParams:
+    properties:
+      code:
+        description: 编码
+        type: string
+      headName:
+        description: 主管名称
+        type: string
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      remark:
+        description: 备注
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.DepartmentParams:
+    properties:
+      code:
+        description: 编码
+        type: string
+      headName:
+        description: 主管名称
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.DeviceCommandParams:
+    properties:
+      cmdContent:
+        description: 指令内容
+        type: string
+      cmdType:
+        description: 指令类型
+        type: string
+      deviceId:
+        description: 设备ID
+        type: string
+    required:
+    - cmdContent
+    - cmdType
+    - deviceId
+    type: object
+  request.DeviceCreateParams:
+    properties:
+      address:
+        description: 所在地址
+        type: string
+      clientId:
+        description: 客户端 ID
+        type: string
+      firmwareVersion:
+        description: 固件版本号
+        type: integer
+      groupId:
+        description: 设备分组 ID
+        type: string
+      ip:
+        description: 接入IP
+        type: string
+      latitude:
+        description: 维度
+        type: string
+      longitude:
+        description: 经度
+        type: string
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      pgId:
+        description: 协议网关 ID
+        type: string
+      pics:
+        description: 图片
+        type: string
+      pid:
+        description: 父级设备 ID
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      secretKey:
+        description: 密钥
+        type: string
+      signal:
+        description: 信号强度
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，离线 2，在线 3，禁用
+        type: integer
+      tag:
+        description: 标签
+        type: string
+    required:
+    - name
+    - productId
+    type: object
+  request.DeviceGroupCreateParams:
+    properties:
+      latitude:
+        description: 维度
+        type: string
+      longitude:
+        description: 经度
+        type: string
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1，正常 2，禁用
+        type: integer
+    required:
+    - name
+    - pid
+    type: object
+  request.DeviceGroupPageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.DevicePageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productId:
+        description: 所属产品 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.DevicePropertyParams:
+    properties:
+      content:
+        description: 属性JSON内容
+        type: string
+      deviceId:
+        description: 设备ID
+        type: string
+    required:
+    - content
+    - deviceId
+    type: object
+  request.DictCreateParams:
+    properties:
+      code:
+        description: 编码
+        type: string
+      content:
+        description: 内容
+        type: string
+      name:
+        description: 名称
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    required:
+    - code
+    - name
+    - pid
+    type: object
+  request.DictPageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      pid:
+        description: 上一级 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.DictParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+    type: object
+  request.FirmwareCreateParams:
+    properties:
+      fileSize:
+        description: 文件大小，单位 MB
+        type: integer
+      fileType:
+        description: 文件类型
+        type: string
+      fileUrl:
+        description: 文件地址
+        type: string
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      version:
+        description: 版本号
+        type: integer
+    required:
+    - fileSize
+    - fileType
+    - fileUrl
+    - name
+    - productId
+    - version
+    type: object
+  request.FirmwarePageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.FirmwareParams:
+    properties:
+      name:
+        type: string
+    type: object
+  request.IdsReq:
+    properties:
+      ids:
+        description: ID数组
+        items:
+          type: string
+        type: array
+    type: object
+  request.LoginParams:
+    properties:
+      captchaCode:
+        description: 验证码内容
+        type: string
+      captchaToken:
+        description: 验证码票据
+        type: string
+      password:
+        description: MD5密码，32位小写
+        type: string
+      username:
+        description: 用户名
+        type: string
+    required:
+    - captchaCode
+    - captchaToken
+    - password
+    - username
+    type: object
+  request.MessageChannelCreateParams:
+    properties:
+      content:
+        description: 配置参数 json
+        type: string
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      type:
+        description: 类型 1，短信 2，邮件 3，钉钉 2，企业微信 3，飞书
+        type: integer
+    required:
+    - content
+    - name
+    - type
+    type: object
+  request.MessageChannelPageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.MessageChannelParams:
+    properties:
+      name:
+        type: string
+    type: object
+  request.MessageTemplateCreateParams:
+    properties:
+      channelId:
+        description: 消息通道ID
+        type: string
+      content:
+        description: 模板内容
+        type: string
+      name:
+        description: 名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+    required:
+    - channelId
+    - content
+    - name
+    type: object
+  request.MessageTemplatePageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.MessageTemplateParams:
+    properties:
+      name:
+        type: string
+    type: object
+  request.ModelEventCreateParams:
+    properties:
+      eventType:
+        description: 事件类型 1，信息 2，警告 3，故障
+        type: integer
+      name:
+        description: 名称
+        type: string
+      outputParams:
+        description: 输出参数 json
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+    required:
+    - eventType
+    - name
+    - outputParams
+    - productId
+    - tag
+    type: object
+  request.ModelEventPageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productId:
+        description: 产品 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.ModelEventParams:
+    properties:
+      name:
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+    required:
+    - productId
+    type: object
+  request.ModelPropertyCreateParams:
+    properties:
+      dataSpec:
+        description: 数据定义 json
+        type: string
+      dataType:
+        description: 数据类型 1，int（整数型） 2，float（浮点型） 3，enum（枚举） 4，bool（布尔） 5，struct（结构体）
+          6，date（日期） 7，array（数组） 8，text（字符串）
+        type: string
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+      type:
+        description: 读写类型 1，读 2，读写
+        type: integer
+    required:
+    - dataSpec
+    - dataType
+    - name
+    - productId
+    - tag
+    - type
+    type: object
+  request.ModelPropertyPageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productId:
+        description: 产品 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.ModelPropertyParams:
+    properties:
+      name:
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+    required:
+    - productId
+    type: object
+  request.ModelServiceCreateParams:
+    properties:
+      callType:
+        description: 调用方式 1，同步 2，异步
+        type: integer
+      inputParams:
+        description: 输入参数 json
+        type: string
+      name:
+        description: 名称
+        type: string
+      outputParams:
+        description: 输出参数 json
+        type: string
+      productId:
+        description: 产品 ID
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      tag:
+        description: 标识符
+        type: string
+    required:
+    - callType
+    - inputParams
+    - name
+    - outputParams
+    - productId
+    - tag
+    type: object
+  request.ModelServicePageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      productId:
+        description: 产品 ID
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.ModelTagPageParams:
+    properties:
+      deviceId:
+        description: 设备ID
+        type: string
+      modelId:
+        description: 属性或事件模型ID
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      ts:
+        description: 时间戳范围，开始结束英文逗号分割，例如：1742359788015,1742363388015
+        type: string
+    required:
+    - deviceId
+    - modelId
+    - ts
+    type: object
+  request.NoticeConfigureCreateParams:
+    properties:
+      configure:
+        description: 配置
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      template:
+        description: 模板
+        type: string
+      type:
+        description: 类型
+        type: string
+    required:
+    - configure
+    - name
+    - template
+    - type
+    type: object
+  request.NoticeConfigurePageParams:
+    properties:
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      remark:
+        description: 备注
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      type:
+        description: 类型
+        type: integer
+    type: object
+  request.NoticeConfigureParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+    type: object
+  request.NoticeGroupCreateParams:
+    properties:
+      addressee:
+        description: 收件人
+        type: string
+      name:
+        description: 名称
+        type: string
+      noticeConfigureId:
+        description: 通知配置ID
+        type: string
+      noticeConfigureType:
+        description: 通知配置类型
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    required:
+    - addressee
+    - name
+    - noticeConfigureId
+    - noticeConfigureType
+    type: object
+  request.NoticeGroupPageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.ProductCategoryCreateParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      tag:
+        description: 标识
+        type: string
+    required:
+    - name
+    - pid
+    type: object
+  request.ProductCategoryPageParams:
+    properties:
+      name:
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.ProductCreateParams:
+    properties:
+      accessToken:
+        description: 访问票据
+        type: string
+      authMethod:
+        description: 认证方式 1，证书 2，Basic 3，AccessToken
+        type: integer
+      authPassword:
+        description: 认证密码
+        type: string
+      authUsername:
+        description: 认证用户名
+        type: string
+      categoryId:
+        description: 产品分类 ID
+        type: string
+      certificateId:
+        description: 证书ID
+        type: string
+      dataFormat:
+        description: 数据格式 1，透传/自定义 2，JSON
+        type: integer
+      factory:
+        description: 工厂
+        type: string
+      name:
+        description: 名称
+        type: string
+      network:
+        description: 网络类型
+        type: string
+      nodeType:
+        description: 节点类型 1，直接设备 2，网关设备 3，网关子设备
+        type: integer
+      num:
+        description: 编号
+        type: string
+      pics:
+        description: 图片
+        type: string
+      protocol:
+        description: 接入协议
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      storageType:
+        description: 存储类型 1，列存储 2，行存储
+        type: integer
+      tag:
+        description: 标签
+        type: string
+    required:
+    - authMethod
+    - categoryId
+    - name
+    - num
+    - storageType
+    type: object
+  request.ProductPageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      num:
+        description: 编号
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      tag:
+        description: 标签
+        type: string
+    type: object
+  request.ProductParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+    type: object
+  request.ProtocolGatewayCreateParams:
+    properties:
+      config:
+        description: 网关配置
+        type: integer
+      document:
+        description: 说明文档
+        type: string
+      icon:
+        description: 图标
+        type: string
+      name:
+        description: 名称
+        type: string
+      protocol:
+        description: 协议
+        type: string
+      remark:
+        description: 描述
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      version:
+        description: 版本
+        type: string
+    type: object
+  request.ProtocolGatewayPageParams:
+    properties:
+      health:
+        description: 健康情况 1，验证成功 2，验证失败
+        type: integer
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      type:
+        description: 资源类型
+        type: string
+    type: object
+  request.ProtocolGatewayParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+    type: object
+  request.RefreshTokenParams:
+    properties:
+      refreshToken:
+        description: 刷新票据
+        type: string
+    required:
+    - refreshToken
+    type: object
+  request.ResetPasswordParams:
+    properties:
+      ids:
+        description: 父ID
+        items:
+          type: string
+        type: array
+      password:
+        description: 密码
+        type: string
+    required:
+    - ids
+    - password
+    type: object
+  request.ResourceApiCreateParams:
+    properties:
+      method:
+        description: 请求方法 get post 等
+        type: string
+      resourceId:
+        description: 资源 ID
+        type: string
+      url:
+        description: 接口地址
+        type: string
+    required:
+    - method
+    - resourceId
+    - url
+    type: object
+  request.ResourceApiParams:
+    properties:
+      resourceId:
+        description: 资源 ID
+        type: string
+      url:
+        description: 接口地址
+        type: string
+    required:
+    - resourceId
+    type: object
+  request.ResourceCreateParams:
+    properties:
+      alias:
+        description: 别名
+        type: string
+      code:
+        description: 编码
+        type: string
+      color:
+        description: 颜色
+        type: string
+      component:
+        description: 视图
+        type: string
+      hidden:
+        description: 隐藏菜单
+        type: boolean
+      icon:
+        description: 图标
+        type: string
+      keepAlive:
+        description: 保留查询参数
+        type: boolean
+      parentRoute:
+        description: 上级路由
+        type: string
+      path:
+        description: 文件路径
+        type: string
+      pid:
+        description: 上一级 ID
+        type: string
+      query:
+        description: 查询携带参数
+        type: string
+      redirect:
+        description: 重定向
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      title:
+        description: 名称
+        type: string
+      type:
+        description: 类型 1，菜单 2，iframe 3，外链 4，按钮
+        type: integer
+    required:
+    - path
+    - pid
+    - title
+    - type
+    type: object
+  request.ResourceParams:
+    properties:
+      title:
+        description: 名称
+        type: string
+    type: object
+  request.RolePageParams:
+    properties:
+      alias:
+        description: 别名
+        type: string
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.RoleParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+    type: object
+  request.RoleResourceSetParams:
+    properties:
+      alias:
+        description: 别名
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      resourceIds:
+        description: 菜单权限ID集合
+        items:
+          type: integer
+        type: array
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    required:
+    - alias
+    - name
+    type: object
+  request.RuleEngineCreateParams:
+    properties:
+      dataResourceId:
+        description: 数据资源ID
+        type: string
+      dataResourceType:
+        description: 数据资源类型
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      rule:
+        description: 规则
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.RuleEnginePageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.SceneCreateParams:
+    properties:
+      actions:
+        description: 执行动作
+        type: string
+      conditions:
+        description: 触发条件
+        type: string
+      name:
+        description: 名称
+        type: string
+      remark:
+        description: 备注
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.ScenePageParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+    type: object
+  request.SubDeviceCreateParams:
+    properties:
+      deviceId:
+        description: 设备 ID
+        type: string
+      subDeviceId:
+        description: 子设备 ID
+        type: string
+    required:
+    - deviceId
+    - subDeviceId
+    type: object
+  request.SubDevicePageParams:
+    properties:
+      deviceId:
+        description: 设备 ID
+        type: string
+      name:
+        description: 名称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+    type: object
+  request.SubDeviceParams:
+    properties:
+      name:
+        description: 名称
+        type: string
+      productId:
+        description: 所属产品 ID
+        type: string
+    required:
+    - productId
+    type: object
+  request.UserAssignSetParams:
+    properties:
+      avatar:
+        description: 用户头像
+        type: string
+      departmentIds:
+        description: 部门ID集合
+        items:
+          type: integer
+        type: array
+      email:
+        description: 邮箱
+        type: string
+      id:
+        description: 主键ID
+        type: string
+      jobNum:
+        description: 工号
+        type: string
+      nickName:
+        description: 昵称
+        type: string
+      password:
+        description: 用户登录密码
+        type: string
+      phone:
+        description: 手机号
+        type: string
+      realName:
+        description: 真实名称
+        type: string
+      roleIds:
+        description: 角色ID集合
+        items:
+          type: integer
+        type: array
+      sex:
+        description: 性别 1、男 2、女
+        type: integer
+      username:
+        description: 用户登录名
+        type: string
+    required:
+    - username
+    type: object
+  request.UserPageParams:
+    properties:
+      departmentId:
+        description: 部门ID
+        type: string
+      email:
+        description: 邮箱
+        type: string
+      jobNum:
+        description: 工号
+        type: string
+      nickName:
+        description: 昵称
+        type: string
+      page:
+        description: 页码
+        type: integer
+      pageSize:
+        description: 每页大小
+        type: integer
+      phone:
+        description: 手机号
+        type: string
+      realName:
+        description: 真实名称
+        type: string
+      searchCount:
+        description: 查询总数 0，是 1，否
+        type: integer
+      sex:
+        description: 性别 1、男 2、女
+        type: integer
+      status:
+        description: 状态 1、正常 2、禁用
+        type: integer
+      username:
+        description: 账号
+        type: string
+    type: object
+  request.UserParams:
+    properties:
+      status:
+        example: "0"
+        type: string
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: artificial intelligence message push service
+  title: apipig api
+  version: 1.0.0
+paths:
+  /v1/analytic/device-post-msg-stats:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 设备上报消息统计
+      tags:
+      - Analytic
+  /v1/analytic/home:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 统计分析首页
+      tags:
+      - Analytic
+  /v1/analytic/os:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 统计分析操作系统
+      tags:
+      - Analytic
+  /v1/captcha:
+    get:
+      responses: {}
+      summary: 验证码
+      tags:
+      - Web
+  /v1/file/download:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: 主键
+        in: query
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+      security:
+      - ApiKeyAuth: []
+      summary: 文件下载
+      tags:
+      - File
+  /v1/file/image-preview:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: 主键
+        in: query
+        name: id
+        required: true
+        type: integer
+      - description: 值 1 图片输出为 base64 字符串
+        in: query
+        name: base64
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+      security:
+      - ApiKeyAuth: []
+      summary: 图片预览
+      tags:
+      - Image
+  /v1/file/image-upload:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: 上传图片
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"上传成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 图片上传
+      tags:
+      - Image
+  /v1/file/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: 上传文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"上传成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 文件上传
+      tags:
+      - File
+  /v1/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户名, 密码, 验证码
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.LoginParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"登陆成功"}'
+          schema:
+            type: string
+      summary: 用户登录
+      tags:
+      - Web
+  /v1/refresh-token:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 刷新票据
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RefreshTokenParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"刷新Token成功"}'
+          schema:
+            type: string
+      summary: 刷新Token
+      tags:
+      - Web
+  /v1/sys/configure/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建扩展配置
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ConfigureCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建扩展配置
+      tags:
+      - Configure
+  /v1/sys/configure/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除扩展配置
+      tags:
+      - Configure
+  /v1/sys/configure/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 扩展配置ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取扩展配置
+      tags:
+      - Configure
+  /v1/sys/configure/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ConfigurePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取扩展配置列表
+      tags:
+      - Configure
+  /v1/sys/configure/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 扩展配置信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Configure'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新扩展配置
+      tags:
+      - Configure
+  /v1/sys/department/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建部门
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DepartmentCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建部门
+      tags:
+      - Department
+  /v1/sys/department/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除部门
+      tags:
+      - Department
+  /v1/sys/department/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 部门ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取部门
+      tags:
+      - Department
+  /v1/sys/department/list-all:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 部门列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DepartmentParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取所有部门列表
+      tags:
+      - Department
+  /v1/sys/department/list-tree:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 部门树列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DepartmentParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取部门树列表
+      tags:
+      - Department
+  /v1/sys/department/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DepartmentPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取部门列表
+      tags:
+      - Department
+  /v1/sys/department/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 部门信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Department'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新部门
+      tags:
+      - Department
+  /v1/sys/dict/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建字典
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DictCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建字典
+      tags:
+      - Dict
+  /v1/sys/dict/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除字典
+      tags:
+      - Dict
+  /v1/sys/dict/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 字典ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取字典
+      tags:
+      - Dict
+  /v1/sys/dict/list-child:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 编码
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据code编码获取字典子类列表
+      tags:
+      - Dict
+  /v1/sys/dict/list-parent:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 查询列表参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DictParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取字典父类列表
+      tags:
+      - Dict
+  /v1/sys/dict/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DictPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取字典列表
+      tags:
+      - Dict
+  /v1/sys/dict/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 字典信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Dict'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新字典
+      tags:
+      - Dict
+  /v1/sys/resource-api/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建资源权限API
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResourceApiCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建资源权限API
+      tags:
+      - ResourceApi
+  /v1/sys/resource-api/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 权限API ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除资源权限API
+      tags:
+      - ResourceApi
+  /v1/sys/resource-api/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资源权限API列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResourceApiParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 资源权限API列表
+      tags:
+      - ResourceApi
+  /v1/sys/resource-api/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资源权限API信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ResourceApi'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新资源权限API
+      tags:
+      - ResourceApi
+  /v1/sys/resource/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建资源
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResourceCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建资源
+      tags:
+      - Resource
+  /v1/sys/resource/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除资源
+      tags:
+      - Resource
+  /v1/sys/resource/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资源ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取资源
+      tags:
+      - Resource
+  /v1/sys/resource/list-menu:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取菜单列表
+      tags:
+      - Resource
+  /v1/sys/resource/list-tree:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资源树列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResourceParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取资源树列表
+      tags:
+      - Resource
+  /v1/sys/resource/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资源信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Resource'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新资源
+      tags:
+      - Resource
+  /v1/sys/role/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除角色
+      tags:
+      - Role
+  /v1/sys/role/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 角色ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取角色
+      tags:
+      - Role
+  /v1/sys/role/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 角色列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RoleParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取角色列表
+      tags:
+      - Role
+  /v1/sys/role/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RolePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取角色列表
+      tags:
+      - Role
+  /v1/sys/role/resource-set:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建角色
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RoleResourceSetParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 角色创建修改并菜单权限分配
+      tags:
+      - Role
+  /v1/sys/role/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 角色信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Role'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新角色
+      tags:
+      - Role
+  /v1/sys/user/assign-departments:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分配部门
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AssignDepartmentsParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分配部门
+      tags:
+      - User
+  /v1/sys/user/assign-roles:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分配角色
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AssignRolesParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分配角色
+      tags:
+      - User
+  /v1/sys/user/assign-set:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户分配设置参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.UserAssignSetParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 用户分配设置
+      tags:
+      - User
+  /v1/sys/user/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除用户
+      tags:
+      - User
+  /v1/sys/user/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取用户
+      tags:
+      - User
+  /v1/sys/user/info:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取当前用户信息
+      tags:
+      - User
+  /v1/sys/user/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.UserParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取用户列表
+      tags:
+      - User
+  /v1/sys/user/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.UserPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取用户列表
+      tags:
+      - User
+  /v1/sys/user/reset-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 密码重置
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ResetPasswordParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 密码重置
+      tags:
+      - User
+  /v1/sys/user/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新用户
+      tags:
+      - User
+  /v1/test-http-push:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"刷新Token成功"}'
+          schema:
+            type: string
+      summary: 测试http推送
+      tags:
+      - Web
+  /v1/thing/alert-message/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除告警消息
+      tags:
+      - AlertMessage
+  /v1/thing/alert-message/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 告警消息ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取告警消息
+      tags:
+      - AlertMessage
+  /v1/thing/alert-message/get-stats:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取告警消息统计数据
+      tags:
+      - AlertMessage
+  /v1/thing/alert-message/ignore:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 告警消息ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id忽略告警消息
+      tags:
+      - AlertMessage
+  /v1/thing/alert-message/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AlertMessagePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取告警消息列表
+      tags:
+      - AlertMessage
+  /v1/thing/alert-message/process:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 告警消息处理参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AlertMessageProcessParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 告警消息处理
+      tags:
+      - AlertMessage
+  /v1/thing/alert-rule/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建告警规则
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AlertRuleCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建告警规则
+      tags:
+      - AlertRule
+  /v1/thing/alert-rule/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除告警规则
+      tags:
+      - AlertRule
+  /v1/thing/alert-rule/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 告警规则ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取告警规则
+      tags:
+      - AlertRule
+  /v1/thing/alert-rule/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.AlertRulePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取告警规则列表
+      tags:
+      - AlertRule
+  /v1/thing/alert-rule/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 告警规则信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.AlertRule'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新告警规则
+      tags:
+      - AlertRule
+  /v1/thing/certificate/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建证书
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.CertificateCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建证书
+      tags:
+      - Certificate
+  /v1/thing/certificate/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除证书
+      tags:
+      - Certificate
+  /v1/thing/certificate/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 证书ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取证书
+      tags:
+      - Certificate
+  /v1/thing/certificate/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 证书列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.CertificateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取证书列表
+      tags:
+      - Certificate
+  /v1/thing/certificate/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.CertificatePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取证书列表
+      tags:
+      - Certificate
+  /v1/thing/certificate/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 证书信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Certificate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新证书
+      tags:
+      - Certificate
+  /v1/thing/data-relay/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据转发
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DataRelayCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 数据转发
+      tags:
+      - DataRelay
+  /v1/thing/data-relay/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除数据转发
+      tags:
+      - DataRelay
+  /v1/thing/data-relay/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据转发ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取数据转发
+      tags:
+      - DataRelay
+  /v1/thing/data-relay/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DataRelayPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取数据转发列表
+      tags:
+      - DataRelay
+  /v1/thing/data-relay/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据转发信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.DataRelay'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新数据转发
+      tags:
+      - DataRelay
+  /v1/thing/data-resource/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据资源ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id验证数据资源
+      tags:
+      - DataResource
+  /v1/thing/data-resource/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据资源
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DataResourceCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 数据资源
+      tags:
+      - DataResource
+  /v1/thing/data-resource/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除数据资源
+      tags:
+      - DataResource
+  /v1/thing/data-resource/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据资源ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取数据资源
+      tags:
+      - DataResource
+  /v1/thing/data-resource/list-by-type:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据资源列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DataResourceByTypeParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据类型获取验证成功数据资源列表
+      tags:
+      - DataResource
+  /v1/thing/data-resource/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DataResourcePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取数据资源列表
+      tags:
+      - DataResource
+  /v1/thing/data-resource/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 数据资源信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.DataResource'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新数据资源
+      tags:
+      - DataResource
+  /v1/thing/device-group/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建设备分组
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DeviceGroupCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建设备分组
+      tags:
+      - DeviceGroup
+  /v1/thing/device-group/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除设备分组
+      tags:
+      - DeviceGroup
+  /v1/thing/device-group/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备分组ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取设备分组
+      tags:
+      - DeviceGroup
+  /v1/thing/device-group/list-tree:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取设备分组树列表
+      tags:
+      - DeviceGroup
+  /v1/thing/device-group/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DeviceGroupPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取设备分组列表
+      tags:
+      - DeviceGroup
+  /v1/thing/device-group/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备分组信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.DeviceGroup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新设备分组
+      tags:
+      - DeviceGroup
+  /v1/thing/device-post/command:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 发送设备指令参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DeviceCommandParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":""}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 发送设备指令
+      tags:
+      - DevicePost
+  /v1/thing/device-post/property:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备上报属性参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DevicePropertyParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":""}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 设备上报属性
+      tags:
+      - DevicePost
+  /v1/thing/device/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建设备
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DeviceCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建设备
+      tags:
+      - Device
+  /v1/thing/device/create-sub-device:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建子设备
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.SubDeviceCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建子设备
+      tags:
+      - Device
+  /v1/thing/device/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除设备
+      tags:
+      - Device
+  /v1/thing/device/get:
+    get:
+      parameters:
+      - description: 设备ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取设备
+      tags:
+      - Device
+  /v1/thing/device/list-add-sub-device/{productId}:
+    post:
+      parameters:
+      - description: 产品ID
+        in: query
+        name: productid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取产品网关子设备添加列表
+      tags:
+      - Device
+  /v1/thing/device/list-sub-device:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.SubDeviceParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取设备列表，根据 name 搜索，默认返回 sort 倒序前 20 条记录
+      tags:
+      - Device
+  /v1/thing/device/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.DevicePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取设备列表
+      tags:
+      - Device
+  /v1/thing/device/page-sub-device:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.SubDevicePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取设备子设备列表
+      tags:
+      - Device
+  /v1/thing/device/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Device'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新设备
+      tags:
+      - Device
+  /v1/thing/firmware/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建固件
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.FirmwareCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建固件
+      tags:
+      - Firmware
+  /v1/thing/firmware/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除固件
+      tags:
+      - Firmware
+  /v1/thing/firmware/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 固件ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取固件
+      tags:
+      - Firmware
+  /v1/thing/firmware/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 固件列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.FirmwareParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取固件列表
+      tags:
+      - Firmware
+  /v1/thing/firmware/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.FirmwarePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取固件列表
+      tags:
+      - Firmware
+  /v1/thing/firmware/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 固件信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Firmware'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新固件
+      tags:
+      - Firmware
+  /v1/thing/message-channel/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建消息通道
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageChannelCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建消息通道
+      tags:
+      - MessageChannel
+  /v1/thing/message-channel/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除消息通道
+      tags:
+      - MessageChannel
+  /v1/thing/message-channel/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息通道ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取消息通道
+      tags:
+      - MessageChannel
+  /v1/thing/message-channel/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息通道列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageChannelParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取消息通道列表
+      tags:
+      - MessageChannel
+  /v1/thing/message-channel/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageChannelPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取消息通道列表
+      tags:
+      - MessageChannel
+  /v1/thing/message-channel/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息通道信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.MessageChannel'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新消息通道
+      tags:
+      - MessageChannel
+  /v1/thing/message-template/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建消息模板
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageTemplateCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建消息模板
+      tags:
+      - MessageTemplate
+  /v1/thing/message-template/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除消息模板
+      tags:
+      - MessageTemplate
+  /v1/thing/message-template/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息模板ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取消息模板
+      tags:
+      - MessageTemplate
+  /v1/thing/message-template/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息模板列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageTemplateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取消息模板列表
+      tags:
+      - MessageTemplate
+  /v1/thing/message-template/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.MessageTemplatePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取消息模板列表
+      tags:
+      - MessageTemplate
+  /v1/thing/message-template/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 消息模板信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.MessageTemplate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新消息模板
+      tags:
+      - MessageTemplate
+  /v1/thing/model-event/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建物模型事件
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelEventCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建物模型事件
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除物模型事件
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型事件ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取物模型事件
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/list-all:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模型事件列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelEventParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取模型事件列表
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/list-up:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备ID
+        in: query
+        name: deviceId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取设备事件上报信息列表
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelEventPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取物模型事件列表
+      tags:
+      - ModelEvent
+  /v1/thing/model-event/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型事件信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ModelEvent'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新物模型事件
+      tags:
+      - ModelEvent
+  /v1/thing/model-property/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建物模型属性
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelPropertyCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建物模型属性
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除物模型属性
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型属性ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取物模型属性
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/list-all:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模型属性列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelPropertyParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取模型属性列表
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/list-up:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 设备ID
+        in: query
+        name: deviceId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取设备属性上报信息列表
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelPropertyPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取物模型属性列表
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/page-history-up:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模型属性属性上报历史信息分页列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelTagPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取设备属性上报历史信息分页列表
+      tags:
+      - ModelProperty
+  /v1/thing/model-property/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型属性信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ModelProperty'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新物模型属性
+      tags:
+      - ModelProperty
+  /v1/thing/model-service/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建物模型属性
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelServiceCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建物模型属性
+      tags:
+      - ModelService
+  /v1/thing/model-service/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除物模型属性
+      tags:
+      - ModelService
+  /v1/thing/model-service/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型属性ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取物模型属性
+      tags:
+      - ModelService
+  /v1/thing/model-service/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ModelServicePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取物模型属性列表
+      tags:
+      - ModelService
+  /v1/thing/model-service/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 物模型属性信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ModelService'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新物模型属性
+      tags:
+      - ModelService
+  /v1/thing/notice-configure/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建通知配置
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeConfigureCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建通知配置
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-configure/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除通知配置
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-configure/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知配置ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取通知配置
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-configure/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知配置列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeConfigureParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取通知配置列表
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-configure/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeConfigurePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取通知配置列表
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-configure/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知配置信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.NoticeConfigure'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新通知配置
+      tags:
+      - NoticeConfigure
+  /v1/thing/notice-group/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建通知组
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeGroupCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建通知组
+      tags:
+      - NoticeGroup
+  /v1/thing/notice-group/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除通知组
+      tags:
+      - NoticeGroup
+  /v1/thing/notice-group/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知组ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取通知组
+      tags:
+      - NoticeGroup
+  /v1/thing/notice-group/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知组列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeConfigureParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取通知组列表
+      tags:
+      - NoticeGroup
+  /v1/thing/notice-group/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.NoticeGroupPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取通知组列表
+      tags:
+      - NoticeGroup
+  /v1/thing/notice-group/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 通知组信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.NoticeGroup'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新通知组
+      tags:
+      - NoticeGroup
+  /v1/thing/product-category/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建产品分类
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductCategoryCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建产品分类
+      tags:
+      - ProductCategory
+  /v1/thing/product-category/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除产品分类
+      tags:
+      - ProductCategory
+  /v1/thing/product-category/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品分类ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取产品分类
+      tags:
+      - ProductCategory
+  /v1/thing/product-category/list-tree:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取产品分类树列表
+      tags:
+      - ProductCategory
+  /v1/thing/product-category/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductCategoryPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取产品分类列表
+      tags:
+      - ProductCategory
+  /v1/thing/product-category/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品分类信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ProductCategory'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新产品分类
+      tags:
+      - ProductCategory
+  /v1/thing/product/cancel-publish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 取消发布
+      tags:
+      - Product
+  /v1/thing/product/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建产品
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建产品
+      tags:
+      - Product
+  /v1/thing/product/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除产品
+      tags:
+      - Product
+  /v1/thing/product/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取产品
+      tags:
+      - Product
+  /v1/thing/product/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取产品列表，根据 name 搜索，默认返回 sort 倒序前20条记录
+      tags:
+      - Product
+  /v1/thing/product/list-gateway-sub-device:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 请求参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取网关子设备产品列表
+      tags:
+      - Product
+  /v1/thing/product/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProductPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取产品列表
+      tags:
+      - Product
+  /v1/thing/product/publish:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 发布产品
+      tags:
+      - Product
+  /v1/thing/product/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 产品信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Product'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新产品
+      tags:
+      - Product
+  /v1/thing/protocol-gateway/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 协议网关
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProtocolGatewayCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 协议网关
+      tags:
+      - ProtocolGateway
+  /v1/thing/protocol-gateway/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除协议网关
+      tags:
+      - ProtocolGateway
+  /v1/thing/protocol-gateway/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 协议网关ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取协议网关
+      tags:
+      - ProtocolGateway
+  /v1/thing/protocol-gateway/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 协议网关列表查询参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProtocolGatewayParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 获取协议网关列表，根据 name 搜索，默认返回 sort 倒序前20条记录
+      tags:
+      - ProtocolGateway
+  /v1/thing/protocol-gateway/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ProtocolGatewayPageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取协议网关列表
+      tags:
+      - ProtocolGateway
+  /v1/thing/protocol-gateway/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 协议网关信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.ProtocolGateway'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新协议网关
+      tags:
+      - ProtocolGateway
+  /v1/thing/rule-engine/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 规则引擎
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RuleEngineCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 规则引擎
+      tags:
+      - RuleEngine
+  /v1/thing/rule-engine/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除规则引擎
+      tags:
+      - RuleEngine
+  /v1/thing/rule-engine/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 规则引擎ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取规则引擎
+      tags:
+      - RuleEngine
+  /v1/thing/rule-engine/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.RuleEnginePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取规则引擎列表
+      tags:
+      - RuleEngine
+  /v1/thing/rule-engine/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 规则引擎信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.RuleEngine'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新规则引擎
+      tags:
+      - RuleEngine
+  /v1/thing/scene/create:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 创建场景
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.SceneCreateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 创建场景
+      tags:
+      - Scene
+  /v1/thing/scene/delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID集合
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.IdsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"删除成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 删除场景
+      tags:
+      - Scene
+  /v1/thing/scene/get:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: 场景ID
+        in: query
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 根据id获取场景
+      tags:
+      - Scene
+  /v1/thing/scene/page:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 页码, 每页大小等分页参数
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/request.ScenePageParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"获取成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 分页获取场景列表
+      tags:
+      - Scene
+  /v1/thing/scene/update:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 场景信息
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/model.Scene'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"success":true,"data":{},"msg":"设置成功"}'
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 更新场景
+      tags:
+      - Scene
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: accessToken
+    type: apiKey
+swagger: "2.0"
