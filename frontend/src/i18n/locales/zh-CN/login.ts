@@ -4,7 +4,7 @@
 export default {
   accountLogin: '\u8d26\u6237\u767b\u5f55',
   apiTokenLogin: 'API 密钥授权',
-  apiTokenHint: '授权凭证有效期为 7 天，仅可查看该密钥的用量统计和调用日志。',
+  apiTokenHint: '仅可查看该密钥的用量统计和调用日志。',
   apiTokenPlaceholder: '请输入 API 密钥',
   pleaseInputApiToken: '请输入 API 密钥',
   authorizeTitle: '查看 API 密钥用量',

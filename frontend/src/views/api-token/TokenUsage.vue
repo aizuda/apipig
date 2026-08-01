@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Activity,
@@ -7,11 +7,14 @@ import {
   ChartPie,
   CheckCircle2,
   Clock3,
+  Eye,
   KeyRound,
+  Layers3,
   LogOut,
   RefreshCw,
   Search,
   ShieldAlert,
+  X,
 } from '@lucide/vue'
 import { Badge, Button, Input, Skeleton, toast } from '@tabtab/ui'
 import { aiGatewayApi, type AccessTokenStatistics, type CallLog } from '@/api/ai-gateway'
@@ -36,7 +39,6 @@ const statusFilter = ref<'all' | 'success' | 'failed'>('all')
 const modelSearchQuery = ref('')
 const modelSort = ref<'tokens' | 'calls' | 'cost' | 'latency'>('tokens')
 const selectedModel = ref('')
-const hoveredModel = ref('')
 const logs = ref<CallLog[]>([])
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -67,6 +69,20 @@ const rangeOptions: { value: RangePreset; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'custom', label: '自定义' },
 ]
+const integerFormatter = new Intl.NumberFormat('zh-CN')
+const compactFormatter = new Intl.NumberFormat('zh-CN', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
 
 const usage = computed(() => statistics.value.items[0])
 const successRate = computed(() => {
@@ -74,9 +90,7 @@ const successRate = computed(() => {
   return (statistics.value.successCount / statistics.value.callCount) * 100
 })
 const expiryText = computed(() =>
-  userStore.expiresAt
-    ? new Date(userStore.expiresAt).toLocaleString('zh-CN', { hour12: false })
-    : '-',
+  userStore.expiresAt ? dateTimeFormatter.format(new Date(userStore.expiresAt)) : '-',
 )
 const tokenParts = computed(() => [
   { label: '输入', value: usage.value?.promptTokens || 0, color: 'bg-blue-500' },
@@ -119,7 +133,8 @@ const modelRows = computed(() => {
   })
 })
 type ModelUsageRow = (typeof modelRows.value)[number]
-const tooltip = ref<{ item: ModelUsageRow; x: number; y: number } | null>(null)
+type ModelPieItem = ModelUsageRow & { chartPercent: number }
+const tooltip = ref<{ item: ModelPieItem; x: number; y: number } | null>(null)
 const tooltipStyle = computed(() =>
   tooltip.value ? { left: `${tooltip.value.x}px`, top: `${tooltip.value.y}px` } : {},
 )
@@ -128,9 +143,18 @@ const visibleModelRows = computed(() => {
   if (!keyword) return modelRows.value
   return modelRows.value.filter((item) => item.model.toLowerCase().includes(keyword))
 })
-const activeModel = computed(() => hoveredModel.value || selectedModel.value)
+const visibleModelTokens = computed(() =>
+  visibleModelRows.value.reduce((total, item) => total + (item.totalTokens || 0), 0),
+)
+const selectedVisibleModel = computed(() =>
+  visibleModelRows.value.some((item) => item.model === selectedModel.value)
+    ? selectedModel.value
+    : visibleModelRows.value[0]?.model || '',
+)
 const activeModelItem = computed(
-  () => modelRows.value.find((item) => item.model === activeModel.value) || modelRows.value[0],
+  () =>
+    visibleModelRows.value.find((item) => item.model === selectedVisibleModel.value) ||
+    modelRows.value[0],
 )
 const modelTokenParts = computed(() => {
   const item = activeModelItem.value
@@ -146,18 +170,24 @@ const maxModelTokenPart = computed(() =>
   Math.max(1, ...modelTokenParts.value.map((part) => part.value)),
 )
 const modelPieSegments = computed(() => {
-  const total = Math.max(1, totalModelTokens.value)
+  const total = Math.max(1, visibleModelTokens.value)
   let startAngle = -Math.PI / 2
   return visibleModelRows.value.map((item) => {
     const sweep = ((item.totalTokens || 0) / total) * Math.PI * 2
+    const endAngle = startAngle + sweep
+    const largeArc = sweep > Math.PI ? 1 : 0
     const segment = {
       ...item,
       startAngle,
-      endAngle: startAngle + sweep,
-      largeArc: sweep > Math.PI ? 1 : 0,
-      midAngle: startAngle + sweep / 2,
+      endAngle,
+      largeArc,
+      path: createPieArcPath(startAngle, endAngle, largeArc),
+      chartPercent:
+        visibleModelTokens.value > 0
+          ? ((item.totalTokens || 0) / visibleModelTokens.value) * 100
+          : 0,
     }
-    startAngle += sweep
+    startAngle = endAngle
     return segment
   })
 })
@@ -275,14 +305,11 @@ function changePageSize(size: number) {
 }
 
 function formatTokens(value?: number) {
-  return (value || 0).toLocaleString('zh-CN')
+  return integerFormatter.format(value || 0)
 }
 
 function formatCompact(value?: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value || 0)
+  return compactFormatter.format(value || 0)
 }
 
 function formatAmount(value?: number) {
@@ -290,7 +317,7 @@ function formatAmount(value?: number) {
 }
 
 function formatTime(value?: number) {
-  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
+  return value ? dateTimeFormatter.format(new Date(value)) : '-'
 }
 
 function barWidth(value: number) {
@@ -312,16 +339,10 @@ function formatLatency(value?: number) {
 
 function selectModel(model: string) {
   selectedModel.value = model
-  hoveredModel.value = ''
   tooltip.value = null
 }
 
-function previewModel(model: string) {
-  hoveredModel.value = model
-}
-
-function clearModelPreview() {
-  hoveredModel.value = ''
+function clearPieTooltip() {
   tooltip.value = null
 }
 
@@ -332,29 +353,47 @@ function polarPoint(center: number, radius: number, angle: number) {
   }
 }
 
-function pieArcPath(segment: (typeof modelPieSegments.value)[number]) {
+function createPieArcPath(startAngle: number, endAngle: number, largeArc: number) {
   const center = 120
   const outerRadius = 112
   const innerRadius = 66
-  const startOuter = polarPoint(center, outerRadius, segment.startAngle)
-  const endOuter = polarPoint(center, outerRadius, segment.endAngle)
-  const startInner = polarPoint(center, innerRadius, segment.endAngle)
-  const endInner = polarPoint(center, innerRadius, segment.startAngle)
+  if (endAngle - startAngle >= Math.PI * 2 - 0.0001) {
+    return [
+      `M ${center} ${center - outerRadius}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${center} ${center + outerRadius}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${center} ${center - outerRadius}`,
+      `M ${center} ${center - innerRadius}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${center} ${center + innerRadius}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${center} ${center - innerRadius}`,
+      'Z',
+    ].join(' ')
+  }
+  const startOuter = polarPoint(center, outerRadius, startAngle)
+  const endOuter = polarPoint(center, outerRadius, endAngle)
+  const startInner = polarPoint(center, innerRadius, endAngle)
+  const endInner = polarPoint(center, innerRadius, startAngle)
   return [
     `M ${startOuter.x.toFixed(2)} ${startOuter.y.toFixed(2)}`,
-    `A ${outerRadius} ${outerRadius} 0 ${segment.largeArc} 1 ${endOuter.x.toFixed(2)} ${endOuter.y.toFixed(2)}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${endOuter.x.toFixed(2)} ${endOuter.y.toFixed(2)}`,
     `L ${startInner.x.toFixed(2)} ${startInner.y.toFixed(2)}`,
-    `A ${innerRadius} ${innerRadius} 0 ${segment.largeArc} 0 ${endInner.x.toFixed(2)} ${endInner.y.toFixed(2)}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${endInner.x.toFixed(2)} ${endInner.y.toFixed(2)}`,
     'Z',
   ].join(' ')
 }
 
-function showPieTooltip(event: MouseEvent, item: ModelUsageRow) {
-  hoveredModel.value = item.model
-  updatePieTooltip(event, item)
+function clearModelSearch() {
+  modelSearchQuery.value = ''
 }
 
-function updatePieTooltip(event: MouseEvent, item: ModelUsageRow) {
+async function viewModelLogs(model: string) {
+  searchQuery.value = model
+  statusFilter.value = 'all'
+  currentPage.value = 1
+  await nextTick()
+  document.querySelector('#call-logs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function showPieTooltip(event: MouseEvent, item: ModelPieItem) {
   const current = event.currentTarget as SVGElement | null
   const container = current?.ownerSVGElement?.parentElement
   const rect = container?.getBoundingClientRect()
@@ -398,7 +437,7 @@ refreshAll()
 
 <template>
   <div class="min-h-screen bg-background text-foreground">
-    <header class="border-b bg-card/80 backdrop-blur">
+    <header class="sticky top-0 z-30 border-b bg-card">
       <div class="mx-auto flex min-h-16 max-w-[1440px] items-center gap-3 px-4 sm:px-6 lg:px-8">
         <div
           class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
@@ -427,7 +466,7 @@ refreshAll()
       </div>
     </header>
 
-    <main class="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+    <main class="mx-auto max-w-[1360px] px-4 py-6 sm:px-6 lg:px-8">
       <section class="border-b pb-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -482,18 +521,28 @@ refreshAll()
           <Skeleton v-for="index in 4" :key="index" class="h-28 rounded-md" />
         </div>
         <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div class="rounded-md border bg-card p-4">
+          <div class="rounded-md border bg-card p-4 shadow-sm">
             <div class="flex items-center justify-between text-sm text-muted-foreground">
-              <span>总 Token</span><ChartNoAxesCombined class="h-4 w-4" />
+              <span>总 Token</span>
+              <span
+                class="flex size-8 items-center justify-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              >
+                <ChartNoAxesCombined class="h-4 w-4" />
+              </span>
             </div>
             <p class="mt-3 text-2xl font-semibold tabular-nums">
               {{ formatTokens(statistics.totalTokens) }}
             </p>
             <p class="mt-1 text-xs text-muted-foreground">所选时间范围</p>
           </div>
-          <div class="rounded-md border bg-card p-4">
+          <div class="rounded-md border bg-card p-4 shadow-sm">
             <div class="flex items-center justify-between text-sm text-muted-foreground">
-              <span>调用次数</span><Activity class="h-4 w-4" />
+              <span>调用次数</span>
+              <span
+                class="flex size-8 items-center justify-center rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+              >
+                <Activity class="h-4 w-4" />
+              </span>
             </div>
             <p class="mt-3 text-2xl font-semibold tabular-nums">
               {{ formatTokens(statistics.callCount) }}
@@ -503,16 +552,26 @@ refreshAll()
               {{ formatTokens(statistics.failureCount) }}
             </p>
           </div>
-          <div class="rounded-md border bg-card p-4">
+          <div class="rounded-md border bg-card p-4 shadow-sm">
             <div class="flex items-center justify-between text-sm text-muted-foreground">
-              <span>成功率</span><CheckCircle2 class="h-4 w-4" />
+              <span>成功率</span>
+              <span
+                class="flex size-8 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              >
+                <CheckCircle2 class="h-4 w-4" />
+              </span>
             </div>
             <p class="mt-3 text-2xl font-semibold tabular-nums">{{ successRate.toFixed(1) }}%</p>
             <p class="mt-1 text-xs text-muted-foreground">按调用结果计算</p>
           </div>
-          <div class="rounded-md border bg-card p-4">
+          <div class="rounded-md border bg-card p-4 shadow-sm">
             <div class="flex items-center justify-between text-sm text-muted-foreground">
-              <span>最近调用</span><Clock3 class="h-4 w-4" />
+              <span>最近调用</span>
+              <span
+                class="flex size-8 items-center justify-center rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              >
+                <Clock3 class="h-4 w-4" />
+              </span>
             </div>
             <p class="mt-3 text-base font-semibold">{{ formatTime(usage?.lastUsedAt) }}</p>
             <p class="mt-2 text-xs text-muted-foreground">
@@ -522,10 +581,14 @@ refreshAll()
         </div>
       </section>
 
-      <section class="border-y py-5">
+      <section class="border-y py-6">
         <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div class="flex items-center gap-2">
-            <ChartPie class="h-4 w-4 text-muted-foreground" />
+          <div class="flex items-center gap-3">
+            <span
+              class="flex size-9 items-center justify-center rounded-md border bg-card text-muted-foreground"
+            >
+              <ChartPie class="h-4 w-4" />
+            </span>
             <div>
               <h2 class="text-base font-semibold">模型使用分析</h2>
               <p class="mt-1 text-xs text-muted-foreground">
@@ -538,7 +601,17 @@ refreshAll()
               <Search
                 class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               />
-              <Input v-model="modelSearchQuery" class="h-9 pl-9" placeholder="筛选模型" />
+              <Input v-model="modelSearchQuery" class="h-9 pl-9 pr-9" placeholder="筛选模型" />
+              <button
+                v-if="modelSearchQuery"
+                type="button"
+                class="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="清除筛选"
+                aria-label="清除模型筛选"
+                @click="clearModelSearch"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
             </div>
             <select
               v-model="modelSort"
@@ -565,84 +638,115 @@ refreshAll()
         >
           没有匹配的模型
         </div>
-        <div v-else class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div class="rounded-md border bg-card p-4">
-            <div
-              class="grid gap-6 lg:grid-cols-[minmax(280px,1fr)_minmax(240px,0.85fr)] lg:items-center"
-            >
-              <div class="relative mx-auto aspect-square w-full max-w-[320px]">
-                <svg
-                  viewBox="0 0 240 240"
-                  class="h-full w-full"
-                  role="img"
-                  aria-label="模型 Token 使用饼图"
-                  @mouseleave="clearModelPreview"
-                >
-                  <path
-                    v-for="segment in modelPieSegments"
-                    :key="segment.model || 'unknown-model'"
-                    :d="pieArcPath(segment)"
-                    :fill="segment.color"
-                    :stroke-width="activeModel === segment.model ? 3 : 1"
-                    :class="[
-                      activeModel === segment.model ? 'stroke-border' : 'stroke-transparent',
-                      'cursor-pointer transition-opacity',
-                      activeModel && activeModel !== segment.model ? 'opacity-60' : 'opacity-100',
-                    ]"
-                    @mouseenter="showPieTooltip($event, segment)"
-                    @mousemove="updatePieTooltip($event, segment)"
-                    @mouseleave="clearModelPreview"
-                    @click="selectModel(segment.model)"
-                  />
-                </svg>
-                <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div class="text-center">
-                    <p class="text-2xl font-semibold tabular-nums">
-                      {{ formatCompact(totalModelTokens) }}
-                    </p>
-                    <p class="mt-1 text-xs text-muted-foreground">Token</p>
+        <div
+          v-else
+          class="grid overflow-hidden rounded-md border bg-card shadow-sm xl:grid-cols-[minmax(0,1fr)_360px] xl:items-stretch"
+        >
+          <div
+            class="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(260px,0.9fr)_minmax(260px,1.1fr)] lg:items-center xl:min-h-[420px] xl:grid-rows-1"
+          >
+            <div class="relative min-h-[300px] self-stretch">
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="relative aspect-square w-full max-w-[288px]">
+                  <svg
+                    viewBox="0 0 240 240"
+                    class="h-full w-full"
+                    role="img"
+                    aria-label="模型 Token 使用饼图"
+                    @mouseleave="clearPieTooltip"
+                  >
+                    <circle
+                      cx="120"
+                      cy="120"
+                      r="89"
+                      fill="none"
+                      stroke-width="46"
+                      class="stroke-muted"
+                    />
+                    <path
+                      v-for="segment in modelPieSegments"
+                      :key="segment.model || 'unknown-model'"
+                      :d="segment.path"
+                      :fill="segment.color"
+                      fill-rule="evenodd"
+                      :stroke-width="selectedVisibleModel === segment.model ? 3 : 1"
+                      :class="[
+                        selectedVisibleModel === segment.model
+                          ? 'stroke-border'
+                          : 'stroke-transparent',
+                        'cursor-pointer transition-opacity hover:opacity-80',
+                      ]"
+                      @mouseenter="showPieTooltip($event, segment)"
+                      @click="selectModel(segment.model)"
+                    />
+                  </svg>
+                  <div
+                    class="pointer-events-none absolute inset-0 flex items-center justify-center"
+                  >
+                    <div class="text-center">
+                      <p class="text-2xl font-semibold tabular-nums">
+                        {{ formatCompact(visibleModelTokens) }}
+                      </p>
+                      <p class="mt-1 text-xs text-muted-foreground">
+                        {{ modelSearchQuery ? '筛选结果' : 'Token' }}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div
-                  v-if="tooltip"
-                  class="pointer-events-none absolute z-20 w-[190px] rounded-md border bg-popover p-3 text-xs shadow-lg"
-                  :style="tooltipStyle"
-                >
-                  <p class="truncate font-semibold" :title="tooltip.item.model || '未标识模型'">
-                    {{ tooltip.item.model || '未标识模型' }}
-                  </p>
-                  <p class="mt-1 text-muted-foreground">
-                    Token {{ formatCompact(tooltip.item.totalTokens) }} ·
-                    {{ tooltip.item.percent.toFixed(1) }}%
-                  </p>
-                  <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
-                    <span>调用 {{ formatTokens(tooltip.item.callCount) }}</span>
-                    <span
-                      >成功率
-                      {{
-                        modelSuccessRate(tooltip.item.callCount, tooltip.item.successCount).toFixed(
-                          1,
-                        )
-                      }}%</span
-                    >
-                    <span>成本 {{ formatAmount(tooltip.item.cost) }}</span>
-                    <span>延迟 {{ formatLatency(tooltip.item.avgLatencyMs) }}</span>
+                  <div
+                    v-if="tooltip"
+                    class="pointer-events-none absolute z-20 w-[190px] rounded-md border bg-popover p-3 text-xs shadow-lg"
+                    :style="tooltipStyle"
+                  >
+                    <p class="truncate font-semibold" :title="tooltip.item.model || '未标识模型'">
+                      {{ tooltip.item.model || '未标识模型' }}
+                    </p>
+                    <p class="mt-1 text-muted-foreground">
+                      Token {{ formatCompact(tooltip.item.totalTokens) }} ·
+                      {{ tooltip.item.chartPercent.toFixed(1) }}%
+                    </p>
+                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-muted-foreground">
+                      <span>调用 {{ formatTokens(tooltip.item.callCount) }}</span>
+                      <span
+                        >成功率
+                        {{
+                          modelSuccessRate(
+                            tooltip.item.callCount,
+                            tooltip.item.successCount,
+                          ).toFixed(1)
+                        }}%</span
+                      >
+                      <span>成本 {{ formatAmount(tooltip.item.cost) }}</span>
+                      <span>延迟 {{ formatLatency(tooltip.item.avgLatencyMs) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="max-h-[340px] space-y-1 overflow-y-auto pr-1">
+            <div class="self-center">
+              <div
+                class="mb-2 flex items-center justify-between px-2 text-xs text-muted-foreground"
+              >
+                <span>模型</span>
+                <span>Token 占比</span>
+              </div>
+              <div class="max-h-[300px] space-y-1 overflow-y-auto pr-1">
                 <button
-                  v-for="segment in modelPieSegments"
+                  v-for="(segment, index) in modelPieSegments"
                   :key="segment.model || 'unknown-model'"
                   type="button"
                   class="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md px-2 py-2 text-left transition-colors"
-                  :class="activeModel === segment.model ? 'bg-primary/5' : 'hover:bg-muted/40'"
-                  @mouseenter="previewModel(segment.model)"
-                  @mouseleave="clearModelPreview"
+                  :class="
+                    selectedVisibleModel === segment.model ? 'bg-primary/5' : 'hover:bg-muted/40'
+                  "
+                  :aria-pressed="selectedModel === segment.model"
                   @click="selectModel(segment.model)"
                 >
                   <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="w-4 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground"
+                      >{{ index + 1 }}</span
+                    >
                     <span
                       class="size-2.5 shrink-0 rounded-sm"
                       :style="{ backgroundColor: segment.color }"
@@ -654,10 +758,10 @@ refreshAll()
                     >
                   </span>
                   <span class="text-right text-xs text-muted-foreground"
-                    >{{ segment.percent.toFixed(1) }}%</span
+                    >{{ segment.chartPercent.toFixed(1) }}%</span
                   >
                   <span
-                    class="col-span-2 mt-1 flex items-center justify-between gap-3 pl-[18px] text-xs text-muted-foreground"
+                    class="col-span-2 mt-1 flex items-center justify-between gap-3 pl-10 text-xs text-muted-foreground"
                   >
                     <span
                       >{{ formatCompact(segment.totalTokens) }} Token ·
@@ -670,9 +774,14 @@ refreshAll()
             </div>
           </div>
 
-          <div class="rounded-md border bg-card p-4">
+          <aside class="border-t bg-muted/10 p-4 xl:border-l xl:border-t-0">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
+                <div
+                  class="mb-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground"
+                >
+                  <Layers3 class="h-3.5 w-3.5" /> 模型详情
+                </div>
                 <h3
                   class="truncate text-base font-semibold"
                   :title="activeModelItem?.model || '未标识模型'"
@@ -686,25 +795,25 @@ refreshAll()
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
+            <div class="mt-3 grid grid-cols-2 border-y text-sm">
+              <div class="border-b border-r p-2.5">
                 <p class="text-xs text-muted-foreground">总 Token</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{ formatTokens(activeModelItem?.totalTokens) }}
                 </p>
               </div>
-              <div>
+              <div class="border-b p-2.5">
                 <p class="text-xs text-muted-foreground">调用 / 失败</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{ formatTokens(activeModelItem?.callCount)
                   }}<span class="ml-1 text-xs font-normal text-muted-foreground"
                     >/ {{ formatTokens(activeModelItem?.failureCount) }}</span
                   >
                 </p>
               </div>
-              <div>
+              <div class="border-b border-r p-2.5">
                 <p class="text-xs text-muted-foreground">成功率</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{
                     modelSuccessRate(
                       activeModelItem?.callCount || 0,
@@ -713,57 +822,67 @@ refreshAll()
                   }}%
                 </p>
               </div>
-              <div>
+              <div class="border-b p-2.5">
                 <p class="text-xs text-muted-foreground">成本</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{ formatAmount(activeModelItem?.cost) }}
                 </p>
               </div>
-              <div>
+              <div class="border-r p-2.5">
                 <p class="text-xs text-muted-foreground">平均延迟</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{ formatLatency(activeModelItem?.avgLatencyMs) }}
                 </p>
               </div>
-              <div>
+              <div class="p-2.5">
                 <p class="text-xs text-muted-foreground">推理 Token</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums">
+                <p class="mt-0.5 text-base font-semibold tabular-nums">
                   {{ formatTokens(activeModelItem?.reasoningTokens) }}
                 </p>
               </div>
             </div>
 
-            <div class="mt-5">
+            <div class="mt-4">
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h4 class="text-sm font-semibold">模型 Token 构成</h4>
                   <p class="mt-1 text-xs text-muted-foreground">推理 Token 已包含在输出 Token 中</p>
                 </div>
-                <span class="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{{
+                <span class="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{{
                   formatCompact(activeModelItem?.totalTokens)
                 }}</span>
               </div>
-              <div class="mt-3 space-y-3">
+              <div class="mt-2.5 space-y-2.5">
                 <div
                   v-for="part in modelTokenParts"
                   :key="part.label"
-                  class="grid grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-3 text-sm"
+                  class="grid grid-cols-[68px_minmax(0,1fr)_auto] items-center gap-2 text-xs"
                 >
                   <span class="text-muted-foreground">{{ part.label }}</span>
-                  <div class="h-2 overflow-hidden rounded-sm bg-muted">
+                  <div class="h-1.5 overflow-hidden rounded-sm bg-muted">
                     <div
                       class="h-full rounded-sm"
                       :class="part.color"
                       :style="{ width: modelBarWidth(part.value) }"
                     ></div>
                   </div>
-                  <span class="min-w-16 text-right font-medium tabular-nums">{{
+                  <span class="min-w-14 text-right font-medium tabular-nums">{{
                     formatTokens(part.value)
                   }}</span>
                 </div>
               </div>
             </div>
-          </div>
+
+            <Button
+              variant="outline"
+              class="mt-4 h-9 w-full"
+              :disabled="!activeModelItem?.model"
+              @click="viewModelLogs(activeModelItem?.model || '')"
+            >
+              <Eye class="mr-2 h-4 w-4" />
+              查看该模型调用明细
+            </Button>
+          </aside>
         </div>
       </section>
 
@@ -807,7 +926,7 @@ refreshAll()
         </div>
       </section>
 
-      <section class="pt-6">
+      <section id="call-logs" class="scroll-mt-20 pt-6">
         <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 class="text-lg font-semibold">调用日志</h2>
