@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button, Dialog, DialogFixedContent, toast } from '@tabtab/ui'
+import { copyText } from '@/utils/clipboard'
 
 defineProps<{
   open: boolean
@@ -14,8 +15,12 @@ const emit = defineEmits<{
 
 async function copy(value: string) {
   if (!value) return
-  await navigator.clipboard.writeText(value)
-  toast.success('已复制到剪贴板')
+  try {
+    await copyText(value)
+    toast.success('已复制到剪贴板')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '复制失败，请手动复制')
+  }
 }
 </script>
 

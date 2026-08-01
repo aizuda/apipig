@@ -56,6 +56,10 @@ function addMapping() {
 function removeMapping(index: number) {
   emit('removeMapping', index)
 }
+
+function syncGatewayModel(mapping: AccountModelMapping) {
+  mapping.gatewayModel = mapping.providerModel
+}
 </script>
 
 <template>
@@ -166,6 +170,7 @@ function removeMapping(index: number) {
             <Input v-model="mapping.gatewayModel" placeholder="网关模型名称" /><select
               v-model="mapping.providerModel"
               class="h-10 rounded-md border bg-background px-3 text-sm"
+              @change="syncGatewayModel(mapping)"
             >
               <option value="">选择上游模型</option>
               <option v-for="model in providerModels" :key="model" :value="model">

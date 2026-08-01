@@ -14,7 +14,7 @@ func (r *WebRouter) InitWebRouter(router fiber.Router) {
 		router.Get("captcha", a.Captcha)
 		router.Post("public-key", a.PublicKey)
 		router.Post("login", a.Login)
-		router.Post("token-login", a.TokenLogin)
+		router.Post("token-authorize", a.AuthorizeToken)
 		router.Post("refresh-token", a.RefreshToken)
 
 		// 测试接口

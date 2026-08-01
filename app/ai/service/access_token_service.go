@@ -274,14 +274,18 @@ func (s *AccessTokenService) Page(params *aiReq.AccessTokenPageParams) (response
 
 // Statistics 按 API 密钥聚合指定时间范围内的调用和 Token 用量。
 func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParams) (aiResp.AccessTokenStatistics, error) {
-	statistics := aiResp.AccessTokenStatistics{Items: []aiResp.AccessTokenStatisticRecord{}}
+	statistics := aiResp.AccessTokenStatistics{
+		Items: []aiResp.AccessTokenStatisticRecord{}, ModelStatistics: []aiResp.AccessTokenModelStatistic{},
+	}
 	page, pageSize, offset := 1, 10, 0
 	keyword := ""
 	var tagID snowflake.ID
+	var accessTokenID snowflake.ID
 	if params != nil {
 		page, pageSize, offset = params.PageOffset()
 		keyword = strings.ToLower(strings.TrimSpace(params.Keyword))
 		tagID = params.TagID
+		accessTokenID = params.AccessTokenID
 		statistics.StartAt = params.StartAt
 		statistics.EndAt = params.EndAt
 		if params.StartAt < 0 || params.EndAt < 0 {
@@ -301,6 +305,9 @@ func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParam
 	tokenQuery := s.persistence().Query(model.AccessToken{}).
 		Select("id, name, status").
 		Order("created_at ASC")
+	if accessTokenID > 0 {
+		tokenQuery = tokenQuery.Where("id = ?", accessTokenID)
+	}
 	if keyword != "" {
 		tokenQuery = tokenQuery.Where("LOWER(ap_ai_access_token.name) LIKE ?", "%"+keyword+"%")
 	}
@@ -361,6 +368,60 @@ func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParam
 	usageByTokenID := make(map[snowflake.ID]usageAggregate, len(aggregates))
 	for _, aggregate := range aggregates {
 		usageByTokenID[aggregate.AccessTokenID] = aggregate
+	}
+
+	type modelUsageAggregate struct {
+		Model            string  `gorm:"column:model"`
+		CallCount        int64   `gorm:"column:call_count"`
+		SuccessCount     int64   `gorm:"column:success_count"`
+		FailureCount     int64   `gorm:"column:failure_count"`
+		PromptTokens     int64   `gorm:"column:prompt_tokens"`
+		CompletionTokens int64   `gorm:"column:completion_tokens"`
+		ReasoningTokens  int64   `gorm:"column:reasoning_tokens"`
+		CacheReadTokens  int64   `gorm:"column:cache_read_tokens"`
+		CacheWriteTokens int64   `gorm:"column:cache_write_tokens"`
+		TotalTokens      int64   `gorm:"column:total_tokens"`
+		Cost             float64 `gorm:"column:cost"`
+		LatencyTotal     int64   `gorm:"column:latency_total"`
+		LastUsedAt       int64   `gorm:"column:last_used_at"`
+	}
+	modelQuery := s.persistence().Query(model.CallLog{}).
+		Select(`model,
+			COUNT(*) AS call_count,
+			COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS success_count,
+			COALESCE(SUM(CASE WHEN success <> 1 THEN 1 ELSE 0 END), 0) AS failure_count,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+			COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
+			COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+			COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
+			COALESCE(SUM(total_tokens), 0) AS total_tokens,
+			COALESCE(SUM(cost), 0) AS cost,
+			COALESCE(SUM(CASE WHEN success = 1 THEN latency_ms ELSE 0 END), 0) AS latency_total,
+			COALESCE(MAX(created_at), 0) AS last_used_at`).
+		Where("access_token_id IN ?", tokenIDs).
+		Group("model").
+		Order("total_tokens DESC, model ASC")
+	if statistics.StartAt > 0 {
+		modelQuery = modelQuery.Where("created_at >= ? AND created_at <= ?", statistics.StartAt, statistics.EndAt)
+	}
+	var modelAggregates []modelUsageAggregate
+	if err := modelQuery.Scan(&modelAggregates).Error; err != nil {
+		return statistics, err
+	}
+	for _, aggregate := range modelAggregates {
+		avgLatencyMs := int64(0)
+		if aggregate.SuccessCount > 0 {
+			avgLatencyMs = aggregate.LatencyTotal / aggregate.SuccessCount
+		}
+		statistics.ModelStatistics = append(statistics.ModelStatistics, aiResp.AccessTokenModelStatistic{
+			Model: aggregate.Model, CallCount: aggregate.CallCount,
+			SuccessCount: aggregate.SuccessCount, FailureCount: aggregate.FailureCount,
+			PromptTokens: aggregate.PromptTokens, CompletionTokens: aggregate.CompletionTokens,
+			ReasoningTokens: aggregate.ReasoningTokens, CacheReadTokens: aggregate.CacheReadTokens,
+			CacheWriteTokens: aggregate.CacheWriteTokens, TotalTokens: aggregate.TotalTokens,
+			Cost: aggregate.Cost, AvgLatencyMs: avgLatencyMs, LastUsedAt: aggregate.LastUsedAt,
+		})
 	}
 
 	items := make([]aiResp.AccessTokenStatisticRecord, 0, len(tokens))

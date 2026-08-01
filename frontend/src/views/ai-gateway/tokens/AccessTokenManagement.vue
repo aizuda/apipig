@@ -35,6 +35,7 @@ import {
 } from '@/api/ai-gateway'
 import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
+import { copyText } from '@/utils/clipboard'
 import GatewayResourceConfirmDialogs from '../components/GatewayResourceConfirmDialogs.vue'
 import { useGatewayResourcePage } from '../composables/useGatewayResourcePage'
 import AIChat from '../chat/AIChat.vue'
@@ -501,12 +502,16 @@ function quotaPercent(item: AccessToken) {
 
 async function copyCreatedToken(token: string, id = 'created') {
   if (!token || token === '********') return
-  await navigator.clipboard.writeText(token)
-  copiedTokenId.value = id
-  toast.success('复制成功')
-  window.setTimeout(() => {
-    if (copiedTokenId.value === id) copiedTokenId.value = ''
-  }, 3000)
+  try {
+    await copyText(token)
+    copiedTokenId.value = id
+    toast.success('复制成功')
+    window.setTimeout(() => {
+      if (copiedTokenId.value === id) copiedTokenId.value = ''
+    }, 3000)
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '复制失败，请手动复制 API 密钥')
+  }
 }
 
 async function copyToken(item: AccessToken) {

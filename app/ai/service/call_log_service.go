@@ -5,6 +5,7 @@ import (
 
 	"apipig/app/ai/model"
 	aiReq "apipig/app/ai/model/request"
+	aiResp "apipig/app/ai/model/response"
 	"apipig/core/api"
 	"apipig/core/api/response"
 	"apipig/core/db"
@@ -64,4 +65,31 @@ func (s *CallLogService) Page(params *aiReq.CallLogPageParams) (response.PageRes
 	}
 	var arr []model.CallLog
 	return s.persistence().Page(query.Order("created_at DESC"), pageInfo(params), arr)
+}
+
+// PageForAccessToken 返回 API 密钥授权页所需的精简日志，避免泄露后台路由和计价配置。
+func (s *CallLogService) PageForAccessToken(params *aiReq.CallLogPageParams) (response.PageResult, error) {
+	result, err := s.Page(params)
+	if err != nil {
+		return result, err
+	}
+	records, ok := result.Records.([]model.CallLog)
+	if !ok {
+		result.Records = []aiResp.AccessTokenCallLogRecord{}
+		return result, nil
+	}
+	visibleRecords := make([]aiResp.AccessTokenCallLogRecord, 0, len(records))
+	for _, record := range records {
+		visibleRecords = append(visibleRecords, aiResp.AccessTokenCallLogRecord{
+			ID: record.ID, RequestID: record.RequestID, Model: record.Model, Path: record.Path, Method: record.Method,
+			StatusCode: record.StatusCode, PromptTokens: record.PromptTokens, CompletionTokens: record.CompletionTokens,
+			ReasoningTokens: record.ReasoningTokens, CacheReadTokens: record.CacheReadTokens,
+			CacheWriteTokens: record.CacheWriteTokens, InputImages: record.InputImages, OutputImages: record.OutputImages,
+			InputImageTokens: record.InputImageTokens, OutputImageTokens: record.OutputImageTokens,
+			TotalTokens: record.TotalTokens, Cost: record.Cost, LatencyMs: record.LatencyMs,
+			Success: record.Success, ErrorMessage: record.ErrorMessage, CreatedAt: record.CreatedAt,
+		})
+	}
+	result.Records = visibleRecords
+	return result, nil
 }

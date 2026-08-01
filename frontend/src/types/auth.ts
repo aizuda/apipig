@@ -18,10 +18,10 @@ export interface LoginParams {
 
 export type LoginType = 'account' | 'api_token'
 
-export interface TokenLoginParams {
-	token: string
-	captchaToken: string
-	captchaCode: string
+export interface TokenAuthorizationParams {
+  token: string
+  captchaToken: string
+  captchaCode: string
 }
 
 export interface BackendUser {
@@ -48,8 +48,9 @@ export interface UserInfo extends BackendUser {
 }
 
 export interface LoginResult {
-	user: BackendUser
-	token: string
-	refreshToken: string
-	loginType: LoginType
+  user: BackendUser
+  token: string
+  refreshToken?: string
+  loginType: LoginType
+  expiresAt?: number
 }

@@ -28,6 +28,7 @@ const emptyStatistics = (): AccessTokenStatistics => ({
   successCount: 0,
   failureCount: 0,
   totalTokens: 0,
+  modelStatistics: [],
   items: [],
 })
 

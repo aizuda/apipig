@@ -3,10 +3,14 @@
  */
 export default {
   accountLogin: 'Account Login',
-  apiTokenLogin: 'API Token Login',
-  apiTokenHint: 'Enter an API Token to view call data for that token only.',
-  apiTokenPlaceholder: 'Enter API Token',
-  pleaseInputApiToken: 'Please enter an API Token',
+  apiTokenLogin: 'API Key Access',
+  apiTokenHint: 'Access lasts 7 days and is limited to usage analytics and logs for this key.',
+  apiTokenPlaceholder: 'Enter API key',
+  pleaseInputApiToken: 'Please enter an API key',
+  authorizeTitle: 'View API key usage',
+  authorizeSubtitle: 'Verify the key to open its dedicated usage page',
+  authorize: 'Authorize access',
+  authorizing: 'Verifying...',
   welcomeBack: 'Welcome Back',
   loginSubtitle: 'Enter your account details to continue',
   newVersion: 'New Version 1.0 Now Available',

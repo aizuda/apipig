@@ -17,4 +17,5 @@ type LoginResp struct {
 	Token        string     `json:"token"`
 	RefreshToken string     `json:"refreshToken"`
 	LoginType    string     `json:"loginType"`
+	ExpiresAt    int64      `json:"expiresAt,omitempty"`
 }

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { fetchCaptcha, fetchLogin, fetchPublicKey, fetchTokenLogin } from '@/api/auth'
+import { fetchCaptcha, fetchLogin, fetchPublicKey, fetchTokenAuthorization } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
 import type { CaptchaInfo, LoginType, PublicKeyInfo } from '@/types/auth'
@@ -91,7 +91,7 @@ async function loadLoginChallenge() {
   captchaCode.value = ''
   try {
     const keyInfo = loginMode.value === 'account' ? await fetchPublicKey() : null
-    const captcha = await fetchCaptcha(keyInfo?.uuid || 'token-login')
+    const captcha = await fetchCaptcha(keyInfo?.uuid || 'token-authorization')
     publicKeyInfo.value = keyInfo
     captchaInfo.value = captcha
   } finally {
@@ -134,7 +134,7 @@ async function handleLogin() {
   try {
     let result
     if (loginMode.value === 'api_token') {
-      result = await fetchTokenLogin({
+      result = await fetchTokenAuthorization({
         token: apiToken.value.trim(),
         captchaToken: captchaInfo.value.token,
         captchaCode: captchaCode.value,
@@ -164,7 +164,7 @@ async function handleLogin() {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : undefined
     await router.replace(
       loginMode.value === 'api_token'
-        ? { name: 'AiGatewayLogs' }
+        ? { name: 'APITokenUsage' }
         : redirect || { name: 'Dashboard' },
     )
   } catch (error) {
@@ -321,10 +321,12 @@ onMounted(refreshLoginChallenge)
 
         <div class="space-y-2 animate-fade-in-up animation-delay-1">
           <h2 class="text-2xl font-bold text-foreground">
-            {{ t('login.welcomeBack') }}
+            {{ loginMode === 'api_token' ? t('login.authorizeTitle') : t('login.welcomeBack') }}
           </h2>
           <p class="text-muted-foreground">
-            {{ t('login.loginSubtitle') }}
+            {{
+              loginMode === 'api_token' ? t('login.authorizeSubtitle') : t('login.loginSubtitle')
+            }}
           </p>
         </div>
 
@@ -433,7 +435,7 @@ onMounted(refreshLoginChallenge)
           </template>
 
           <div v-else class="space-y-2">
-            <Label for="api-token">API Token</Label>
+            <Label for="api-token">API 密钥</Label>
             <div class="relative">
               <KeyRound
                 class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -528,10 +530,10 @@ onMounted(refreshLoginChallenge)
           >
             <span v-if="isLoading" class="flex items-center gap-2">
               <Loader2 class="animate-spin h-4 w-4" />
-              {{ t('common.loggingIn') }}
+              {{ loginMode === 'api_token' ? t('login.authorizing') : t('common.loggingIn') }}
             </span>
             <span v-else class="flex items-center gap-2">
-              {{ t('common.login') }}
+              {{ loginMode === 'api_token' ? t('login.authorize') : t('common.login') }}
               <ArrowRight class="w-4 h-4" />
             </span>
           </Button>

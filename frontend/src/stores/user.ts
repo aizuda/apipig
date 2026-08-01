@@ -6,6 +6,7 @@ const TOKEN_KEY = 'apipig_token'
 const REFRESH_TOKEN_KEY = 'apipig_refreshToken'
 const USER_KEY = 'apipig_userInfo'
 const LOGIN_TYPE_KEY = 'apipig_loginType'
+const EXPIRES_AT_KEY = 'apipig_expiresAt'
 export const DEFAULT_AVATAR_URL = '/avatar.jpg'
 
 function normalizeUser(user: BackendUser): UserInfo {
@@ -33,6 +34,7 @@ export const useUserStore = defineStore('user', () => {
   const loginType = ref<LoginType>(
     localStorage.getItem(LOGIN_TYPE_KEY) === 'api_token' ? 'api_token' : 'account',
   )
+  const expiresAt = ref(Number(localStorage.getItem(EXPIRES_AT_KEY)) || 0)
   const permissions = ref<string[]>([])
 
   const isAuthenticated = computed(() => Boolean(token.value))
@@ -53,13 +55,17 @@ export const useUserStore = defineStore('user', () => {
   function setSession(session: LoginResult) {
     const normalizedUser = normalizeUser(session.user)
     token.value = session.token
-    refreshToken.value = session.refreshToken
+    refreshToken.value = session.refreshToken || null
     user.value = normalizedUser
-	loginType.value = session.loginType || 'account'
+    loginType.value = session.loginType || 'account'
+    expiresAt.value = session.expiresAt || 0
     localStorage.setItem(TOKEN_KEY, session.token)
-    localStorage.setItem(REFRESH_TOKEN_KEY, session.refreshToken)
+    if (session.refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, session.refreshToken)
+    else localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
-	localStorage.setItem(LOGIN_TYPE_KEY, loginType.value)
+    localStorage.setItem(LOGIN_TYPE_KEY, loginType.value)
+    if (expiresAt.value) localStorage.setItem(EXPIRES_AT_KEY, String(expiresAt.value))
+    else localStorage.removeItem(EXPIRES_AT_KEY)
   }
 
   function setUserProfile(profile: BackendUser) {
@@ -72,12 +78,14 @@ export const useUserStore = defineStore('user', () => {
     token.value = null
     refreshToken.value = null
     user.value = null
-	loginType.value = 'account'
+    loginType.value = 'account'
+    expiresAt.value = 0
     permissions.value = []
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
-	localStorage.removeItem(LOGIN_TYPE_KEY)
+    localStorage.removeItem(LOGIN_TYPE_KEY)
+    localStorage.removeItem(EXPIRES_AT_KEY)
   }
 
   function setPermissions(perms: string[]) {
@@ -88,10 +96,11 @@ export const useUserStore = defineStore('user', () => {
     token,
     refreshToken,
     user,
-	loginType,
+    loginType,
+    expiresAt,
     permissions,
     isAuthenticated,
-	isAPITokenSession,
+    isAPITokenSession,
     displayName,
     displayEmail,
     defaultAvatar,

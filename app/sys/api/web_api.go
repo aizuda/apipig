@@ -63,12 +63,13 @@ func (a *WebApi) Login(c *fiber.Ctx) error {
 // @Param data body sysReq.RefreshTokenParams true "刷新票据"
 // @Success 200 {string} string "{"success":true,"data":{},"msg":"刷新Token成功"}"
 // @Router /v1/refresh-token [post]
-func (a *WebApi) TokenLogin(c *fiber.Ctx) error {
-	params := new(sysReq.TokenLoginParams)
-	if err := a.BodyParserVerify(c, params, "API Token login"); err != nil {
+// AuthorizeToken 使用 API 密钥签发仅限用量页面的临时授权凭证。
+func (a *WebApi) AuthorizeToken(c *fiber.Ctx) error {
+	params := new(sysReq.TokenAuthorizationParams)
+	if err := a.BodyParserVerify(c, params, "API Token authorization"); err != nil {
 		return response.Failed(c, err.Error())
 	}
-	login, err := webService.TokenLogin(c, params)
+	login, err := webService.AuthorizeToken(c, params)
 	if err != nil {
 		return response.Failed(c, err.Error())
 	}

@@ -30,10 +30,11 @@ type AccessTokenPageParams struct {
 // AccessTokenStatisticsParams 定义 API 密钥用量统计的时间范围；零值表示全部时间。
 type AccessTokenStatisticsParams struct {
 	coreReq.PageInfo
-	Keyword string       `json:"keyword"`
-	TagID   snowflake.ID `json:"tagId" swaggertype:"string"`
-	StartAt int64        `json:"startAt"`
-	EndAt   int64        `json:"endAt"`
+	Keyword       string       `json:"keyword"`
+	TagID         snowflake.ID `json:"tagId" swaggertype:"string"`
+	AccessTokenID snowflake.ID `json:"-"` // 仅由授权接口根据 JWT 注入，客户端不可指定
+	StartAt       int64        `json:"startAt"`
+	EndAt         int64        `json:"endAt"`
 }
 
 // GetPageInfo 返回通用分页参数。

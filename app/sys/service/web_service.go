@@ -26,6 +26,8 @@ import (
 
 type WebService struct{}
 
+const apiTokenAuthorizationDuration = 7 * 24 * time.Hour
+
 var cache1Minute, cache1MinuteErr = bigcache.New(context.Background(), bigcache.DefaultConfig(time.Minute))
 var loginPrivateKeyCache, loginPrivateKeyCacheErr = bigcache.New(context.Background(), bigcache.DefaultConfig(5*time.Minute))
 
@@ -85,7 +87,7 @@ func (s *WebService) Login(c *fiber.Ctx, params *sysReq.LoginParams) (loginResp 
 	return loginResp, err
 }
 
-func (s *WebService) TokenLogin(c *fiber.Ctx, params *sysReq.TokenLoginParams) (sysResp.LoginResp, error) {
+func (s *WebService) AuthorizeToken(c *fiber.Ctx, params *sysReq.TokenAuthorizationParams) (sysResp.LoginResp, error) {
 	if err := s.verifyCaptcha(params.CaptchaToken, params.CaptchaCode); err != nil {
 		return sysResp.LoginResp{}, err
 	}
@@ -158,27 +160,23 @@ func (s *WebService) tokenNext(user model.User, sid string) (loginResp sysResp.L
 
 func (s *WebService) apiTokenNext(accessTokenID snowflake.ID, name string, sid string) (sysResp.LoginResp, error) {
 	nowTime := toolkit.GetNowLocal()
+	expiresAt := nowTime.Add(apiTokenAuthorizationDuration)
 	j := middleware.NewJWT()
 	accessToken, accessErr := j.CreateToken(middleware.TokenClaims{
 		SID: sid, ID: accessTokenID, Username: name, NickName: name,
 		LoginType: middleware.LoginTypeAPIToken, AccessTokenID: accessTokenID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(nowTime.Add(time.Duration(j.ExpiresTime) * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(nowTime),
 		},
 	})
-	refreshToken, refreshErr := j.CreateToken(middleware.RefreshTokenClaims{
-		SID: sid, ID: accessTokenID, LoginType: middleware.LoginTypeAPIToken, AccessTokenID: accessTokenID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(nowTime.Add(time.Duration(j.ExpiresTime+5) * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(nowTime),
-		},
-	})
-	if accessErr != nil || refreshErr != nil {
+	if accessErr != nil {
 		return sysResp.LoginResp{}, errors.New("failed to create login session")
 	}
 	user := model.User{MODEL: coreAPI.MODEL{ID: accessTokenID}, Username: name, NickName: name, Status: 1}
-	return sysResp.LoginResp{User: user, Token: accessToken, RefreshToken: refreshToken, LoginType: middleware.LoginTypeAPIToken}, nil
+	return sysResp.LoginResp{
+		User: user, Token: accessToken, LoginType: middleware.LoginTypeAPIToken, ExpiresAt: expiresAt.UnixMilli(),
+	}, nil
 }
 
 func (s *WebService) RefreshToken(c *fiber.Ctx, params *sysReq.RefreshTokenParams) (*sysResp.LoginResp, error) {
@@ -187,15 +185,7 @@ func (s *WebService) RefreshToken(c *fiber.Ctx, params *sysReq.RefreshTokenParam
 		return nil, errors.New("illegal login")
 	}
 	if refreshToken.LoginType == middleware.LoginTypeAPIToken {
-		if err = aiService.AiService.AccessTokenService.ValidateSession(refreshToken.AccessTokenID, c.IP()); err != nil {
-			return nil, errors.New("illegal login")
-		}
-		token, err := aiService.AiService.AccessTokenService.Get(refreshToken.AccessTokenID)
-		if err != nil {
-			return nil, errors.New("illegal login")
-		}
-		result, err := s.apiTokenNext(token.ID, token.Name, refreshToken.SID)
-		return &result, err
+		return nil, errors.New("API Token authorization cannot be refreshed")
 	}
 	if err = SysService.UserService.UpdateSession(refreshToken.ID, refreshToken.SID, c.IP()); err != nil {
 		return nil, errors.New("illegal login")

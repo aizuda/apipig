@@ -64,7 +64,11 @@ func JWTAuth() fiber.Handler {
 }
 
 func isAPITokenSessionAllowed(c *fiber.Ctx) bool {
-	return c.Method() == fiber.MethodPost && strings.HasSuffix(c.Path(), "/ai/gateway/log/page")
+	if c.Method() != fiber.MethodPost {
+		return false
+	}
+	return strings.HasSuffix(c.Path(), "/ai/gateway/log/page") ||
+		strings.HasSuffix(c.Path(), "/ai/gateway/token/statistics")
 }
 
 type JWT struct {
@@ -84,6 +88,9 @@ func (j *JWT) CreateToken(claims jwt.Claims) (string, error) {
 
 func (j *JWT) ParseToken(tokenString string) (*TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
 		return j.SigningKey, nil
 	})
 	if err == nil {
@@ -96,6 +103,9 @@ func (j *JWT) ParseToken(tokenString string) (*TokenClaims, error) {
 
 func (j *JWT) ParseRefreshToken(refreshToken string) (*RefreshTokenClaims, error) {
 	token, err := jwt.ParseWithClaims(refreshToken, &RefreshTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
 		return j.SigningKey, nil
 	})
 	if err == nil {

@@ -15,6 +15,8 @@ export interface GatewayPageParams {
 
 export interface CallLogPageParams extends GatewayPageParams {
   success?: number
+  startAt?: number
+  endAt?: number
 }
 
 export interface Provider {
@@ -143,6 +145,22 @@ export interface AccessTokenStatisticRecord {
   lastUsedAt: number
 }
 
+export interface AccessTokenModelStatistic {
+  model: string
+  callCount: number
+  successCount: number
+  failureCount: number
+  promptTokens: number
+  completionTokens: number
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  cost: number
+  avgLatencyMs: number
+  lastUsedAt: number
+}
+
 export interface AccessTokenStatistics {
   startAt: number
   endAt: number
@@ -155,6 +173,7 @@ export interface AccessTokenStatistics {
   successCount: number
   failureCount: number
   totalTokens: number
+  modelStatistics: AccessTokenModelStatistic[]
   items: AccessTokenStatisticRecord[]
 }
 

@@ -32,7 +32,25 @@ type AccessTokenStatistics struct {
 	SuccessCount     int64                        `json:"successCount"`
 	FailureCount     int64                        `json:"failureCount"`
 	TotalTokens      int64                        `json:"totalTokens"`
+	ModelStatistics  []AccessTokenModelStatistic  `json:"modelStatistics"`
 	Items            []AccessTokenStatisticRecord `json:"items"`
+}
+
+// AccessTokenModelStatistic 表示指定密钥和时间范围内单个模型的用量。
+type AccessTokenModelStatistic struct {
+	Model            string  `json:"model"`
+	CallCount        int64   `json:"callCount"`
+	SuccessCount     int64   `json:"successCount"`
+	FailureCount     int64   `json:"failureCount"`
+	PromptTokens     int64   `json:"promptTokens"`
+	CompletionTokens int64   `json:"completionTokens"`
+	ReasoningTokens  int64   `json:"reasoningTokens"`
+	CacheReadTokens  int64   `json:"cacheReadTokens"`
+	CacheWriteTokens int64   `json:"cacheWriteTokens"`
+	TotalTokens      int64   `json:"totalTokens"`
+	Cost             float64 `json:"cost"`
+	AvgLatencyMs     int64   `json:"avgLatencyMs"`
+	LastUsedAt       int64   `json:"lastUsedAt"`
 }
 
 // AccessTokenStatisticRecord 表示单个 API 密钥的分项 Token 用量。
@@ -50,4 +68,30 @@ type AccessTokenStatisticRecord struct {
 	CacheWriteTokens int64        `json:"cacheWriteTokens"`
 	TotalTokens      int64        `json:"totalTokens"`
 	LastUsedAt       int64        `json:"lastUsedAt"`
+}
+
+// AccessTokenCallLogRecord 是 API 密钥授权页可见的调用日志字段。
+// 后台路由、客户端 IP 和计价快照等内部信息不会返回给调用方。
+type AccessTokenCallLogRecord struct {
+	ID                snowflake.ID `json:"id" swaggertype:"string"`
+	RequestID         string       `json:"requestId"`
+	Model             string       `json:"model"`
+	Path              string       `json:"path"`
+	Method            string       `json:"method"`
+	StatusCode        int          `json:"statusCode"`
+	PromptTokens      int          `json:"promptTokens"`
+	CompletionTokens  int          `json:"completionTokens"`
+	ReasoningTokens   int          `json:"reasoningTokens"`
+	CacheReadTokens   int          `json:"cacheReadTokens"`
+	CacheWriteTokens  int          `json:"cacheWriteTokens"`
+	InputImages       int          `json:"inputImages"`
+	OutputImages      int          `json:"outputImages"`
+	InputImageTokens  int          `json:"inputImageTokens"`
+	OutputImageTokens int          `json:"outputImageTokens"`
+	TotalTokens       int          `json:"totalTokens"`
+	Cost              float64      `json:"cost"`
+	LatencyMs         int64        `json:"latencyMs"`
+	Success           uint         `json:"success"`
+	ErrorMessage      string       `json:"errorMessage"`
+	CreatedAt         int64        `json:"createdAt"`
 }

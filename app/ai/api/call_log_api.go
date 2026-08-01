@@ -31,6 +31,7 @@ func (a *CallLogApi) PageCallLog(c *fiber.Ctx) error {
 			params = new(aiReq.CallLogPageParams)
 		}
 		params.TokenID = claims.AccessTokenID
+		return response.Execute(c, a.service.PageForAccessToken, params, nil)
 	}
 	return response.Execute(c, a.service.Page, params, err)
 }

@@ -17,6 +17,17 @@ export const constantRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/api-token/usage',
+    name: 'APITokenUsage',
+    component: () => import('@/views/api-token/TokenUsage.vue'),
+    meta: {
+      title: 'API 密钥用量',
+      requiresAuth: true,
+      hideInMenu: true,
+      hideInTab: true,
+    },
+  },
+  {
     path: '/401',
     name: '401',
     component: () => import('@/views/error/401.vue'),

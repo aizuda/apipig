@@ -7,6 +7,7 @@ import (
 	"apipig/core/api"
 	"apipig/core/api/request"
 	"apipig/core/api/response"
+	"apipig/middleware"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -66,5 +67,16 @@ func (a *AccessTokenApi) PageAccessToken(c *fiber.Ctx) error {
 func (a *AccessTokenApi) StatisticsAccessToken(c *fiber.Ctx) error {
 	params := new(aiReq.AccessTokenStatisticsParams)
 	err := a.BodyParser(c, params, "API 密钥统计")
+	claims := middleware.GetTokenClaims(c)
+	if err == nil && claims != nil && claims.LoginType == middleware.LoginTypeAPIToken {
+		if validateErr := service.AiService.AccessTokenService.ValidateSession(claims.AccessTokenID, c.IP()); validateErr != nil {
+			return response.Failed(c, validateErr.Error())
+		}
+		params.AccessTokenID = claims.AccessTokenID
+		params.Keyword = ""
+		params.TagID = 0
+		params.Page = 1
+		params.PageSize = 1
+	}
 	return response.Execute(c, a.service.Statistics, params, err)
 }

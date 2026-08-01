@@ -4,7 +4,7 @@ import type {
   LoginParams,
   LoginResult,
   PublicKeyInfo,
-  TokenLoginParams,
+  TokenAuthorizationParams,
 } from '@/types/auth'
 
 export function fetchPublicKey(): Promise<PublicKeyInfo> {
@@ -19,6 +19,6 @@ export function fetchLogin(params: LoginParams): Promise<LoginResult> {
   return post<LoginResult>('/login', params)
 }
 
-export function fetchTokenLogin(params: TokenLoginParams): Promise<LoginResult> {
-  return post<LoginResult>('/token-login', params)
+export function fetchTokenAuthorization(params: TokenAuthorizationParams): Promise<LoginResult> {
+  return post<LoginResult>('/token-authorize', params)
 }

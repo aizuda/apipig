@@ -30,7 +30,7 @@ type LoginParams struct {
 	CaptchaCode  string `json:"captchaCode" validate:"required"`  // 验证码内容
 }
 
-type TokenLoginParams struct {
+type TokenAuthorizationParams struct {
 	Token        string `json:"token" validate:"required"`
 	CaptchaToken string `json:"captchaToken" validate:"required"`
 	CaptchaCode  string `json:"captchaCode" validate:"required"`

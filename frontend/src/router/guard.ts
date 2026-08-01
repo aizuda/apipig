@@ -31,11 +31,15 @@ export function setupRouterGuard(router: Router) {
     }
 
     if (to.name === 'Login' && isAuthenticated) {
-      return { name: userStore.isAPITokenSession ? 'AiGatewayLogs' : 'Dashboard' }
+      return { name: userStore.isAPITokenSession ? 'APITokenUsage' : 'Dashboard' }
     }
 
-    if (isAuthenticated && userStore.isAPITokenSession && to.name !== 'AiGatewayLogs') {
-      return { name: 'AiGatewayLogs' }
+    if (isAuthenticated && userStore.isAPITokenSession && to.name !== 'APITokenUsage') {
+      return { name: 'APITokenUsage' }
+    }
+
+    if (isAuthenticated && !userStore.isAPITokenSession && to.name === 'APITokenUsage') {
+      return { name: 'Dashboard' }
     }
 
     if (to.meta.permissions?.length) {

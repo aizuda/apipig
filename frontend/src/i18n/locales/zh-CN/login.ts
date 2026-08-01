@@ -3,11 +3,14 @@
  */
 export default {
   accountLogin: '\u8d26\u6237\u767b\u5f55',
-  apiTokenLogin: 'API Token \u767b\u5f55',
-  apiTokenHint:
-    '\u8f93\u5165 API Token\uff0c\u4ec5\u67e5\u770b\u8be5 Token \u7684\u8c03\u7528\u6570\u636e',
-  apiTokenPlaceholder: '\u8bf7\u8f93\u5165 API Token',
-  pleaseInputApiToken: '\u8bf7\u8f93\u5165 API Token',
+  apiTokenLogin: 'API 密钥授权',
+  apiTokenHint: '授权凭证有效期为 7 天，仅可查看该密钥的用量统计和调用日志。',
+  apiTokenPlaceholder: '请输入 API 密钥',
+  pleaseInputApiToken: '请输入 API 密钥',
+  authorizeTitle: '查看 API 密钥用量',
+  authorizeSubtitle: '验证密钥后进入专属用量页面',
+  authorize: '授权查看',
+  authorizing: '验证中...',
   welcomeBack: '欢迎回来',
   loginSubtitle: '请输入您的账户信息以继续',
   newVersion: '全新版本 1.0 现已发布',
