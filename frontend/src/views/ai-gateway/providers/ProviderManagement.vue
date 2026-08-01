@@ -7,6 +7,7 @@ import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import GatewayResourceConfirmDialogs from '../components/GatewayResourceConfirmDialogs.vue'
 import { useGatewayResourcePage } from '../composables/useGatewayResourcePage'
+import ProviderBrandIcon from './ProviderBrandIcon.vue'
 import ProviderEditorDialog from './ProviderEditorDialog.vue'
 
 defineOptions({ name: 'AiGatewayProviders' })
@@ -16,6 +17,7 @@ const providerModelInput = ref('')
 const providerForm = reactive<Provider>({
   name: '',
   code: '',
+  icon: '',
   protocol: 'openai',
   baseUrl: '',
   models: '',
@@ -69,6 +71,7 @@ function resetProviderForm() {
     id: undefined,
     name: '',
     code: '',
+    icon: '',
     protocol: 'openai',
     baseUrl: '',
     models: '',
@@ -204,7 +207,17 @@ function requestStatusChange(_kind: 'provider', item: Provider) {
                   :key="item.id"
                   class="border-b last:border-0 hover:bg-muted/30"
                 >
-                  <td class="px-4 py-3 font-medium">{{ item.name }}</td>
+                  <td class="px-4 py-3 font-medium">
+                    <div class="flex items-center gap-2.5">
+                      <ProviderBrandIcon
+                        :icon="item.icon"
+                        :fallback="item.code"
+                        :secondary-fallback="item.protocol"
+                        size="sm"
+                      />
+                      <span>{{ item.name }}</span>
+                    </div>
+                  </td>
                   <td class="px-4 py-3">{{ item.code }}</td>
                   <td class="px-4 py-3">{{ item.protocol }}</td>
                   <td class="max-w-[320px] px-4 py-3">

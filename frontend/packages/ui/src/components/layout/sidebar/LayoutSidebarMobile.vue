@@ -88,7 +88,7 @@ const openModel = computed({
           </slot>
           <div class="flex flex-col min-w-0">
             <SheetTitle class="text-sm font-bold tracking-tight truncate">
-              ApiPig Admin
+              ApiPig Gateway
             </SheetTitle>
             <span class="text-[10px] text-muted-foreground truncate">管理系统</span>
           </div>

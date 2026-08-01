@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"apipig/app/ai/model"
@@ -19,6 +20,19 @@ func TestNormalizeProviderBaseURL(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/v1", normalizeProviderBaseURL("openai", "https://api.example.com/v1/"))
 	assert.Equal(t, "https://api.example.com/api/v1", normalizeProviderBaseURL("openai", "https://api.example.com/api/v1"))
 	assert.Equal(t, "https://api.example.com", normalizeProviderBaseURL("custom", "https://api.example.com/"))
+}
+
+func TestNormalizeAndValidateProviderIcon(t *testing.T) {
+	providerModel := &model.Provider{
+		Name: "DeepSeek", Code: "deepseek", Icon: " DeepSeek ", Protocol: "openai",
+		BaseURL: "https://api.deepseek.com", TimeoutMs: 60_000, Status: gatewayStatusNormal,
+	}
+	normalizeProvider(providerModel)
+	assert.Equal(t, "deepseek", providerModel.Icon)
+	require.NoError(t, validateProvider(providerModel))
+
+	providerModel.Icon = strings.Repeat("x", 51)
+	require.EqualError(t, validateProvider(providerModel), "供应商图标标识不能超过 50 个字符")
 }
 
 func TestOpenAICompatibleGatewayUsesV1ChatCompletions(t *testing.T) {

@@ -21,6 +21,7 @@ export interface Provider {
   id?: string
   name: string
   code: string
+  icon?: string
   protocol: string
   baseUrl: string
   models: string
@@ -124,6 +125,46 @@ export interface AccessToken {
 export interface AccessTokenSaveResult {
   success: boolean
   token?: string
+}
+
+export interface AccessTokenStatisticRecord {
+  tokenId: string
+  tokenName: string
+  status: number
+  callCount: number
+  successCount: number
+  failureCount: number
+  promptTokens: number
+  completionTokens: number
+  reasoningTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  totalTokens: number
+  lastUsedAt: number
+}
+
+export interface AccessTokenStatistics {
+  startAt: number
+  endAt: number
+  total: number
+  page: number
+  pageSize: number
+  tokenCount: number
+  activeTokenCount: number
+  callCount: number
+  successCount: number
+  failureCount: number
+  totalTokens: number
+  items: AccessTokenStatisticRecord[]
+}
+
+export interface AccessTokenStatisticsParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  tagId?: string
+  startAt?: number
+  endAt?: number
 }
 
 export interface AccessTokenTag {
@@ -311,6 +352,8 @@ export const aiGatewayApi = {
 
   tokenPage: (params: GatewayPageParams = { page: 1, pageSize: 100 }) =>
     post<PageResult<AccessToken>>('/ai/gateway/token/page', params),
+  tokenStatistics: (params: AccessTokenStatisticsParams = {}) =>
+    post<AccessTokenStatistics>('/ai/gateway/token/statistics', params),
   saveToken: (data: AccessToken) => {
     const payload = {
       ...data,

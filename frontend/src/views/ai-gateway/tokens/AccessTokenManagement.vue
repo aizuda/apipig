@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { Check, Copy, MessageSquareText, Plus, Search, Tags, Trash2 } from '@lucide/vue'
+import {
+  ChartBarStacked,
+  Check,
+  Copy,
+  MessageSquareText,
+  Plus,
+  Search,
+  Tags,
+  Trash2,
+} from '@lucide/vue'
 import {
   Badge,
   Button,
@@ -33,6 +42,7 @@ import TokenTagManagerDialog from './TokenTagManagerDialog.vue'
 import AccessTokenEditorDialog from './AccessTokenEditorDialog.vue'
 import CreatedTokenDialog from './CreatedTokenDialog.vue'
 import AccessTokenTagAssignmentDialog from './AccessTokenTagAssignmentDialog.vue'
+import AccessTokenStatisticsDialog from './AccessTokenStatisticsDialog.vue'
 
 defineOptions({ name: 'AiGatewayTokens' })
 
@@ -46,6 +56,7 @@ const tokenModelTags = ref<string[]>([])
 const tokenModelSelection = ref('')
 const tokenTagManagerOpen = ref(false)
 const aiChatOpen = ref(false)
+const tokenStatisticsOpen = ref(false)
 const tokenTagAssignmentTarget = ref<AccessToken | null>(null)
 const tokenTagAssignmentLoading = ref(false)
 const tokenTagLoading = ref(false)
@@ -617,7 +628,19 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
       description="API 密钥独立管理。"
       :loading="loading"
       @refresh="loadData"
-    />
+    >
+      <template #actions>
+        <Button
+          variant="outline"
+          size="sm"
+          class="w-full shrink-0 sm:w-auto"
+          @click="tokenStatisticsOpen = true"
+        >
+          <ChartBarStacked class="mr-1.5 h-3.5 w-3.5" />
+          统计分析
+        </Button>
+      </template>
+    </AppPageHeader>
 
     <div
       v-if="errorMessage"
@@ -678,6 +701,8 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
       </DialogFixedContent>
     </Dialog>
 
+    <AccessTokenStatisticsDialog v-model:open="tokenStatisticsOpen" />
+
     <section>
       <AccessTokenEditorDialog
         :open="editorOpen"
@@ -720,10 +745,10 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                   <th class="px-4 py-3">API 密钥</th>
                   <th class="px-4 py-3">关联号池</th>
                   <th class="px-4 py-3">模型</th>
+                  <th class="px-4 py-3">调用/用量</th>
                   <th class="px-4 py-3">IP 限制</th>
                   <th class="px-4 py-3">速率限制</th>
                   <th class="px-4 py-3">额度</th>
-                  <th class="px-4 py-3">调用/用量</th>
                   <th class="px-4 py-3">有效期</th>
                   <th class="px-4 py-3">状态</th>
                   <th
@@ -812,6 +837,17 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                     </div>
                     <span v-else class="text-muted-foreground">未配置</span>
                   </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    成功 {{ item.successCount || 0 }} / 失败 {{ item.failureCount || 0 }}<br />
+                    <span class="text-xs text-muted-foreground"
+                      >入 {{ formatTokens(item.promptTokensTotal) }} / 出
+                      {{ formatTokens(item.completionTokensTotal) }} / 缓存
+                      {{ formatTokens(item.cacheReadTokensTotal) }}</span
+                    ><br />
+                    <span class="text-xs text-muted-foreground"
+                      >最近 {{ formatTime(item.lastUsedAt) }}</span
+                    >
+                  </td>
                   <td class="min-w-[140px] px-4 py-3">
                     <div
                       class="flex items-center gap-2 whitespace-nowrap"
@@ -885,17 +921,6 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                     <div v-if="item.quotaAmount" class="mt-1 text-xs text-muted-foreground">
                       已使用 {{ quotaPercent(item).toFixed(1) }}%
                     </div>
-                  </td>
-                  <td class="px-4 py-3 whitespace-nowrap">
-                    成功 {{ item.successCount || 0 }} / 失败 {{ item.failureCount || 0 }}<br />
-                    <span class="text-xs text-muted-foreground"
-                      >入 {{ formatTokens(item.promptTokensTotal) }} / 出
-                      {{ formatTokens(item.completionTokensTotal) }} / 缓存
-                      {{ formatTokens(item.cacheReadTokensTotal) }}</span
-                    ><br />
-                    <span class="text-xs text-muted-foreground"
-                      >最近 {{ formatTime(item.lastUsedAt) }}</span
-                    >
                   </td>
                   <td class="px-4 py-3 whitespace-nowrap">
                     <span v-if="item.expireAt">{{ formatTime(item.expireAt) }}</span>

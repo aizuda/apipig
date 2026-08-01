@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"sort"
 	"strings"
 
 	"apipig/app/ai/model"
@@ -269,6 +270,130 @@ func (s *AccessTokenService) Page(params *aiReq.AccessTokenPageParams) (response
 	}
 	result.Records = pageRecords
 	return result, nil
+}
+
+// Statistics 按 API 密钥聚合指定时间范围内的调用和 Token 用量。
+func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParams) (aiResp.AccessTokenStatistics, error) {
+	statistics := aiResp.AccessTokenStatistics{Items: []aiResp.AccessTokenStatisticRecord{}}
+	page, pageSize, offset := 1, 10, 0
+	keyword := ""
+	var tagID snowflake.ID
+	if params != nil {
+		page, pageSize, offset = params.PageOffset()
+		keyword = strings.ToLower(strings.TrimSpace(params.Keyword))
+		tagID = params.TagID
+		statistics.StartAt = params.StartAt
+		statistics.EndAt = params.EndAt
+		if params.StartAt < 0 || params.EndAt < 0 {
+			return statistics, errors.New("统计时间不能为负数")
+		}
+		if (params.StartAt == 0) != (params.EndAt == 0) {
+			return statistics, errors.New("统计开始时间和结束时间必须同时提供")
+		}
+		if params.StartAt > 0 && params.EndAt < params.StartAt {
+			return statistics, errors.New("统计结束时间不能早于开始时间")
+		}
+	}
+	statistics.Page = page
+	statistics.PageSize = pageSize
+
+	var tokens []model.AccessToken
+	tokenQuery := s.persistence().Query(model.AccessToken{}).
+		Select("id, name, status").
+		Order("created_at ASC")
+	if keyword != "" {
+		tokenQuery = tokenQuery.Where("LOWER(ap_ai_access_token.name) LIKE ?", "%"+keyword+"%")
+	}
+	if tagID > 0 {
+		tokenQuery = tokenQuery.Where(
+			"EXISTS (SELECT 1 FROM ap_ai_access_token_tag_relation relation WHERE relation.access_token_id = ap_ai_access_token.id AND relation.tag_id = ?)",
+			tagID,
+		)
+	}
+	if err := tokenQuery.Find(&tokens).Error; err != nil {
+		return statistics, err
+	}
+	statistics.TokenCount = int64(len(tokens))
+	statistics.Total = statistics.TokenCount
+	if len(tokens) == 0 {
+		return statistics, nil
+	}
+	tokenIDs := make([]snowflake.ID, 0, len(tokens))
+	for _, token := range tokens {
+		tokenIDs = append(tokenIDs, token.ID)
+	}
+
+	type usageAggregate struct {
+		AccessTokenID    snowflake.ID `gorm:"column:access_token_id"`
+		CallCount        int64        `gorm:"column:call_count"`
+		SuccessCount     int64        `gorm:"column:success_count"`
+		FailureCount     int64        `gorm:"column:failure_count"`
+		PromptTokens     int64        `gorm:"column:prompt_tokens"`
+		CompletionTokens int64        `gorm:"column:completion_tokens"`
+		ReasoningTokens  int64        `gorm:"column:reasoning_tokens"`
+		CacheReadTokens  int64        `gorm:"column:cache_read_tokens"`
+		CacheWriteTokens int64        `gorm:"column:cache_write_tokens"`
+		TotalTokens      int64        `gorm:"column:total_tokens"`
+		LastUsedAt       int64        `gorm:"column:last_used_at"`
+	}
+
+	query := s.persistence().Query(model.CallLog{}).
+		Select(`access_token_id,
+			COUNT(*) AS call_count,
+			COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0) AS success_count,
+			COALESCE(SUM(CASE WHEN success <> 1 THEN 1 ELSE 0 END), 0) AS failure_count,
+			COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+			COALESCE(SUM(reasoning_tokens), 0) AS reasoning_tokens,
+			COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+			COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
+			COALESCE(SUM(total_tokens), 0) AS total_tokens,
+			COALESCE(MAX(created_at), 0) AS last_used_at`).
+		Where("access_token_id IN ?", tokenIDs).
+		Group("access_token_id")
+	if statistics.StartAt > 0 {
+		query = query.Where("created_at >= ? AND created_at <= ?", statistics.StartAt, statistics.EndAt)
+	}
+	var aggregates []usageAggregate
+	if err := query.Scan(&aggregates).Error; err != nil {
+		return statistics, err
+	}
+	usageByTokenID := make(map[snowflake.ID]usageAggregate, len(aggregates))
+	for _, aggregate := range aggregates {
+		usageByTokenID[aggregate.AccessTokenID] = aggregate
+	}
+
+	items := make([]aiResp.AccessTokenStatisticRecord, 0, len(tokens))
+	for _, token := range tokens {
+		usage := usageByTokenID[token.ID]
+		item := aiResp.AccessTokenStatisticRecord{
+			TokenID: token.ID, TokenName: token.Name, Status: token.Status,
+			CallCount: usage.CallCount, SuccessCount: usage.SuccessCount, FailureCount: usage.FailureCount,
+			PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+			ReasoningTokens: usage.ReasoningTokens, CacheReadTokens: usage.CacheReadTokens,
+			CacheWriteTokens: usage.CacheWriteTokens, TotalTokens: usage.TotalTokens,
+			LastUsedAt: usage.LastUsedAt,
+		}
+		if item.CallCount > 0 {
+			statistics.ActiveTokenCount++
+		}
+		statistics.CallCount += item.CallCount
+		statistics.SuccessCount += item.SuccessCount
+		statistics.FailureCount += item.FailureCount
+		statistics.TotalTokens += item.TotalTokens
+		items = append(items, item)
+	}
+	sort.SliceStable(items, func(left, right int) bool {
+		if items[left].TotalTokens == items[right].TotalTokens {
+			return items[left].TokenName < items[right].TokenName
+		}
+		return items[left].TotalTokens > items[right].TotalTokens
+	})
+	if offset < len(items) {
+		end := min(offset+pageSize, len(items))
+		statistics.Items = items[offset:end]
+	}
+	return statistics, nil
 }
 
 // normalizeAccessToken 统一清理访问令牌字段并补齐默认值。

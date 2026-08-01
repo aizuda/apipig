@@ -27,6 +27,15 @@ type AccessTokenPageParams struct {
 	Status  uint   `json:"status"`  // 状态：1 启用，2 禁用
 }
 
+// AccessTokenStatisticsParams 定义 API 密钥用量统计的时间范围；零值表示全部时间。
+type AccessTokenStatisticsParams struct {
+	coreReq.PageInfo
+	Keyword string       `json:"keyword"`
+	TagID   snowflake.ID `json:"tagId" swaggertype:"string"`
+	StartAt int64        `json:"startAt"`
+	EndAt   int64        `json:"endAt"`
+}
+
 // GetPageInfo 返回通用分页参数。
 func (p *AccessTokenPageParams) GetPageInfo() coreReq.PageInfo {
 	if p == nil {

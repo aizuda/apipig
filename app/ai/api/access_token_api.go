@@ -61,3 +61,10 @@ func (a *AccessTokenApi) PageAccessToken(c *fiber.Ctx) error {
 	err := a.BodyParser(c, &params, "访问 Token 分页")
 	return response.Execute(c, a.service.Page, params, err)
 }
+
+// StatisticsAccessToken 按 API 密钥聚合指定时间范围内的 Token 用量。
+func (a *AccessTokenApi) StatisticsAccessToken(c *fiber.Ctx) error {
+	params := new(aiReq.AccessTokenStatisticsParams)
+	err := a.BodyParser(c, params, "API 密钥统计")
+	return response.Execute(c, a.service.Statistics, params, err)
+}

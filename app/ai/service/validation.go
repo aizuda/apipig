@@ -21,6 +21,9 @@ func validateProvider(m *model.Provider) error {
 	if m.Name == "" || m.Code == "" {
 		return errors.New("供应商名称和编码不能为空")
 	}
+	if len(m.Icon) > 50 {
+		return errors.New("供应商图标标识不能超过 50 个字符")
+	}
 	parsed, err := url.Parse(m.BaseURL)
 	if err != nil || parsed.Host == "" || !slices.Contains([]string{"http", "https"}, strings.ToLower(parsed.Scheme)) {
 		return errors.New("供应商 BaseURL 必须是有效的 HTTP 或 HTTPS 地址")

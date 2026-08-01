@@ -10,6 +10,7 @@ type Provider struct {
 	api.MODEL        // 通用主键、创建更新信息和软删除标记
 	Name      string `gorm:"size:80;not null;index" json:"name"`               // 供应商名称
 	Code      string `gorm:"size:50;not null;uniqueIndex" json:"code"`         // 供应商编码，系统内部唯一标识
+	Icon      string `gorm:"size:50" json:"icon"`                              // SVG 品牌图标标识
 	Protocol  string `gorm:"size:30;not null;default:openai" json:"protocol"`  // 协议类型：openai、anthropic、codex、grok、gemini、qwen、custom
 	BaseURL   string `gorm:"size:255;not null" json:"baseUrl"`                 // API 基础地址，建议保存到兼容协议的 /v1 层级
 	Models    string `gorm:"size:1000" json:"models"`                          // 支持模型，多个模型使用英文逗号分隔

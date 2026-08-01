@@ -171,6 +171,83 @@ func TestAccessTokenPageAssemblesCurrentPageAssociations(t *testing.T) {
 	assert.IsType(t, []aiResp.AccessTokenPageRecord{}, emptyPage.Records)
 }
 
+func TestAccessTokenStatisticsAggregatesRangeAndIncludesUnusedTokens(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open("file:access-token-statistics?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, database.AutoMigrate(&model.AccessToken{}, &model.CallLog{}, &model.AccessTokenTagRelation{}))
+
+	tokens := []model.AccessToken{
+		{MODEL: coreAPI.MODEL{ID: snowflake.ID(3451), CreatedAt: 1}, Name: "production", Token: "sk-production", RPM: 60, Status: gatewayStatusNormal},
+		{MODEL: coreAPI.MODEL{ID: snowflake.ID(3452), CreatedAt: 2}, Name: "unused", Token: "sk-unused", RPM: 60, Status: gatewayStatusDisabled},
+	}
+	require.NoError(t, database.Create(&tokens).Error)
+	tagID := snowflake.ID(3453)
+	require.NoError(t, database.Create(&model.AccessTokenTagRelation{AccessTokenID: tokens[0].ID, TagID: tagID}).Error)
+	require.NoError(t, database.Create(&[]model.CallLog{
+		{MODEL: coreAPI.MODEL{ID: snowflake.ID(3461), CreatedAt: 1_000}, RequestID: "inside-success", AccessTokenID: tokens[0].ID, Success: gatewayStatusNormal, PromptTokens: 100, CompletionTokens: 40, ReasoningTokens: 10, CacheReadTokens: 20, CacheWriteTokens: 5, TotalTokens: 165},
+		{MODEL: coreAPI.MODEL{ID: snowflake.ID(3462), CreatedAt: 2_000}, RequestID: "inside-failure", AccessTokenID: tokens[0].ID, Success: gatewayStatusDisabled},
+		{MODEL: coreAPI.MODEL{ID: snowflake.ID(3463), CreatedAt: 3_000}, RequestID: "outside", AccessTokenID: tokens[0].ID, Success: gatewayStatusNormal, PromptTokens: 999, TotalTokens: 999},
+	}).Error)
+
+	tokenService := &AccessTokenService{store: newGormAIStore(func() *gorm.DB { return database })}
+	statistics, err := tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{StartAt: 500, EndAt: 2_500})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, statistics.Total)
+	assert.Equal(t, 1, statistics.Page)
+	assert.Equal(t, 10, statistics.PageSize)
+	assert.EqualValues(t, 2, statistics.TokenCount)
+	assert.EqualValues(t, 1, statistics.ActiveTokenCount)
+	assert.EqualValues(t, 2, statistics.CallCount)
+	assert.EqualValues(t, 1, statistics.SuccessCount)
+	assert.EqualValues(t, 1, statistics.FailureCount)
+	assert.EqualValues(t, 165, statistics.TotalTokens)
+	require.Len(t, statistics.Items, 2)
+	assert.Equal(t, "production", statistics.Items[0].TokenName)
+	assert.EqualValues(t, 100, statistics.Items[0].PromptTokens)
+	assert.EqualValues(t, 40, statistics.Items[0].CompletionTokens)
+	assert.EqualValues(t, 10, statistics.Items[0].ReasoningTokens)
+	assert.EqualValues(t, 20, statistics.Items[0].CacheReadTokens)
+	assert.EqualValues(t, 5, statistics.Items[0].CacheWriteTokens)
+	assert.EqualValues(t, 2_000, statistics.Items[0].LastUsedAt)
+	assert.Equal(t, "unused", statistics.Items[1].TokenName)
+	assert.Zero(t, statistics.Items[1].CallCount)
+
+	secondPage, err := tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{
+		PageInfo: coreReq.PageInfo{Page: 2, PageSize: 1}, StartAt: 500, EndAt: 2_500,
+	})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, secondPage.Total)
+	assert.EqualValues(t, 2, secondPage.TokenCount)
+	assert.EqualValues(t, 2, secondPage.CallCount)
+	require.Len(t, secondPage.Items, 1)
+	assert.Equal(t, "unused", secondPage.Items[0].TokenName)
+
+	filtered, err := tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{Keyword: "PROD"})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, filtered.Total)
+	assert.EqualValues(t, 1, filtered.TokenCount)
+	assert.EqualValues(t, 3, filtered.CallCount)
+	require.Len(t, filtered.Items, 1)
+	assert.Equal(t, "production", filtered.Items[0].TokenName)
+
+	byTag, err := tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{TagID: tagID})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, byTag.Total)
+	assert.EqualValues(t, 1, byTag.TokenCount)
+	require.Len(t, byTag.Items, 1)
+	assert.Equal(t, "production", byTag.Items[0].TokenName)
+
+	allTime, err := tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1_164, allTime.TotalTokens)
+	assert.EqualValues(t, 3, allTime.CallCount)
+
+	_, err = tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{StartAt: 2_000})
+	require.EqualError(t, err, "统计开始时间和结束时间必须同时提供")
+	_, err = tokenService.Statistics(&aiReq.AccessTokenStatisticsParams{StartAt: 2_000, EndAt: 1_000})
+	require.EqualError(t, err, "统计结束时间不能早于开始时间")
+}
+
 func TestAccessTokenUpdateTagsReplacesRelations(t *testing.T) {
 	database, err := gorm.Open(sqlite.Open("file:access-token-update-tags?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)

@@ -2,7 +2,7 @@
   "name": "@tabtab/admin",
   "version": "0.0.1",
   "private": true,
-  "description": "ApiPig Admin App",
+  "description": "ApiPig Gateway App",
   "type": "module",
   "scripts": {
     "dev": "node internal/dev-cli/index.mjs",
@@ -19,6 +19,7 @@
     "stub": "pnpm -r --filter './packages/*' --filter './internal/*' run stub"
   },
   "dependencies": {
+    "@lobehub/icons-static-svg": "^1.94.0",
     "@lucide/vue": "catalog:",
     "@tabtab/styles": "workspace:*",
     "@tabtab/ui": "workspace:*",

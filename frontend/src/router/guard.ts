@@ -50,7 +50,7 @@ export function setupRouterGuard(router: Router) {
 
     const titleKey = to.meta.titleKey as string
     const title = titleKey ? t(titleKey) : (to.meta.title as string)
-    document.title = title ? `${title} | ApiPig Admin` : 'ApiPig Admin'
+    document.title = title ? `${title} | ApiPig Gateway` : 'ApiPig Gateway'
   })
 
   router.afterEach(() => {

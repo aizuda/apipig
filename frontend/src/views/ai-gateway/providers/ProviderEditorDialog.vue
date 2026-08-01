@@ -3,6 +3,7 @@ import { computed, toRef } from 'vue'
 import { X } from '@lucide/vue'
 import { Badge, Button, Dialog, DialogFixedContent, Input, Label, Textarea } from '@tabtab/ui'
 import type { Provider } from '@/api/ai-gateway'
+import ProviderIconPicker from './ProviderIconPicker.vue'
 
 const props = defineProps<{
   open: boolean
@@ -84,6 +85,15 @@ function removeProviderModel(index: number) {
             <Input id="provider-code" v-model="providerForm.code" placeholder="例如 openai" />
             <p class="text-xs text-muted-foreground">系统内部唯一标识，建议使用小写英文。</p>
           </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label>供应商图标</Label>
+          <ProviderIconPicker
+            v-model="providerForm.icon"
+            :fallback="providerForm.code"
+            :secondary-fallback="providerForm.protocol"
+            :disabled="loading"
+          />
         </div>
         <div class="space-y-1.5">
           <Label for="provider-protocol">上游协议 <span class="text-destructive">*</span></Label>

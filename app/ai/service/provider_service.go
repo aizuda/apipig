@@ -126,6 +126,7 @@ func (s *ProviderService) Page(params *aiReq.ProviderPageParams) (response.PageR
 func normalizeProvider(m *model.Provider) {
 	m.Name = strings.TrimSpace(m.Name)
 	m.Code = strings.TrimSpace(m.Code)
+	m.Icon = strings.ToLower(strings.TrimSpace(m.Icon))
 	m.Protocol = strings.ToLower(defaultString(strings.TrimSpace(m.Protocol), "openai"))
 	m.BaseURL = strings.TrimRight(strings.TrimSpace(m.BaseURL), "/")
 	m.Models = normalizeModels(m.Models)
