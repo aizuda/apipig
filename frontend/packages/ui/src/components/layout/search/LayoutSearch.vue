@@ -1,7 +1,6 @@
 ﻿<script setup lang="ts">
 import type { MenuItem, LayoutSearchProps } from '../types'
 import { computed, ref, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useMagicKeys, whenever, useEventListener } from '@vueuse/core'
 import { Search } from '@lucide/vue'
 import {
@@ -38,7 +37,6 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const router = useRouter()
 const open = ref(false)
 const isExpanded = ref(false)
 const searchValue = ref('')
@@ -160,13 +158,6 @@ const flattenedMenuItems = computed<SearchMenuItem[]>(() => {
  * 澶勭悊閫夋嫨鑿滃崟椤? */
 function handleSelect(item: MenuItem) {
   emit('select', item)
-
-  if (item.href) {
-    window.open(item.href, '_blank')
-  } else if (item.path) {
-    router.push(item.path)
-  }
-
   open.value = false
 }
 

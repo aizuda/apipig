@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import type { MenuItem } from '@tabtab/ui'
+import { useRouter } from 'vue-router'
 import { LayoutSearch, Button } from '@tabtab/ui'
 import { ExternalLink } from '@lucide/vue'
 import Notification from '@/components/Notification.vue'
@@ -21,6 +22,17 @@ defineProps<{
 }>()
 
 const showThemeSettings = defineModel<boolean>('showThemeSettings', { default: true })
+const router = useRouter()
+
+function handleSelect(item: MenuItem) {
+  if (item.href) {
+    window.open(item.href, '_blank', 'noopener,noreferrer')
+    return
+  }
+  if (item.path) {
+    void router.push(item.path)
+  }
+}
 </script>
 
 <template>
@@ -36,6 +48,7 @@ const showThemeSettings = defineModel<boolean>('showThemeSettings', { default: t
       :description="description"
       :empty-text="emptyText"
       :group-titles="groupTitles"
+      @select="handleSelect"
     />
     <Notification />
     <div class="hidden sm:block">
