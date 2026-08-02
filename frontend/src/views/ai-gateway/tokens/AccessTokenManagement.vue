@@ -1039,7 +1039,7 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                             class="cursor-pointer"
                             :disabled="!canCopyToken(item)"
                             :title="canCopyToken(item) ? undefined : '当前列表未提供完整 API 密钥'"
-                            @click="copyConnectionInfo(item)"
+                            @select="copyConnectionInfo(item)"
                           >
                             <Copy />
                             复制连接信息

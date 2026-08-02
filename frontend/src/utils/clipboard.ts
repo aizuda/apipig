@@ -21,17 +21,18 @@ function copyWithSelection(text: string): boolean {
   if (!document.body || typeof document.execCommand !== 'function') return false
 
   const activeElement = document.activeElement
+  const selection = document.getSelection?.()
+  const selectedRanges = selection
+    ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index))
+    : []
   const textarea = document.createElement('textarea')
   textarea.value = text
-  textarea.readOnly = true
   textarea.setAttribute('aria-hidden', 'true')
+  textarea.setAttribute('tabindex', '-1')
   Object.assign(textarea.style, {
     position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '1px',
-    height: '1px',
-    opacity: '0',
+    top: '-9999px',
+    left: '-9999px',
     pointerEvents: 'none',
   })
 
@@ -40,14 +41,31 @@ function copyWithSelection(text: string): boolean {
   textarea.select()
   textarea.setSelectionRange(0, textarea.value.length)
 
+  // Explicitly supply text/plain when execCommand dispatches the copy event.
+  // This avoids relying solely on hidden-textarea selection behavior, which
+  // differs between browsers when the page is served over HTTP.
+  const handleCopy = (event: ClipboardEvent) => {
+    if (!event.clipboardData) return
+    event.clipboardData.setData('text/plain', text)
+    event.preventDefault()
+  }
+
   let copied = false
+  document.addEventListener('copy', handleCopy, { once: true })
   try {
     copied = document.execCommand('copy')
   } catch {
     copied = false
   } finally {
+    document.removeEventListener('copy', handleCopy)
     textarea.remove()
-    if (activeElement instanceof HTMLElement) activeElement.focus({ preventScroll: true })
+    if (selection) {
+      selection.removeAllRanges()
+      selectedRanges.forEach((range) => selection.addRange(range))
+    }
+    if (activeElement instanceof HTMLElement && activeElement.isConnected) {
+      activeElement.focus({ preventScroll: true })
+    }
   }
   return copied
 }
