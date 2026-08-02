@@ -171,6 +171,8 @@ npm install -g pnpm
 
 ```bash
 pnpm install
+
+pnpm approve-builds
 ```
 
 ### 启动开发服务器
