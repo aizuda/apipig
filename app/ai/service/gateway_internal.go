@@ -40,6 +40,9 @@ func (s *GatewayService) GenerateInternal(params InternalGenerateParams) (string
 	if err != nil {
 		return "", errors.New("所选 API 密钥无效或已禁用")
 	}
+	if token.ChannelID == 0 {
+		return "", errors.New("API key must be bound to a channel for internal AI calls")
+	}
 	if err := validateGatewayTokenAccess(token, ""); err != nil && !strings.Contains(err.Error(), "IP") {
 		return "", err
 	}
@@ -57,7 +60,7 @@ func (s *GatewayService) GenerateInternal(params InternalGenerateParams) (string
 	if !s.allowRate(fmt.Sprintf("token:%d", token.ID), token.RPM, token.TPM, 0) {
 		return "", errors.New("访问 Token 已触发限流")
 	}
-	target, err := s.pickRoute(modelName)
+	target, err := s.pickRouteForChannel(token.ChannelID, modelName)
 	if err != nil {
 		return "", err
 	}

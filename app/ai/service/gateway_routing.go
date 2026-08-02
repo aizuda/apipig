@@ -18,7 +18,7 @@ type routeTarget struct {
 	Proxy    *model.Proxy
 }
 
-func (s *GatewayService) pickRoute(modelName string) (routeTarget, error) {
+func (s *GatewayService) pickRouteForChannel(channelID snowflake.ID, modelName string) (routeTarget, error) {
 	targets, err := s.loadRouteTargets()
 	if err != nil {
 		return routeTarget{}, err
@@ -27,6 +27,9 @@ func (s *GatewayService) pickRoute(modelName string) (routeTarget, error) {
 	selectedPriority := 0
 	prioritySelected := false
 	for _, target := range targets {
+		if channelID != 0 && target.Channel.ID != channelID {
+			continue
+		}
 		providerModel, supported := resolveAccountModel(target.Account.Models, modelName)
 		if s.breakerOpen(target.Channel.ID) || !supported || !containsModel(target.Provider.Models, providerModel) {
 			continue
@@ -44,6 +47,10 @@ func (s *GatewayService) pickRoute(modelName string) (routeTarget, error) {
 		return routeTarget{}, errors.New("没有可用的模型渠道")
 	}
 	return weightedPick(candidates), nil
+}
+
+func (s *GatewayService) pickRoute(modelName string) (routeTarget, error) {
+	return s.pickRouteForChannel(0, modelName)
 }
 
 func (s *GatewayService) loadRouteTargets() ([]routeTarget, error) {

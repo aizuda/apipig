@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -168,6 +169,129 @@ func TestPickRouteOnlyUsesHighestPriorityGroup(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "primary", target.Channel.Name)
 	}
+}
+
+func TestPickRouteForChannelOnlyUsesTokenBoundChannel(t *testing.T) {
+	providerID := snowflake.ID(30)
+	boundChannelID := snowflake.ID(31)
+	preferredChannelID := snowflake.ID(32)
+	repository := &fakeGatewayRepository{config: routeConfig{
+		Providers: []model.Provider{{
+			MODEL: coreAPI.MODEL{ID: providerID}, Name: "provider", Code: "bound-provider", Protocol: "openai", BaseURL: "https://example.com/v1", Models: "gpt-test", Status: gatewayStatusNormal,
+		}},
+		Channels: []model.Channel{
+			{MODEL: coreAPI.MODEL{ID: preferredChannelID}, ProviderID: providerID, Name: "preferred", Priority: 100, Weight: 10000, Status: gatewayStatusNormal},
+			{MODEL: coreAPI.MODEL{ID: boundChannelID}, ProviderID: providerID, Name: "bound", Priority: 1, Weight: 1, Status: gatewayStatusNormal},
+		},
+		Accounts: []model.ChannelAccount{
+			{MODEL: coreAPI.MODEL{ID: snowflake.ID(33)}, ChannelID: boundChannelID, Name: "bound-account", APIKey: "bound-key", Models: "gpt-test", Status: gatewayStatusNormal},
+			{MODEL: coreAPI.MODEL{ID: snowflake.ID(34)}, ChannelID: preferredChannelID, Name: "preferred-account", APIKey: "preferred-key", Models: "gpt-test", Status: gatewayStatusNormal},
+		},
+	}}
+	vault := newAESCredentialVault(func() string { return "0123456789abcdef0123456789abcdef" })
+	service := NewGatewayService(GatewayDependencies{Repository: repository, Vault: vault})
+	for index := 0; index < 20; index++ {
+		target, err := service.pickRouteForChannel(boundChannelID, "gpt-test")
+		require.NoError(t, err)
+		assert.Equal(t, "bound", target.Channel.Name)
+	}
+
+	target, err := service.pickRoute("gpt-test")
+	require.NoError(t, err)
+	assert.Equal(t, "preferred", target.Channel.Name)
+
+	_, err = service.pickRouteForChannel(snowflake.ID(99), "gpt-test")
+	require.Error(t, err)
+}
+
+func TestGenerateInternalRoutesToTokenBoundChannel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, `{"id":"chatcmpl-test","model":"gpt-test","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
+	}))
+	defer server.Close()
+
+	tokenID := snowflake.ID(40)
+	providerID := snowflake.ID(41)
+	boundChannelID := snowflake.ID(42)
+	preferredChannelID := snowflake.ID(43)
+	repository := &internalGatewayRepository{
+		token: model.AccessToken{
+			MODEL: coreAPI.MODEL{ID: tokenID}, ChannelID: boundChannelID, Name: "token", Token: "token",
+			Models: "gpt-test", RPM: 60, Status: gatewayStatusNormal,
+		},
+		fakeGatewayRepository: fakeGatewayRepository{
+			config: routeConfig{
+				Providers: []model.Provider{{
+					MODEL: coreAPI.MODEL{ID: providerID}, Name: "provider", Code: "bound-provider", Protocol: "openai",
+					BaseURL: server.URL, Models: "gpt-test", TimeoutMs: 5000, Status: gatewayStatusNormal,
+				}},
+				Channels: []model.Channel{
+					{MODEL: coreAPI.MODEL{ID: preferredChannelID}, ProviderID: providerID, Name: "preferred", Priority: 100, Weight: 10000, Status: gatewayStatusNormal},
+					{MODEL: coreAPI.MODEL{ID: boundChannelID}, ProviderID: providerID, Name: "bound", Priority: 1, Weight: 1, Status: gatewayStatusNormal},
+				},
+				Accounts: []model.ChannelAccount{
+					{MODEL: coreAPI.MODEL{ID: snowflake.ID(44)}, ChannelID: boundChannelID, Name: "bound-account", APIKey: "bound-key", Models: "gpt-test", Status: gatewayStatusNormal},
+					{MODEL: coreAPI.MODEL{ID: snowflake.ID(45)}, ChannelID: preferredChannelID, Name: "preferred-account", APIKey: "preferred-key", Models: "gpt-test", Status: gatewayStatusNormal},
+				},
+			},
+		},
+	}
+	vault := newAESCredentialVault(func() string { return "0123456789abcdef0123456789abcdef" })
+	logSink := &fakeCallLogSink{}
+	service := NewGatewayService(GatewayDependencies{Repository: repository, Vault: vault, LogSink: logSink})
+
+	result, err := service.GenerateInternal(InternalGenerateParams{
+		AccessTokenID: tokenID,
+		Model:         "gpt-test",
+		UserPrompt:    "hello",
+		MaxTokens:     128,
+		Path:          "/internal/apps/code-review",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ok", result)
+	require.Len(t, logSink.records, 1)
+	assert.Equal(t, boundChannelID, logSink.records[0].ChannelID)
+}
+
+func TestGenerateInternalRejectsTokenWithoutBoundChannel(t *testing.T) {
+	tokenID := snowflake.ID(50)
+	repository := &internalGatewayRepository{
+		token: model.AccessToken{
+			MODEL: coreAPI.MODEL{ID: tokenID}, Name: "token", Token: "token",
+			Models: "gpt-test", RPM: 60, Status: gatewayStatusNormal,
+		},
+	}
+	service := NewGatewayService(GatewayDependencies{Repository: repository})
+
+	_, err := service.GenerateInternal(InternalGenerateParams{
+		AccessTokenID: tokenID,
+		Model:         "gpt-test",
+		UserPrompt:    "hello",
+	})
+	require.EqualError(t, err, "API key must be bound to a channel for internal AI calls")
+}
+
+type fakeCallLogSink struct {
+	records []model.CallLog
+}
+
+func (s *fakeCallLogSink) Enqueue(record model.CallLog) error {
+	s.records = append(s.records, record)
+	return nil
+}
+
+func (s *fakeCallLogSink) Close(context.Context) error {
+	return nil
+}
+
+type internalGatewayRepository struct {
+	fakeGatewayRepository
+	token model.AccessToken
+}
+
+func (r *internalGatewayRepository) FindAccessTokenByID(_ snowflake.ID) (model.AccessToken, error) {
+	return r.token, nil
 }
 
 func setupCredentialTestDB(t *testing.T) *gorm.DB {
