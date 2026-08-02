@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	aiService "apipig/app/ai/service"
@@ -275,8 +276,15 @@ func branchAllowed(patterns, ref string) bool {
 	return false
 }
 func validateSHAs(head string) error {
-	if strings.TrimSpace(head) == "" || strings.Trim(head, "0") == "" {
+	if !validGitObjectID(head) {
 		return errors.New("WebHook 缺少有效 head SHA")
 	}
 	return nil
+}
+
+var gitObjectIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,64}$`)
+
+func validGitObjectID(value string) bool {
+	value = strings.TrimSpace(value)
+	return gitObjectIDPattern.MatchString(value) && strings.Trim(value, "0") != ""
 }

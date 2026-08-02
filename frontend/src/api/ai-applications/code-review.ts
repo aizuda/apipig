@@ -78,6 +78,9 @@ export const codeReviewApi = {
     post<boolean>('/ai-applications/code-review/project/delete', { ids: [id] }),
   taskPage: (params: ReviewTaskPageParams) =>
     post<PageResult<ReviewTask>>('/ai-applications/code-review/task/page', params),
-  getTask: (id: string) => get<ReviewTask>(`/ai-applications/code-review/task/get?id=${id}`),
+  getTask: (id: string) => {
+    const query = new URLSearchParams({ id })
+    return get<ReviewTask>(`/ai-applications/code-review/task/get?${query}`)
+  },
   retryTask: (id: string) => post<boolean>('/ai-applications/code-review/task/retry', { id }),
 }

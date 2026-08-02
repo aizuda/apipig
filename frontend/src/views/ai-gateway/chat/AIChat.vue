@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { Bot, LoaderCircle, RotateCcw, Send, Settings2, Sparkles, User } from '@lucide/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Bot, LoaderCircle, RotateCcw, Send, Settings2, Sparkles, Square, User } from '@lucide/vue'
 import {
   Badge,
   Button,
@@ -44,6 +44,9 @@ const configOpen = ref(false)
 const messageList = ref<HTMLElement | null>(null)
 const autoScrollEnabled = ref(true)
 let messageId = 0
+let activeRequestController: AbortController | null = null
+
+const MAX_SSE_EVENT_CHARS = 2 * 1024 * 1024
 
 const selectedToken = computed(() =>
   tokens.value.find((token) => String(token.id) === tokenId.value),
@@ -134,6 +137,8 @@ async function sendMessage() {
   messages.value.push(userMessage)
   input.value = ''
   sending.value = true
+  const requestController = new AbortController()
+  activeRequestController = requestController
   autoScrollEnabled.value = true
   await scrollToBottom(true)
   try {
@@ -143,13 +148,16 @@ async function sendMessage() {
         : []),
       ...selectSlidingContext(messages.value, effectiveContextRounds.value),
     ]
-    const response = await aiGatewayApi.chatStream({
-      tokenId: tokenId.value,
-      model: model.value,
-      messages: requestMessages,
-      temperature: temperature.value,
-      maxTokens: maxTokens.value,
-    })
+    const response = await aiGatewayApi.chatStream(
+      {
+        tokenId: tokenId.value,
+        model: model.value,
+        messages: requestMessages,
+        temperature: Math.min(2, Math.max(0, Number(temperature.value) || 0)),
+        maxTokens: Math.min(32768, Math.max(1, Math.floor(Number(maxTokens.value) || 1))),
+      },
+      requestController.signal,
+    )
     await consumeChatStream(response, assistantMessage, () => {
       if (assistantAdded) return
       messages.value.push(assistantMessage)
@@ -162,16 +170,34 @@ async function sendMessage() {
       assistantMessage.content = '模型未返回文本内容。'
     }
   } catch (error) {
-    messages.value = messages.value.filter(
-      (message) => message.id !== userMessage.id && message.id !== assistantMessage.id,
-    )
-    input.value = content
-    errorMessage.value = error instanceof Error ? error.message : '聊天请求失败'
-    toast.error(errorMessage.value)
+    if (isAbortError(error)) {
+      if (!assistantAdded) {
+        assistantMessage.content = '已停止生成。'
+        messages.value.push(assistantMessage)
+      } else if (!assistantMessage.content) {
+        assistantMessage.content = '已停止生成。'
+      }
+    } else {
+      messages.value = messages.value.filter(
+        (message) => message.id !== userMessage.id && message.id !== assistantMessage.id,
+      )
+      input.value = content
+      errorMessage.value = error instanceof Error ? error.message : '聊天请求失败'
+      toast.error(errorMessage.value)
+    }
   } finally {
+    if (activeRequestController === requestController) activeRequestController = null
     sending.value = false
     await scrollToBottom()
   }
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function cancelStreaming() {
+  activeRequestController?.abort()
 }
 
 async function consumeChatStream(
@@ -201,6 +227,7 @@ async function consumeChatStream(
   }
 
   const processEvent = (eventText: string) => {
+    if (eventText.length > MAX_SSE_EVENT_CHARS) throw new Error('流式响应事件过大')
     const data = eventText
       .split(/\r?\n/)
       .filter((line) => line.startsWith('data:'))
@@ -233,6 +260,7 @@ async function consumeChatStream(
     while (true) {
       const { value, done } = await reader.read()
       buffer += decoder.decode(value, { stream: !done })
+      if (buffer.length > MAX_SSE_EVENT_CHARS) throw new Error('流式响应缓冲区过大')
       const events = buffer.split(/\r?\n\r?\n/)
       buffer = events.pop() || ''
       for (const eventText of events) processEvent(eventText)
@@ -270,6 +298,7 @@ watch(availableModels, (models) => {
   if (!models.includes(model.value)) model.value = models[0] || ''
 })
 onMounted(loadOptions)
+onBeforeUnmount(cancelStreaming)
 </script>
 
 <template>
@@ -432,10 +461,14 @@ onMounted(loadOptions)
               :disabled="sending"
               @keydown="handleComposerKeydown"
             />
-            <Button class="h-9 shrink-0 px-3" :disabled="!canSend" @click="sendMessage">
-              <LoaderCircle v-if="sending" class="h-4 w-4 animate-spin sm:mr-1.5" />
+            <Button
+              class="h-9 shrink-0 px-3"
+              :disabled="!sending && !canSend"
+              @click="sending ? cancelStreaming() : sendMessage()"
+            >
+              <Square v-if="sending" class="h-4 w-4 fill-current sm:mr-1.5" />
               <Send v-else class="h-4 w-4 sm:mr-1.5" />
-              <span class="hidden sm:inline">发送</span>
+              <span class="hidden sm:inline">{{ sending ? '停止' : '发送' }}</span>
             </Button>
           </div>
         </div>

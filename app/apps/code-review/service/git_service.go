@@ -35,6 +35,9 @@ func prepareDiff(ctx context.Context, project reviewModel.Project, task reviewMo
 		return diffResult{}, err
 	}
 	defer os.RemoveAll(workspace)
+	if err = validateRepositoryRemote(ctx, project.RepositoryURL); err != nil {
+		return diffResult{}, err
+	}
 	run := func(args ...string) (string, error) {
 		return runGit(ctx, workspace, gitArgsWithAuth(project.Provider, repositoryToken, args...)...)
 	}
@@ -88,7 +91,13 @@ func prepareDiff(ctx context.Context, project reviewModel.Project, task reviewMo
 func runGit(ctx context.Context, dir string, args ...string) (string, error) {
 	command := exec.CommandContext(ctx, "git", args...)
 	command.Dir = dir
-	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1")
+	command.Env = append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.followRedirects",
+		"GIT_CONFIG_VALUE_0=false",
+	)
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
@@ -114,8 +123,7 @@ func gitArgsWithAuth(providerName, token string, args ...string) []string {
 }
 
 func validBaseSHA(sha string) bool {
-	sha = strings.TrimSpace(sha)
-	return sha != "" && strings.Trim(sha, "0") != ""
+	return validGitObjectID(sha)
 }
 func parseNumstat(value string) (int, int) {
 	additions, deletions := 0, 0

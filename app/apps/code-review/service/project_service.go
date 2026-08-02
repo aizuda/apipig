@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	aiService "apipig/app/ai/service"
@@ -17,6 +16,7 @@ import (
 	"apipig/global"
 	"apipig/toolkit/snowflake"
 
+	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
@@ -45,14 +45,23 @@ func (s *ProjectService) Save(params *reviewReq.ProjectSaveParams) (reviewResp.P
 	if project.Provider != "github" && project.Provider != "gitlab" && project.Provider != "gitee" {
 		return result, errors.New("provider 仅支持 github、gitlab、gitee")
 	}
-	parsedURL, err := url.Parse(project.RepositoryURL)
-	if err != nil || parsedURL.Scheme != "https" || parsedURL.Host == "" {
-		return result, errors.New("仓库地址必须是有效的 HTTPS URL")
+	if _, err := validateRepositoryURL(project.RepositoryURL); err != nil {
+		return result, err
+	}
+	if err := validateProjectTextFields(project); err != nil {
+		return result, err
+	}
+	if len([]byte(params.WebhookSecret)) > 512 {
+		return result, errors.New("WebHook Secret 不能超过 512 字节")
+	}
+	if len([]byte(params.RepositoryToken)) > 4096 {
+		return result, errors.New("仓库 Token 不能超过 4096 字节")
 	}
 	if project.Status == 0 {
 		project.Status = reviewModel.ProjectStatusEnabled
 	}
 	project.Status = normalizedStatus(project.Status)
+	var err error
 	var plaintextSecret string
 	if project.ID == 0 {
 		project.MODEL = db.NewModel(params.Ctx)
@@ -116,7 +125,7 @@ func (s *ProjectService) Save(params *reviewReq.ProjectSaveParams) (reviewResp.P
 	}
 	result.Project = sanitizeProject(*project)
 	result.WebhookSecret = plaintextSecret
-	result.WebhookURL = strings.TrimRight(params.Ctx.BaseURL(), "/") + "/v1/apps/code-review/webhook/" + project.WebhookKey
+	result.WebhookURL = webhookURL(requestContextBaseURL(params.Ctx), project.WebhookKey)
 	return result, nil
 }
 
@@ -179,6 +188,28 @@ func normalizedStatus(status uint) uint {
 	}
 	return reviewModel.ProjectStatusEnabled
 }
+func validateProjectTextFields(project *reviewModel.Project) error {
+	limits := []struct {
+		name  string
+		value string
+		max   int
+	}{
+		{name: "项目名称", value: project.Name, max: 100},
+		{name: "仓库地址", value: project.RepositoryURL, max: 1000},
+		{name: "默认分支", value: project.DefaultBranch, max: 200},
+		{name: "模型名称", value: project.Model, max: 200},
+		{name: "评审规则", value: project.ReviewPrompt, max: 16 * 1024},
+		{name: "分支规则", value: project.BranchPattern, max: 500},
+		{name: "忽略规则", value: project.IgnorePatterns, max: 16 * 1024},
+		{name: "备注", value: project.Remark, max: 500},
+	}
+	for _, field := range limits {
+		if len([]byte(field.value)) > field.max {
+			return fmt.Errorf("%s不能超过 %d 字节", field.name, field.max)
+		}
+	}
+	return nil
+}
 func randomSecret(size int) (string, error) {
 	data := make([]byte, size)
 	if _, err := rand.Read(data); err != nil {
@@ -188,4 +219,12 @@ func randomSecret(size int) (string, error) {
 }
 func webhookURL(baseURL, key string) string {
 	return fmt.Sprintf("%s/v1/apps/code-review/webhook/%s", strings.TrimRight(baseURL, "/"), key)
+}
+
+func requestContextBaseURL(c *fiber.Ctx) string {
+	baseURL := strings.TrimRight(c.BaseURL(), "/")
+	if index := strings.LastIndex(c.Path(), "/v1/"); index > 0 {
+		baseURL += strings.TrimRight(c.Path()[:index], "/")
+	}
+	return baseURL
 }

@@ -21,6 +21,10 @@ const DEFAULT_API_BASE = 'http://localhost:8090/v1'
 const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE
 let refreshPromise: Promise<boolean> | null = null
 
+export function apiUrl(path: string) {
+  return `${API_BASE.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
 function redirectToLogin() {
   if (!window.location.hash.startsWith('#/login')) {
     window.location.hash = '#/login'
@@ -32,7 +36,7 @@ async function refreshAccessToken(): Promise<boolean> {
   if (!userStore.refreshToken) return false
 
   try {
-    const response = await fetch(`${API_BASE}/refresh-token`, {
+    const response = await fetch(apiUrl('/refresh-token'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: userStore.refreshToken }),
@@ -61,7 +65,7 @@ async function executeRequest<T>(url: string, options: RequestInit, canRetry: bo
   headers.set('Content-Type', headers.get('Content-Type') || 'application/json')
   if (userStore.token) headers.set('accessToken', userStore.token)
 
-  const response = await fetch(`${API_BASE}${url}`, { ...options, headers })
+  const response = await fetch(apiUrl(url), { ...options, headers })
   const payload = (await response.json()) as ApiResponse<T>
 
   if (payload.code === '2' && canRetry && url !== '/refresh-token') {
@@ -93,7 +97,7 @@ async function executeStreamRequest(
   headers.set('Accept', 'text/event-stream')
   if (userStore.token) headers.set('accessToken', userStore.token)
 
-  const response = await fetch(`${API_BASE}${url}`, { ...options, headers })
+  const response = await fetch(apiUrl(url), { ...options, headers })
   const contentType = response.headers.get('Content-Type') || ''
   if (response.ok && contentType.includes('text/event-stream')) return response
 
@@ -138,12 +142,13 @@ export function post<T>(url: string, body: unknown): Promise<T> {
   })
 }
 
-export function postStream(url: string, body: unknown): Promise<Response> {
+export function postStream(url: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   return executeStreamRequest(
     url,
     {
       method: 'POST',
       body: JSON.stringify(body),
+      signal,
     },
     true,
   )

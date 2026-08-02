@@ -88,11 +88,16 @@ func calculateModelBilling(target routeTarget, gatewayModel, providerModel strin
 	if !ok {
 		return BillingResult{Multiplier: multiplier}
 	}
+	return calculatePricingRuleBilling(rule, usage, multiplier)
+}
+
+func calculatePricingRuleBilling(rule ModelPricingRule, usage BillingUsage, multiplier float64) BillingResult {
 	unit, err := normalizeModelPricingUnit(rule)
 	if err != nil {
 		return BillingResult{Multiplier: multiplier}
 	}
 	rule.TokenPriceUnit = unit
+	multiplier = normalizedCostMultiplier(multiplier)
 	tokenPriceDivisor := 1.0
 	if rule.TokenPriceUnit == modelPricingUnitPerMillion {
 		tokenPriceDivisor = 1_000_000

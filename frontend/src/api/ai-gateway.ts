@@ -335,7 +335,8 @@ export const aiGatewayApi = {
     return get<GatewaySummary>(`/ai/gateway/summary${suffix ? `?${suffix}` : ''}`)
   },
   chat: (data: AIChatParams) => post<AIChatResponse>('/ai/gateway/chat', data),
-  chatStream: (data: AIChatParams) => postStream('/ai/gateway/chat/stream', data),
+  chatStream: (data: AIChatParams, signal?: AbortSignal) =>
+    postStream('/ai/gateway/chat/stream', data, signal),
 
   providerPage: (params: GatewayPageParams = { page: 1, pageSize: 100 }) =>
     post<PageResult<Provider>>('/ai/gateway/provider/page', params),

@@ -145,6 +145,41 @@ func validateAIChatParams(params *aiReq.AIChatParams) error {
 	if params == nil {
 		return errors.New("聊天请求参数不能为空")
 	}
+	if params.TokenID == 0 {
+		return errors.New("tokenId 不能为空")
+	}
+	if modelID := strings.TrimSpace(params.Model); modelID == "" || len([]byte(modelID)) > 200 {
+		return errors.New("model 不能为空且不能超过 200 字节")
+	}
+	if len(params.Messages) == 0 || len(params.Messages) > 64 {
+		return errors.New("messages 数量必须在 1 到 64 之间")
+	}
+	totalContentBytes := 0
+	hasUserMessage := false
+	for index, message := range params.Messages {
+		switch message.Role {
+		case "system":
+			if index != 0 {
+				return errors.New("system 消息只能位于 messages 首位")
+			}
+		case "user":
+			hasUserMessage = true
+		case "assistant":
+		default:
+			return fmt.Errorf("messages[%d].role 无效", index)
+		}
+		contentBytes := len([]byte(message.Content))
+		if strings.TrimSpace(message.Content) == "" || contentBytes > 1024*1024 {
+			return fmt.Errorf("messages[%d].content 不能为空且不能超过 1 MiB", index)
+		}
+		totalContentBytes += contentBytes
+	}
+	if !hasUserMessage {
+		return errors.New("messages 至少需要一条 user 消息")
+	}
+	if totalContentBytes > 4*1024*1024 {
+		return errors.New("messages 内容总计不能超过 4 MiB")
+	}
 	if params.Temperature != nil && (math.IsNaN(*params.Temperature) || math.IsInf(*params.Temperature, 0) || *params.Temperature < 0 || *params.Temperature > 2) {
 		return errors.New("temperature 必须在 0 到 2 之间")
 	}
@@ -327,51 +362,78 @@ func (s *GatewayService) streamOpenAI(c *fiber.Ctx, call gatewayCall, languageMo
 		usage := provider.Usage{}
 		var streamErr error
 		sawFinish := false
+		clientDisconnected := false
 		toolIndexes := make(map[string]int)
 		nextToolIndex := 0
 		writeOpenAIChunk(writer, call, map[string]any{"role": "assistant", "content": ""}, nil, nil)
-		for chunk := range stream.Stream {
-			switch chunk.Type {
-			case provider.ChunkText:
-				writeOpenAIChunk(writer, call, map[string]any{"content": chunk.Text}, nil, nil)
-			case provider.ChunkReasoning:
-				writeOpenAIChunk(writer, call, map[string]any{"reasoning_content": chunk.Text}, nil, nil)
-			case provider.ChunkToolCallStreamStart:
-				index, ok := toolIndexes[chunk.ToolCallID]
+		if err := writer.Flush(); err != nil {
+			cancel()
+			logRecord.StatusCode = 499
+			s.finishGatewayCall(call, logRecord, usage, nil)
+			return
+		}
+		heartbeat := time.NewTicker(15 * time.Second)
+		defer heartbeat.Stop()
+	streamLoop:
+		for {
+			select {
+			case chunk, ok := <-stream.Stream:
 				if !ok {
-					index = nextToolIndex
-					nextToolIndex++
-					toolIndexes[chunk.ToolCallID] = index
+					break streamLoop
 				}
-				toolCall := map[string]any{"index": index, "id": chunk.ToolCallID, "type": "function", "function": map[string]any{"name": chunk.ToolName, "arguments": chunk.ToolInput}}
-				writeOpenAIChunk(writer, call, map[string]any{"tool_calls": []map[string]any{toolCall}}, nil, nil)
-			case provider.ChunkToolCall:
-				if _, ok := toolIndexes[chunk.ToolCallID]; !ok {
-					index := nextToolIndex
-					nextToolIndex++
-					toolIndexes[chunk.ToolCallID] = index
+				switch chunk.Type {
+				case provider.ChunkText:
+					writeOpenAIChunk(writer, call, map[string]any{"content": chunk.Text}, nil, nil)
+				case provider.ChunkReasoning:
+					writeOpenAIChunk(writer, call, map[string]any{"reasoning_content": chunk.Text}, nil, nil)
+				case provider.ChunkToolCallStreamStart:
+					index, ok := toolIndexes[chunk.ToolCallID]
+					if !ok {
+						index = nextToolIndex
+						nextToolIndex++
+						toolIndexes[chunk.ToolCallID] = index
+					}
 					toolCall := map[string]any{"index": index, "id": chunk.ToolCallID, "type": "function", "function": map[string]any{"name": chunk.ToolName, "arguments": chunk.ToolInput}}
 					writeOpenAIChunk(writer, call, map[string]any{"tool_calls": []map[string]any{toolCall}}, nil, nil)
+				case provider.ChunkToolCall:
+					if _, ok := toolIndexes[chunk.ToolCallID]; !ok {
+						index := nextToolIndex
+						nextToolIndex++
+						toolIndexes[chunk.ToolCallID] = index
+						toolCall := map[string]any{"index": index, "id": chunk.ToolCallID, "type": "function", "function": map[string]any{"name": chunk.ToolName, "arguments": chunk.ToolInput}}
+						writeOpenAIChunk(writer, call, map[string]any{"tool_calls": []map[string]any{toolCall}}, nil, nil)
+					}
+				case provider.ChunkToolCallDelta:
+					index := toolIndexes[chunk.ToolCallID]
+					toolCall := map[string]any{"index": index, "function": map[string]any{"arguments": chunk.ToolInput}}
+					writeOpenAIChunk(writer, call, map[string]any{"tool_calls": []map[string]any{toolCall}}, nil, nil)
+				case provider.ChunkFinish:
+					sawFinish = true
+					usage = chunk.Usage
+					finish := openAIFinishReason(chunk.FinishReason)
+					writeOpenAIChunk(writer, call, map[string]any{}, &finish, openAIUsage(usage))
+				case provider.ChunkError:
+					streamErr = chunk.Error
+					writeSSEData(writer, map[string]any{"error": map[string]any{"message": errorText(chunk.Error), "type": "api_error"}})
 				}
-			case provider.ChunkToolCallDelta:
-				index := toolIndexes[chunk.ToolCallID]
-				toolCall := map[string]any{"index": index, "function": map[string]any{"arguments": chunk.ToolInput}}
-				writeOpenAIChunk(writer, call, map[string]any{"tool_calls": []map[string]any{toolCall}}, nil, nil)
-			case provider.ChunkFinish:
-				sawFinish = true
-				usage = chunk.Usage
-				finish := openAIFinishReason(chunk.FinishReason)
-				writeOpenAIChunk(writer, call, map[string]any{}, &finish, openAIUsage(usage))
-			case provider.ChunkError:
-				streamErr = chunk.Error
-				writeSSEData(writer, map[string]any{"error": map[string]any{"message": errorText(chunk.Error), "type": "api_error"}})
+			case <-heartbeat.C:
+				_, _ = writer.WriteString(": keep-alive\n\n")
+			}
+			if err := writer.Flush(); err != nil {
+				clientDisconnected = true
+				cancel()
+				break streamLoop
 			}
 		}
-		if !sawFinish && streamErr == nil {
+		if !sawFinish && streamErr == nil && !clientDisconnected {
 			streamErr = errors.New("上游流在完成事件前结束")
 		}
-		_, _ = writer.WriteString("data: [DONE]\n\n")
-		_ = writer.Flush()
+		if !clientDisconnected {
+			_, _ = writer.WriteString("data: [DONE]\n\n")
+			_ = writer.Flush()
+		} else {
+			logRecord.StatusCode = 499
+		}
 		s.finishGatewayCall(call, logRecord, usage, streamErr)
 	})
 	return nil
@@ -396,65 +458,92 @@ func (s *GatewayService) streamAnthropic(c *fiber.Ctx, call gatewayCall, languag
 		usage := provider.Usage{}
 		var streamErr error
 		sawFinish := false
+		clientDisconnected := false
 		textStarted := false
 		openBlocks := make(map[int]struct{})
 		toolIndexes := make(map[string]int)
 		nextIndex := 0
 		message := map[string]any{"id": responseID("", "msg"), "type": "message", "role": "assistant", "model": call.Model, "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": anthropicUsage(provider.Usage{})}
 		writeAnthropicEvent(writer, "message_start", map[string]any{"type": "message_start", "message": message})
-		for chunk := range stream.Stream {
-			switch chunk.Type {
-			case provider.ChunkText:
-				if !textStarted {
-					textStarted = true
-					openBlocks[0] = struct{}{}
-					nextIndex = 1
-					writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}})
-				}
-				writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": chunk.Text}})
-			case provider.ChunkToolCallStreamStart:
-				index, ok := toolIndexes[chunk.ToolCallID]
+		if err := writer.Flush(); err != nil {
+			cancel()
+			logRecord.StatusCode = 499
+			s.finishGatewayCall(call, logRecord, usage, nil)
+			return
+		}
+		heartbeat := time.NewTicker(15 * time.Second)
+		defer heartbeat.Stop()
+	streamLoop:
+		for {
+			select {
+			case chunk, ok := <-stream.Stream:
 				if !ok {
-					index = nextIndex
-					nextIndex++
-					toolIndexes[chunk.ToolCallID] = index
-					openBlocks[index] = struct{}{}
-					writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": index, "content_block": map[string]any{"type": "tool_use", "id": chunk.ToolCallID, "name": chunk.ToolName, "input": map[string]any{}}})
+					break streamLoop
 				}
-				if chunk.ToolInput != "" {
-					writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "input_json_delta", "partial_json": chunk.ToolInput}})
-				}
-			case provider.ChunkToolCall:
-				if _, ok := toolIndexes[chunk.ToolCallID]; !ok {
-					index := nextIndex
-					nextIndex++
-					toolIndexes[chunk.ToolCallID] = index
-					openBlocks[index] = struct{}{}
-					writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": index, "content_block": map[string]any{"type": "tool_use", "id": chunk.ToolCallID, "name": chunk.ToolName, "input": map[string]any{}}})
+				switch chunk.Type {
+				case provider.ChunkText:
+					if !textStarted {
+						textStarted = true
+						openBlocks[0] = struct{}{}
+						nextIndex = 1
+						writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]any{"type": "text", "text": ""}})
+					}
+					writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]any{"type": "text_delta", "text": chunk.Text}})
+				case provider.ChunkToolCallStreamStart:
+					index, ok := toolIndexes[chunk.ToolCallID]
+					if !ok {
+						index = nextIndex
+						nextIndex++
+						toolIndexes[chunk.ToolCallID] = index
+						openBlocks[index] = struct{}{}
+						writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": index, "content_block": map[string]any{"type": "tool_use", "id": chunk.ToolCallID, "name": chunk.ToolName, "input": map[string]any{}}})
+					}
 					if chunk.ToolInput != "" {
 						writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "input_json_delta", "partial_json": chunk.ToolInput}})
 					}
+				case provider.ChunkToolCall:
+					if _, ok := toolIndexes[chunk.ToolCallID]; !ok {
+						index := nextIndex
+						nextIndex++
+						toolIndexes[chunk.ToolCallID] = index
+						openBlocks[index] = struct{}{}
+						writeAnthropicEvent(writer, "content_block_start", map[string]any{"type": "content_block_start", "index": index, "content_block": map[string]any{"type": "tool_use", "id": chunk.ToolCallID, "name": chunk.ToolName, "input": map[string]any{}}})
+						if chunk.ToolInput != "" {
+							writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "input_json_delta", "partial_json": chunk.ToolInput}})
+						}
+					}
+				case provider.ChunkToolCallDelta:
+					index := toolIndexes[chunk.ToolCallID]
+					writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "input_json_delta", "partial_json": chunk.ToolInput}})
+				case provider.ChunkFinish:
+					sawFinish = true
+					usage = chunk.Usage
+					for index := range openBlocks {
+						writeAnthropicEvent(writer, "content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
+					}
+					writeAnthropicEvent(writer, "message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": anthropicStopReason(chunk.FinishReason), "stop_sequence": nil}, "usage": anthropicUsage(usage)})
+				case provider.ChunkError:
+					streamErr = chunk.Error
+					writeAnthropicEvent(writer, "error", map[string]any{"type": "error", "error": map[string]any{"type": "api_error", "message": errorText(chunk.Error)}})
 				}
-			case provider.ChunkToolCallDelta:
-				index := toolIndexes[chunk.ToolCallID]
-				writeAnthropicEvent(writer, "content_block_delta", map[string]any{"type": "content_block_delta", "index": index, "delta": map[string]any{"type": "input_json_delta", "partial_json": chunk.ToolInput}})
-			case provider.ChunkFinish:
-				sawFinish = true
-				usage = chunk.Usage
-				for index := range openBlocks {
-					writeAnthropicEvent(writer, "content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
-				}
-				writeAnthropicEvent(writer, "message_delta", map[string]any{"type": "message_delta", "delta": map[string]any{"stop_reason": anthropicStopReason(chunk.FinishReason), "stop_sequence": nil}, "usage": anthropicUsage(usage)})
-			case provider.ChunkError:
-				streamErr = chunk.Error
-				writeAnthropicEvent(writer, "error", map[string]any{"type": "error", "error": map[string]any{"type": "api_error", "message": errorText(chunk.Error)}})
+			case <-heartbeat.C:
+				_, _ = writer.WriteString(": keep-alive\n\n")
+			}
+			if err := writer.Flush(); err != nil {
+				clientDisconnected = true
+				cancel()
+				break streamLoop
 			}
 		}
-		if !sawFinish && streamErr == nil {
+		if !sawFinish && streamErr == nil && !clientDisconnected {
 			streamErr = errors.New("上游流在完成事件前结束")
 		}
-		writeAnthropicEvent(writer, "message_stop", map[string]any{"type": "message_stop"})
-		_ = writer.Flush()
+		if !clientDisconnected {
+			writeAnthropicEvent(writer, "message_stop", map[string]any{"type": "message_stop"})
+			_ = writer.Flush()
+		} else {
+			logRecord.StatusCode = 499
+		}
 		s.finishGatewayCall(call, logRecord, usage, streamErr)
 	})
 	return nil
@@ -477,7 +566,6 @@ func writeSSEData(writer *bufio.Writer, payload any) {
 	_, _ = writer.WriteString("data: ")
 	_, _ = writer.Write(data)
 	_, _ = writer.WriteString("\n\n")
-	_ = writer.Flush()
 }
 
 func writeAnthropicEvent(writer *bufio.Writer, event string, payload any) {
@@ -486,7 +574,6 @@ func writeAnthropicEvent(writer *bufio.Writer, event string, payload any) {
 	_, _ = writer.WriteString("data: ")
 	_, _ = writer.Write(data)
 	_, _ = writer.WriteString("\n\n")
-	_ = writer.Flush()
 }
 
 func writeGatewayError(c *fiber.Ctx, protocolName string, status int, err error) error {

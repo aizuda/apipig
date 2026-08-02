@@ -18,6 +18,7 @@ import {
 } from '@tabtab/ui'
 import { aiGatewayApi, type AccessToken } from '@/api/ai-gateway'
 import { codeReviewApi, type ReviewProject } from '@/api/ai-applications/code-review'
+import { apiUrl } from '@/api/request'
 import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import CodeReviewSectionNav from './components/CodeReviewSectionNav.vue'
@@ -131,7 +132,9 @@ async function saveProject() {
 function showWebhook(project: ReviewProject) {
   webhookDialog.open = true
   webhookDialog.projectName = project.name
-  webhookDialog.url = `${window.location.origin}/v1/ai-applications/code-review/webhook/${project.webhookKey}`
+  webhookDialog.url = apiUrl(
+    `/apps/code-review/webhook/${encodeURIComponent(project.webhookKey || '')}`,
+  )
   webhookDialog.secret = ''
 }
 
