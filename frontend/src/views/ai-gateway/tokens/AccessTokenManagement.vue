@@ -4,7 +4,10 @@ import {
   ChartBarStacked,
   Check,
   Copy,
+  Ellipsis,
+  Import as ImportIcon,
   MessageSquareText,
+  Pencil,
   Plus,
   Search,
   Tags,
@@ -17,6 +20,10 @@ import {
   CardContent,
   Dialog,
   DialogFixedContent,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
   Progress,
   Tooltip,
@@ -33,6 +40,7 @@ import {
   type AccessTokenTag,
   type Channel,
 } from '@/api/ai-gateway'
+import { apiUrl } from '@/api/request'
 import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import { copyText } from '@/utils/clipboard'
@@ -44,6 +52,14 @@ import AccessTokenEditorDialog from './AccessTokenEditorDialog.vue'
 import CreatedTokenDialog from './CreatedTokenDialog.vue'
 import AccessTokenTagAssignmentDialog from './AccessTokenTagAssignmentDialog.vue'
 import AccessTokenStatisticsDialog from './AccessTokenStatisticsDialog.vue'
+import CCSwitchImportDialog from './CCSwitchImportDialog.vue'
+import {
+  buildCCSwitchImportUrl,
+  isUsableAccessToken,
+  resolveGatewayEndpoint,
+  type CCSwitchImportSelection,
+} from './cc-switch'
+import { buildApiPigConnectionInfo } from './connection-info'
 
 defineOptions({ name: 'AiGatewayTokens' })
 
@@ -58,6 +74,7 @@ const tokenModelSelection = ref('')
 const tokenTagManagerOpen = ref(false)
 const aiChatOpen = ref(false)
 const tokenStatisticsOpen = ref(false)
+const ccSwitchImportTarget = ref<AccessToken | null>(null)
 const tokenTagAssignmentTarget = ref<AccessToken | null>(null)
 const tokenTagAssignmentLoading = ref(false)
 const tokenTagLoading = ref(false)
@@ -488,7 +505,48 @@ function tokenChannelDescription(item: AccessToken) {
 }
 
 function canCopyToken(item: AccessToken) {
-  return Boolean(item.token && item.token !== '********')
+  return isUsableAccessToken(item.token)
+}
+
+const ccSwitchImportModels = computed(() =>
+  [...new Set(splitModels(ccSwitchImportTarget.value?.models))].filter((model) => model !== '*'),
+)
+
+function openCCSwitchImport(item: AccessToken) {
+  if (!isUsableAccessToken(item.token)) return
+  ccSwitchImportTarget.value = item
+}
+
+function importToCCSwitch(selection: CCSwitchImportSelection) {
+  const item = ccSwitchImportTarget.value
+  if (!item) return
+  const apiKey = item.token?.trim()
+  if (!apiKey || !isUsableAccessToken(apiKey)) return
+
+  const deepLink = buildCCSwitchImportUrl({
+    app: selection.app,
+    name: selection.name,
+    endpoint: resolveGatewayEndpoint(apiUrl(''), window.location.href),
+    apiKey,
+    model: selection.model,
+    notes: item.remark?.trim() || undefined,
+  })
+  ccSwitchImportTarget.value = null
+  window.location.href = deepLink
+}
+
+async function copyConnectionInfo(item: AccessToken) {
+  const apiKey = item.token?.trim()
+  if (!apiKey || !isUsableAccessToken(apiKey)) return
+
+  try {
+    await copyText(
+      buildApiPigConnectionInfo(apiKey, resolveGatewayEndpoint(apiUrl(''), window.location.href)),
+    )
+    toast.success('连接信息已复制')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '连接信息复制失败')
+  }
 }
 
 function formatTokens(value?: number) {
@@ -745,19 +803,19 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
             <table class="w-full text-sm">
               <thead class="border-b bg-muted/40 text-left text-muted-foreground">
                 <tr>
-                  <th class="w-[180px] min-w-[180px] max-w-[180px] px-4 py-3">名称</th>
-                  <th class="px-4 py-3">标签</th>
+                  <th class="min-w-[128px] px-4 py-3">名称</th>
+                  <th class="min-w-[128px] px-4 py-3">标签</th>
                   <th class="px-4 py-3">API 密钥</th>
                   <th class="px-4 py-3">关联号池</th>
                   <th class="px-4 py-3">模型</th>
                   <th class="px-4 py-3">调用/用量</th>
-                  <th class="px-4 py-3">IP 限制</th>
-                  <th class="px-4 py-3">速率限制</th>
-                  <th class="px-4 py-3">额度</th>
-                  <th class="px-4 py-3">有效期</th>
                   <th class="px-4 py-3">状态</th>
+                  <th class="px-4 py-3">额度</th>
+                  <th class="px-4 py-3">速率限制</th>
+                  <th class="px-4 py-3">有效期</th>
+                  <th class="px-4 py-3">IP 限制</th>
                   <th
-                    class="sticky right-0 z-20 w-[120px] min-w-[120px] max-w-[120px] bg-muted px-4 py-3 text-center shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.35)]"
+                    class="sticky right-0 z-20 w-[96px] min-w-[96px] max-w-[96px] bg-muted px-2 py-3 text-center shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.35)]"
                   >
                     操作
                   </th>
@@ -770,12 +828,12 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                   class="group border-b last:border-0 hover:bg-muted/30"
                 >
                   <td
-                    class="w-[180px] min-w-[180px] max-w-[180px] truncate px-4 py-3 font-medium"
+                    class="min-w-[128px] whitespace-nowrap px-4 py-3 font-medium"
                     :title="item.name"
                   >
                     {{ item.name }}
                   </td>
-                  <td class="min-w-[180px] px-4 py-3">
+                  <td class="min-w-[128px] px-4 py-3">
                     <button
                       type="button"
                       class="block w-full cursor-pointer rounded-md text-left outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
@@ -853,6 +911,81 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                       >最近 {{ formatTime(item.lastUsedAt) }}</span
                     >
                   </td>
+                  <td class="px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="group h-auto rounded-full p-0"
+                      :disabled="loading || Boolean(statusChangingKey)"
+                      :aria-label="`${item.name}当前${statusLabel(item.status)}，点击切换为${statusLabel(nextStatus(item.status))}`"
+                      @click="requestStatusChange('token', item)"
+                    >
+                      <Badge
+                        :variant="statusVariant(item.status)"
+                        class="transition-opacity group-hover:opacity-80"
+                        >{{ statusLabel(item.status) }}</Badge
+                      >
+                    </Button>
+                  </td>
+                  <td class="min-w-[160px] px-4 py-3">
+                    <div class="w-32">
+                      <div class="flex justify-between gap-3 text-xs">
+                        <span>{{ formatAmount(item.usedAmount) }}</span
+                        ><span>{{
+                          item.quotaAmount ? formatAmount(item.quotaAmount) : '不限'
+                        }}</span>
+                      </div>
+                      <Progress
+                        v-if="item.quotaAmount"
+                        class="mt-2 h-1.5"
+                        :model-value="quotaPercent(item)"
+                      />
+                      <div v-if="item.quotaAmount" class="mt-1 text-xs text-muted-foreground">
+                        已使用 {{ quotaPercent(item).toFixed(1) }}%
+                      </div>
+                    </div>
+                  </td>
+                  <td class="min-w-[128px] px-2 py-3">
+                    <div
+                      class="whitespace-nowrap"
+                      :title="accessTokenRateLimitSummary(item.rateLimitRule).title"
+                    >
+                      <dl
+                        v-if="accessTokenRateLimitSummary(item.rateLimitRule).enabled"
+                        class="grid grid-cols-[max-content_max-content] justify-start gap-x-2 gap-y-1 text-xs"
+                      >
+                        <dt class="text-muted-foreground">5小时</dt>
+                        <dd class="text-right font-medium tabular-nums text-foreground">
+                          {{
+                            formatRateLimitAmount(
+                              accessTokenRateLimitSummary(item.rateLimitRule).fiveHourAmount,
+                            )
+                          }}
+                        </dd>
+                        <dt class="text-muted-foreground">1天</dt>
+                        <dd class="text-right font-medium tabular-nums text-foreground">
+                          {{
+                            formatRateLimitAmount(
+                              accessTokenRateLimitSummary(item.rateLimitRule).dayAmount,
+                            )
+                          }}
+                        </dd>
+                        <dt class="text-muted-foreground">7天</dt>
+                        <dd class="text-right font-medium tabular-nums text-foreground">
+                          {{
+                            formatRateLimitAmount(
+                              accessTokenRateLimitSummary(item.rateLimitRule).sevenDayAmount,
+                            )
+                          }}
+                        </dd>
+                      </dl>
+                      <span v-else class="text-xs text-muted-foreground">未启用</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span v-if="item.expireAt">{{ formatTime(item.expireAt) }}</span>
+                    <span v-else class="text-muted-foreground">永久有效</span>
+                  </td>
                   <td class="min-w-[140px] px-4 py-3">
                     <div
                       class="flex items-center gap-2 whitespace-nowrap"
@@ -870,95 +1003,49 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                       </span>
                     </div>
                   </td>
-                  <td class="min-w-[180px] px-4 py-3">
-                    <div
-                      class="whitespace-nowrap"
-                      :title="accessTokenRateLimitSummary(item.rateLimitRule).title"
-                    >
-                      <div
-                        v-if="accessTokenRateLimitSummary(item.rateLimitRule).enabled"
-                        class="grid gap-1 text-xs"
-                      >
-                        <div class="flex items-center justify-between gap-3">
-                          <span class="text-muted-foreground">5 小时</span>
-                          <span class="font-medium text-foreground">
-                            {{
-                              formatRateLimitAmount(
-                                accessTokenRateLimitSummary(item.rateLimitRule).fiveHourAmount,
-                              )
-                            }}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-3">
-                          <span class="text-muted-foreground">1 天</span>
-                          <span class="font-medium text-foreground">
-                            {{
-                              formatRateLimitAmount(
-                                accessTokenRateLimitSummary(item.rateLimitRule).dayAmount,
-                              )
-                            }}
-                          </span>
-                        </div>
-                        <div class="flex items-center justify-between gap-3">
-                          <span class="text-muted-foreground">7 天</span>
-                          <span class="font-medium text-foreground">
-                            {{
-                              formatRateLimitAmount(
-                                accessTokenRateLimitSummary(item.rateLimitRule).sevenDayAmount,
-                              )
-                            }}
-                          </span>
-                        </div>
-                      </div>
-                      <span v-else class="text-xs text-muted-foreground">未启用</span>
-                    </div>
-                  </td>
-                  <td class="min-w-[190px] px-4 py-3">
-                    <div class="flex justify-between gap-3 text-xs">
-                      <span>{{ formatAmount(item.usedAmount) }}</span
-                      ><span>{{ item.quotaAmount ? formatAmount(item.quotaAmount) : '不限' }}</span>
-                    </div>
-                    <Progress
-                      v-if="item.quotaAmount"
-                      class="mt-2 h-1.5"
-                      :model-value="quotaPercent(item)"
-                    />
-                    <div v-if="item.quotaAmount" class="mt-1 text-xs text-muted-foreground">
-                      已使用 {{ quotaPercent(item).toFixed(1) }}%
-                    </div>
-                  </td>
-                  <td class="px-4 py-3 whitespace-nowrap">
-                    <span v-if="item.expireAt">{{ formatTime(item.expireAt) }}</span>
-                    <span v-else class="text-muted-foreground">永久有效</span>
-                  </td>
-                  <td class="px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      class="group h-auto rounded-full p-0"
-                      :disabled="loading || Boolean(statusChangingKey)"
-                      :aria-label="`${item.name}当前${statusLabel(item.status)}，点击切换为${statusLabel(nextStatus(item.status))}`"
-                      @click="requestStatusChange('token', item)"
-                    >
-                      <Badge
-                        :variant="statusVariant(item.status)"
-                        class="transition-opacity group-hover:opacity-80"
-                        >{{ statusLabel(item.status) }}</Badge
-                      >
-                    </Button>
-                  </td>
                   <td
-                    class="sticky right-0 z-10 w-[120px] min-w-[120px] max-w-[120px] whitespace-nowrap bg-card px-4 py-3 text-center shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.35)] transition-colors group-hover:bg-muted"
+                    class="sticky right-0 z-10 w-[96px] min-w-[96px] max-w-[96px] whitespace-nowrap bg-card px-2 py-3 text-center shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.35)] transition-colors group-hover:bg-muted"
                   >
                     <div class="flex items-center justify-center gap-1">
-                      <Button variant="ghost" size="sm" @click="editToken(item)">编辑</Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        :aria-label="`删除 ${item.name}`"
                         @click="requestDelete('token', item.id, item.name)"
                       >
                         <Trash2 class="h-4 w-4 text-destructive" />
                       </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                          <Button variant="ghost" size="icon" :aria-label="`${item.name} 更多操作`">
+                            <Ellipsis class="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" class="w-44">
+                          <DropdownMenuItem class="cursor-pointer" @click="editToken(item)">
+                            <Pencil />
+                            编辑
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            class="cursor-pointer"
+                            :disabled="!canCopyToken(item)"
+                            :title="canCopyToken(item) ? undefined : '当前列表未提供完整 API 密钥'"
+                            @click="openCCSwitchImport(item)"
+                          >
+                            <ImportIcon />
+                            导入到 CC Switch
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            class="cursor-pointer"
+                            :disabled="!canCopyToken(item)"
+                            :title="canCopyToken(item) ? undefined : '当前列表未提供完整 API 密钥'"
+                            @click="copyConnectionInfo(item)"
+                          >
+                            <Copy />
+                            复制连接信息
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </td>
                 </tr>
@@ -976,6 +1063,14 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
         </CardContent>
       </Card>
     </section>
+
+    <CCSwitchImportDialog
+      :open="Boolean(ccSwitchImportTarget)"
+      :token-name="ccSwitchImportTarget?.name || ''"
+      :models="ccSwitchImportModels"
+      @close="ccSwitchImportTarget = null"
+      @confirm="importToCCSwitch"
+    />
 
     <GatewayResourceConfirmDialogs
       :delete-target="deleteTarget"

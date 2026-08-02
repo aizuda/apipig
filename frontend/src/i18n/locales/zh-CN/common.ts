@@ -2,7 +2,7 @@
  * 中文通用翻译
  */
 export default {
-  appName: 'ApiPig Gateway',
+  appName: 'ApiPig',
   admin: '管理面板',
   confirm: '确认',
   cancel: '取消',

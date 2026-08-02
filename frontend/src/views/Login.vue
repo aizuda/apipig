@@ -316,7 +316,7 @@ onMounted(refreshLoginChallenge)
           >
             <span class="text-2xl font-bold text-primary-foreground">T</span>
           </div>
-          <span class="text-xl font-bold text-foreground">ApiPig Gateway</span>
+          <span class="text-xl font-bold text-foreground">ApiPig</span>
         </div>
 
         <div class="space-y-2 animate-fade-in-up animation-delay-1">

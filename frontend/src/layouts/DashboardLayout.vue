@@ -810,7 +810,7 @@ onUnmounted(() => {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage>ApiPig Gateway</BreadcrumbPage>
+                    <BreadcrumbPage>ApiPig</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>

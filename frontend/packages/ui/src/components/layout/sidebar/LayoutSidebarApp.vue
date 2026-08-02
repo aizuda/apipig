@@ -421,7 +421,7 @@ onUnmounted(() => {
           </slot>
           <slot name="sidebar-title">
             <div v-if="!collapsed" class="flex flex-col min-w-0">
-              <span class="text-sm font-bold tracking-tight truncate">ApiPig Gateway</span>
+              <span class="text-sm font-bold tracking-tight truncate">ApiPig</span>
               <span class="text-[10px] text-muted-foreground truncate">管理系统</span>
             </div>
           </slot>

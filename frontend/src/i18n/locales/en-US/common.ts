@@ -2,7 +2,7 @@
  * English common translations
  */
 export default {
-  appName: 'ApiPig Gateway',
+  appName: 'ApiPig',
   admin: 'Admin Panel',
   confirm: 'Confirm',
   cancel: 'Cancel',

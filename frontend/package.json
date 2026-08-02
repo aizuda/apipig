@@ -2,7 +2,7 @@
   "name": "@tabtab/admin",
   "version": "0.0.1",
   "private": true,
-  "description": "ApiPig Gateway App",
+  "description": "ApiPig App",
   "type": "module",
   "scripts": {
     "dev": "node internal/dev-cli/index.mjs",
