@@ -43,6 +43,7 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
     files:
       - src: cmd/remote-agent/remote-agent.example.yaml
+        dst: remote-agent.example.yaml
       - src: docs/remote-agent.md
 
 checksum:

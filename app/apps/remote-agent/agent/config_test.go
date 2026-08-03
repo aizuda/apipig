@@ -23,6 +23,14 @@ func TestConfigNormalizeDefaults(t *testing.T) {
 	assert.Greater(t, config.RequestTimeoutSeconds, config.PollWaitSeconds)
 }
 
+func TestConfigRegistrationIncludesHostname(t *testing.T) {
+	config := Config{AgentKey: "node", Name: "Node", hostname: "test-host"}
+
+	registration := config.Registration()
+
+	assert.Equal(t, "test-host", registration.Hostname)
+}
+
 func TestWithinRoot(t *testing.T) {
 	root := t.TempDir()
 	assert.True(t, withinRoot(root, filepath.Join(root, "task", "repo")))

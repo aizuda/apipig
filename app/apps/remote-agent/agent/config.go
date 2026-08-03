@@ -23,6 +23,7 @@ type Config struct {
 	PollWaitSeconds       int      `yaml:"poll-wait-seconds"`
 	RequestTimeoutSeconds int      `yaml:"request-timeout-seconds"`
 	LogFile               string   `yaml:"log-file"`
+	hostname              string
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -56,12 +57,19 @@ func (c *Config) normalize() error {
 	if c.RegistrationToken == "" {
 		return errors.New("registration-token is required")
 	}
-	hostname, _ := os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	c.hostname = strings.TrimSpace(hostname)
+	if c.hostname == "" {
+		return errors.New("hostname cannot be empty")
+	}
 	if c.AgentKey == "" {
-		c.AgentKey = hostname
+		c.AgentKey = c.hostname
 	}
 	if c.Name == "" {
-		c.Name = hostname
+		c.Name = c.hostname
 	}
 	if c.AgentKey == "" || c.Name == "" {
 		return errors.New("agent-key and name cannot be empty")
@@ -102,7 +110,7 @@ func (c *Config) normalize() error {
 
 func (c Config) Registration() RegistrationInfo {
 	return RegistrationInfo{
-		AgentKey: c.AgentKey, Name: c.Name, OperatingSystem: runtime.GOOS,
+		AgentKey: c.AgentKey, Name: c.Name, Hostname: c.hostname, OperatingSystem: runtime.GOOS,
 		Architecture: runtime.GOARCH, CPUInfo: logicalCPUInfo(), AgentVersion: Version,
 	}
 }
