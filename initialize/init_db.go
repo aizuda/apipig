@@ -38,6 +38,7 @@ const (
 	settingsMessageResourceID snowflake.ID = 10015
 	codeReviewResourceID      snowflake.ID = 10016
 	aiApplicationsResourceID  snowflake.ID = 10017
+	remoteAgentResourceID     snowflake.ID = 10018
 
 	seedCreatedAt      int64        = 1781936428406
 	roleResourceIDBase int64        = 11000
@@ -187,6 +188,7 @@ func currentMenuResources() []sysModel.Resource {
 		menuResource(aiLogsResourceID, aiGatewayResourceID, "调用日志", "AiGatewayLogs", "/ai-gateway/logs", "lucide:activity", "views/ai-gateway/calllogs/CallLogsManagement.vue", 100, "", false),
 		menuResource(aiApplicationsResourceID, rootResourceID, "AI 应用", "AiApplications", "/ai-applications", "lucide:server", "layout.base", 150, "/ai-applications/code-review", false),
 		menuResource(codeReviewResourceID, aiApplicationsResourceID, "AI 代码评审", "CodeReview", "/ai-applications/code-review", "lucide:git-pull-request", "layout.base", 100, "/ai-applications/code-review/projects", false),
+		menuResource(remoteAgentResourceID, aiApplicationsResourceID, "Remote Agent", "RemoteAgent", "/ai-applications/remote-agent", "lucide:monitor-cog", "layout.base", 90, "/ai-applications/remote-agent/agents", false),
 		menuResource(settingsResourceID, rootResourceID, "系统设置", "Settings", "/settings", "lucide:settings", "layout.base", 100, "/settings/users", false),
 		menuResource(settingsUsersResourceID, settingsResourceID, "用户管理", "SettingsUsers", "/settings/users", "lucide:users", "views/settings/users/UserManagement.vue", 500, "", true),
 		menuResource(settingsRolesResourceID, settingsResourceID, "角色管理", "SettingsRoles", "/settings/roles", "lucide:shield", "views/settings/roles/RoleManagement.vue", 400, "", true),

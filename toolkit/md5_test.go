@@ -1,10 +1,16 @@
 package toolkit
 
 import (
-	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetFileMd5(t *testing.T) {
-	assert.Equal(t, "ed7fb0c7ce9e95343016a3e7f6be70dd", GetFileMd5("./md5.go"))
+	path := filepath.Join(t.TempDir(), "fixture.txt")
+	require.NoError(t, os.WriteFile(path, []byte("hello\n"), 0600))
+	assert.Equal(t, "b1946ac92492d2347c6235b4d2611184", GetFileMd5(path))
 }

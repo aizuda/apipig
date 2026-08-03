@@ -79,6 +79,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Microchip,
+  MonitorCog,
   Network,
   NotebookPen,
   Package,
@@ -363,6 +364,7 @@ export const menuIconOptions: MenuIconOption[] = [
 
   { value: 'lucide:settings', label: '设置', component: Settings, category: 'system' },
   { value: 'lucide:cog', label: '系统配置', component: Cog, category: 'system' },
+  { value: 'lucide:monitor-cog', label: '节点管理', component: MonitorCog, category: 'system' },
   {
     value: 'lucide:sliders-horizontal',
     label: '参数配置',

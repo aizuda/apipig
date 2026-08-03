@@ -17,10 +17,10 @@ import (
 	"apipig/global"
 	"apipig/toolkit/snowflake"
 
+	"github.com/glebarez/sqlite"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -31,7 +31,7 @@ func TestSecureGatewayTokenAndHash(t *testing.T) {
 	second, err := generateSecureGatewayToken()
 	require.NoError(t, err)
 	assert.NotEqual(t, first, second)
-	assert.Regexp(t, `^sk-apipig-[A-Za-z0-9_-]{43}$`, first)
+	assert.Regexp(t, `^sk-[A-Za-z0-9_-]{43}$`, first)
 	assert.True(t, isHashedGatewayToken(hashGatewayToken(first)))
 	assert.NotContains(t, hashGatewayToken(first), first)
 }
@@ -298,7 +298,10 @@ func setupCredentialTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	database, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(&model.Provider{}, &model.Channel{}, &model.ChannelAccount{}, &model.AccessToken{}, &model.Proxy{}))
+	require.NoError(t, database.AutoMigrate(
+		&model.Provider{}, &model.Channel{}, &model.ChannelAccount{}, &model.AccessToken{},
+		&model.AccessTokenTag{}, &model.AccessTokenTagRelation{}, &model.Proxy{},
+	))
 	previous := global.DB
 	global.DB = database
 	t.Cleanup(func() { global.DB = previous })

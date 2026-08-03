@@ -1,23 +1,54 @@
 # documentation https://goreleaser.com
+version: 2
+
+project_name: apipig
+
 before:
   hooks:
-     - go mod tidy
-     - go generate ./...
-project_name: apipig
+    - go mod verify
+
 builds:
-  - env:
+  - id: apipig
+    main: .
+    binary: apipig
+    env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
     goos:
       - linux
       - windows
       - darwin
     goarch:
       - amd64
-      - 386
+      - arm64
+
+archives:
+  - id: apipig
+    ids:
+      - apipig
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+
 checksum:
-  name_template: 'checksums.txt'
+  name_template: checksums.txt
+  algorithm: sha256
+
 snapshot:
-  name_template: "{{ incpatch .Version }}"
+  version_template: "{{ incpatch .Version }}"
+
 changelog:
   sort: asc
   filters:

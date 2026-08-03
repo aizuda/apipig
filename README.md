@@ -5,6 +5,8 @@
 
 ```shell
 goreleaser release --snapshot --clean
+
+goreleaser release --snapshot --clean --config cmd/remote-agent/.goreleaser.yaml
 ```
 
 - 打包无 cmd 窗口命令

@@ -4,6 +4,7 @@ import (
 	aiRouter "apipig/app/ai/router"
 	reviewRouter "apipig/app/apps/code-review/router"
 	reviewService "apipig/app/apps/code-review/service"
+	remoteAgentRouter "apipig/app/apps/remote-agent/router"
 	sysRouter "apipig/app/sys/router"
 	_ "apipig/docs"
 	"apipig/global"
@@ -68,6 +69,12 @@ func Routers() *fiber.App {
 		reviewRouter.ReviewRouter.InitWebhookRouter(publicGroup)
 	}
 
+	// Agent-facing endpoints use a dedicated bootstrap/per-agent token flow.
+	remoteAgentGroup := app.Group(prefix + "/remote-agent/")
+	{
+		remoteAgentRouter.RemoteAgentRoutes.InitAgentRouter(remoteAgentGroup)
+	}
+
 	// 注入系统鉴权路由
 	sysGroup := app.Group(prefix + "/sys/")
 	sysGroup.Use(middleware.JWTAuth()).Use(middleware.RbacHandler())
@@ -103,6 +110,12 @@ func Routers() *fiber.App {
 	reviewGroup.Use(middleware.JWTAuth()).Use(middleware.RbacHandler())
 	{
 		reviewRouter.ReviewRouter.InitAdminRouter(reviewGroup)
+	}
+
+	remoteAgentAdminGroup := app.Group(prefix + "/ai-applications/remote-agent/")
+	remoteAgentAdminGroup.Use(middleware.JWTAuth()).Use(middleware.RbacHandler())
+	{
+		remoteAgentRouter.RemoteAgentRoutes.InitAdminRouter(remoteAgentAdminGroup)
 	}
 	reviewService.StartReview()
 

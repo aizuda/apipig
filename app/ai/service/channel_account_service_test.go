@@ -10,8 +10,8 @@ import (
 	"apipig/core/api/request"
 	"apipig/toolkit/snowflake"
 
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +25,7 @@ func TestChannelAccountRequiresChannelAndProtectsChannelDelete(t *testing.T) {
 	accountID := snowflake.ID(2003)
 	tokenID := snowflake.ID(2004)
 	require.NoError(t, database.Create(&model.Provider{
-		MODEL: api.MODEL{ID: providerID}, Name: "OpenAI", Code: "openai", BaseURL: "https://api.openai.com",
+		MODEL: api.MODEL{ID: providerID}, Name: "OpenAI", Code: "openai", BaseURL: "https://api.openai.com", Models: "gpt-test",
 	}).Error)
 	require.NoError(t, database.Create(&model.Channel{
 		MODEL: api.MODEL{ID: channelID}, ProviderID: providerID, Name: "OpenAI 主渠道",
@@ -39,14 +39,14 @@ func TestChannelAccountRequiresChannelAndProtectsChannelDelete(t *testing.T) {
 	}})
 	require.EqualError(t, err, "关联渠道不存在")
 	_, err = accountService.Save(&aiReq.ChannelAccountSaveParams{Account: &model.ChannelAccount{
-		ChannelID: channelID, Name: "主账户",
+		ChannelID: channelID, Name: "主账户", Models: "gpt-test",
 	}})
 	require.EqualError(t, err, "账户 API Key不能为空")
 
 	encryptedKey, err := vault.Encrypt("account-secret")
 	require.NoError(t, err)
 	require.NoError(t, database.Create(&model.ChannelAccount{
-		MODEL: api.MODEL{ID: accountID}, ChannelID: channelID, Name: "主账户", APIKey: encryptedKey, Status: 1,
+		MODEL: api.MODEL{ID: accountID}, ChannelID: channelID, Name: "主账户", APIKey: encryptedKey, Models: "gpt-test", Status: 1,
 	}).Error)
 	pageResult, err := accountService.Page(&aiReq.ChannelAccountPageParams{})
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestChannelAccountRequiresChannelAndProtectsChannelDelete(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "account-secret", account.APIKey)
 	success, err := accountService.Save(&aiReq.ChannelAccountSaveParams{Account: &model.ChannelAccount{
-		MODEL: api.MODEL{ID: accountID}, ChannelID: channelID, Name: "主账户更新", APIKey: maskedCredential, Status: 1,
+		MODEL: api.MODEL{ID: accountID}, ChannelID: channelID, Name: "主账户更新", APIKey: maskedCredential, Models: "gpt-test", Status: 1,
 	}})
 	require.NoError(t, err)
 	require.True(t, success)

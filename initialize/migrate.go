@@ -3,6 +3,7 @@ package initialize
 import (
 	aiModel "apipig/app/ai/model"
 	reviewModel "apipig/app/apps/code-review/model"
+	remoteAgentModel "apipig/app/apps/remote-agent/model"
 	sysModel "apipig/app/sys/model"
 	"log"
 
@@ -22,6 +23,12 @@ func autoMigrate(db *gorm.DB) error {
 		&aiModel.CallLog{},
 		&reviewModel.Project{},
 		&reviewModel.Task{},
+		&remoteAgentModel.Agent{},
+		&remoteAgentModel.Heartbeat{},
+		&remoteAgentModel.Task{},
+		&remoteAgentModel.TaskLog{},
+		&remoteAgentModel.Workspace{},
+		&remoteAgentModel.Command{},
 		&sysModel.Resource{},
 		&sysModel.ResourceApi{},
 		&sysModel.Role{},

@@ -60,12 +60,13 @@ type setupRequest struct {
 }
 
 type setupConfig struct {
-	Version    string            `yaml:"version"`
-	System     config.System     `yaml:"system"`
-	JWT        config.JWT        `yaml:"jwt"`
-	AI         config.AI         `yaml:"ai"`
-	CodeReview config.CodeReview `yaml:"code-review"`
-	Database   config.Database   `yaml:"database"`
+	Version     string             `yaml:"version"`
+	System      config.System      `yaml:"system"`
+	JWT         config.JWT         `yaml:"jwt"`
+	AI          config.AI          `yaml:"ai"`
+	CodeReview  config.CodeReview  `yaml:"code-review"`
+	RemoteAgent config.RemoteAgent `yaml:"remote-agent"`
+	Database    config.Database    `yaml:"database"`
 }
 
 type setupResponse struct {
@@ -257,6 +258,10 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 	if err != nil {
 		return setupConfig{}, err
 	}
+	remoteAgentToken, err := secureRandomString(48)
+	if err != nil {
+		return setupConfig{}, err
+	}
 
 	database := config.Database{
 		DbType:       request.DBType,
@@ -312,6 +317,13 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 			AITimeoutSec:    180,
 			MaxDiffBytes:    524288,
 			MaxChangedFiles: 200,
+		},
+		RemoteAgent: config.RemoteAgent{
+			RegistrationToken:         remoteAgentToken,
+			HeartbeatTimeoutSeconds:   90,
+			OfflineCheckCron:          "* * * * *",
+			CommandPollTimeoutSeconds: 25,
+			DispatchLeaseSeconds:      30,
 		},
 		Database: database,
 	}, nil

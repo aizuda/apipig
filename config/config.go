@@ -7,6 +7,9 @@ type Server struct {
 	// CodeReview 定义 Git WebHook 代码评审任务配置。
 	CodeReview CodeReview `mapstructure:"code-review" json:"codeReview" yaml:"code-review"`
 
+	// RemoteAgent defines the Remote Agent Controller settings.
+	RemoteAgent RemoteAgent `mapstructure:"remote-agent" json:"remoteAgent" yaml:"remote-agent"`
+
 	// 授权认证相关配置
 	JWT JWT `mapstructure:"jwt" json:"jwt" yaml:"jwt"`
 
