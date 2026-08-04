@@ -18,26 +18,39 @@ type HeartbeatResult struct {
 	ServerTime int64        `json:"serverTime"`
 }
 
+type AgentCredential struct {
+	Agent             remoteModel.Agent `json:"agent"`
+	RegistrationToken string            `json:"registrationToken"`
+	ConfigYAML        string            `json:"configYaml"`
+}
+
 type AgentDetail struct {
-	Agent      remoteModel.Agent       `json:"agent"`
-	Heartbeats []remoteModel.Heartbeat `json:"heartbeats"`
-	Tasks      []remoteModel.Task      `json:"tasks"`
+	Agent         remoteModel.Agent          `json:"agent"`
+	Heartbeats    []remoteModel.Heartbeat    `json:"heartbeats"`
+	Conversations []remoteModel.Conversation `json:"conversations"`
+}
+
+type ConversationDetail struct {
+	Conversation remoteModel.Conversation `json:"conversation"`
+	Messages     []remoteModel.Message    `json:"messages"`
+}
+
+type SendMessageResult struct {
+	UserMessage      remoteModel.Message `json:"userMessage"`
+	AssistantMessage remoteModel.Message `json:"assistantMessage"`
 }
 
 type CommandDispatch struct {
-	CommandID       snowflake.ID `json:"commandId" swaggertype:"string"`
-	Type            string       `json:"type"`
-	TaskID          snowflake.ID `json:"taskId" swaggertype:"string"`
-	TaskName        string       `json:"taskName"`
-	RepositoryURL   string       `json:"repositoryUrl"`
-	WorkingDir      string       `json:"workingDir"`
-	Prompt          string       `json:"prompt"`
-	NextLogSequence int64        `json:"nextLogSequence"`
+	CommandID          snowflake.ID `json:"commandId" swaggertype:"string"`
+	ConversationID     snowflake.ID `json:"conversationId" swaggertype:"string"`
+	UserMessageID      snowflake.ID `json:"userMessageId" swaggertype:"string"`
+	AssistantMessageID snowflake.ID `json:"assistantMessageId" swaggertype:"string"`
+	Type               string       `json:"type"`
+	Prompt             string       `json:"prompt"`
+	NextChunkSequence  int64        `json:"nextChunkSequence"`
 }
 
-type TaskDetail struct {
-	Task      remoteModel.Task      `json:"task"`
-	Workspace remoteModel.Workspace `json:"workspace"`
-	Commands  []remoteModel.Command `json:"commands"`
-	Logs      []remoteModel.TaskLog `json:"logs"`
+type MessageStreamEvent struct {
+	Chunks  []remoteModel.MessageChunk `json:"chunks"`
+	Message remoteModel.Message        `json:"message"`
 }

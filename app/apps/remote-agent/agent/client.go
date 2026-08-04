@@ -18,7 +18,7 @@ import (
 )
 
 type RegistrationInfo = remoteReq.RegisterRequest
-type TaskResult = remoteReq.TaskResultRequest
+type MessageResult = remoteReq.MessageResultRequest
 type Command = remoteResp.CommandDispatch
 
 type APIError struct {
@@ -73,12 +73,12 @@ func (c *Client) Acknowledge(ctx context.Context, commandID fmt.Stringer) error 
 	}, nil)
 }
 
-func (c *Client) Complete(ctx context.Context, result TaskResult) error {
-	return c.doAgent(ctx, http.MethodPost, "/task/result", result, nil)
+func (c *Client) Complete(ctx context.Context, result MessageResult) error {
+	return c.doAgent(ctx, http.MethodPost, "/message/result", result, nil)
 }
 
-func (c *Client) UploadLogs(ctx context.Context, request remoteReq.TaskLogUploadRequest) error {
-	return c.doAgent(ctx, http.MethodPost, "/task/logs", request, nil)
+func (c *Client) UploadChunks(ctx context.Context, request remoteReq.MessageChunkUploadRequest) error {
+	return c.doAgent(ctx, http.MethodPost, "/message/chunks", request, nil)
 }
 
 func (c *Client) doAgent(ctx context.Context, method, path string, body, result any) error {

@@ -46,8 +46,8 @@ func TestBoundedBuffer(t *testing.T) {
 }
 
 func TestLogChunkEndPreservesUTF8Boundary(t *testing.T) {
-	content := append(make([]byte, maxLogChunkBytes-1), []byte("中文")...)
-	end := logChunkEnd(content)
-	assert.Equal(t, maxLogChunkBytes-1, end)
+	content := append(make([]byte, maxMessageChunkBytes-1), []byte("中文")...)
+	end := messageChunkEnd(content)
+	assert.Equal(t, maxMessageChunkBytes-1, end)
 	assert.True(t, utf8.Valid(content[:end]))
 }

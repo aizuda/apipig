@@ -1,4 +1,4 @@
-import type { AgentStatus, TaskStatus } from '@/api/ai-applications/remote-agent'
+import type { AgentStatus } from '@/api/ai-applications/remote-agent'
 
 export function formatTime(value?: number) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
@@ -31,36 +31,4 @@ export function agentStatusLabel(status: AgentStatus) {
 
 export function agentStatusVariant(status: AgentStatus) {
   return status === 'ONLINE' ? 'default' : status === 'BUSY' ? 'secondary' : 'outline'
-}
-
-export function taskStatusLabel(status: TaskStatus) {
-  return {
-    PENDING: '等待执行',
-    RUNNING: '执行中',
-    SUCCESS: '成功',
-    FAILED: '失败',
-    CANCELLED: '已取消',
-  }[status]
-}
-
-export function taskStatusVariant(status: TaskStatus) {
-  return status === 'SUCCESS'
-    ? 'default'
-    : status === 'FAILED'
-      ? 'destructive'
-      : status === 'CANCELLED'
-        ? 'outline'
-        : 'secondary'
-}
-
-export function parseChangedFiles(value?: string) {
-  if (!value) return []
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === 'string')
-      : []
-  } catch {
-    return [value]
-  }
 }

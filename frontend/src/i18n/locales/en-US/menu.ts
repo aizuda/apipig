@@ -15,7 +15,6 @@ export default {
   codeReviewTasks: 'Review Tasks',
   remoteAgent: 'Remote Agent',
   remoteAgentAgents: 'Agent Nodes',
-  remoteAgentTasks: 'Remote Tasks',
   users: 'Users',
   settings: 'Settings',
   account: 'Account',

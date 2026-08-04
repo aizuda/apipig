@@ -12,45 +12,44 @@ import (
 )
 
 const (
-	logUploadBatchSize = 50
-	logUploadQueueSize = 512
-	maxLogChunkBytes   = 32 * 1024
+	chunkUploadBatchSize = 50
+	chunkUploadQueueSize = 512
+	maxMessageChunkBytes = 32 * 1024
 )
 
-type logUploader struct {
-	client *Client
-	taskID snowflake.ID
-	queue  chan remoteReq.TaskLogEntry
-	done   chan error
-	mu     sync.Mutex
-	next   int64
+type messageUploader struct {
+	client    *Client
+	messageID snowflake.ID
+	queue     chan remoteReq.MessageChunkEntry
+	done      chan error
+	mu        sync.Mutex
+	next      int64
 }
 
-func newLogUploader(ctx context.Context, client *Client, taskID snowflake.ID, nextSequence int64) *logUploader {
+func newMessageUploader(ctx context.Context, client *Client, messageID snowflake.ID, nextSequence int64) *messageUploader {
 	if nextSequence <= 0 {
 		nextSequence = 1
 	}
-	uploader := &logUploader{
-		client: client, taskID: taskID, queue: make(chan remoteReq.TaskLogEntry, logUploadQueueSize),
+	uploader := &messageUploader{
+		client: client, messageID: messageID, queue: make(chan remoteReq.MessageChunkEntry, chunkUploadQueueSize),
 		done: make(chan error, 1), next: nextSequence,
 	}
 	go uploader.run(ctx)
 	return uploader
 }
 
-func (u *logUploader) Append(stream string, content []byte) {
+func (u *messageUploader) Append(content []byte) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for len(content) > 0 {
-		end := logChunkEnd(content)
-		entry := remoteReq.TaskLogEntry{Sequence: u.next, Stream: stream, Content: string(content[:end])}
+		end := messageChunkEnd(content)
+		u.queue <- remoteReq.MessageChunkEntry{Sequence: u.next, Content: string(content[:end])}
 		u.next++
-		u.queue <- entry
 		content = content[end:]
 	}
 }
 
-func (u *logUploader) Close(ctx context.Context) error {
+func (u *messageUploader) Close(ctx context.Context) error {
 	u.mu.Lock()
 	close(u.queue)
 	u.mu.Unlock()
@@ -62,8 +61,8 @@ func (u *logUploader) Close(ctx context.Context) error {
 	}
 }
 
-func (u *logUploader) run(ctx context.Context) {
-	batch := make([]remoteReq.TaskLogEntry, 0, logUploadBatchSize)
+func (u *messageUploader) run(ctx context.Context) {
+	batch := make([]remoteReq.MessageChunkEntry, 0, chunkUploadBatchSize)
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -74,7 +73,7 @@ func (u *logUploader) run(ctx context.Context) {
 				return
 			}
 			batch = append(batch, entry)
-			if len(batch) >= logUploadBatchSize {
+			if len(batch) >= chunkUploadBatchSize {
 				if err := u.flush(ctx, batch); err != nil {
 					u.done <- err
 					return
@@ -96,13 +95,13 @@ func (u *logUploader) run(ctx context.Context) {
 	}
 }
 
-func (u *logUploader) flush(ctx context.Context, batch []remoteReq.TaskLogEntry) error {
+func (u *messageUploader) flush(ctx context.Context, batch []remoteReq.MessageChunkEntry) error {
 	if len(batch) == 0 {
 		return nil
 	}
-	request := remoteReq.TaskLogUploadRequest{TaskID: u.taskID, Logs: append([]remoteReq.TaskLogEntry(nil), batch...)}
+	request := remoteReq.MessageChunkUploadRequest{MessageID: u.messageID, Chunks: append([]remoteReq.MessageChunkEntry(nil), batch...)}
 	for {
-		err := u.client.UploadLogs(ctx, request)
+		err := u.client.UploadChunks(ctx, request)
 		if err == nil {
 			return nil
 		}
@@ -112,16 +111,16 @@ func (u *logUploader) flush(ctx context.Context, batch []remoteReq.TaskLogEntry)
 	}
 }
 
-func logChunkEnd(content []byte) int {
-	if len(content) <= maxLogChunkBytes {
+func messageChunkEnd(content []byte) int {
+	if len(content) <= maxMessageChunkBytes {
 		return len(content)
 	}
-	end := maxLogChunkBytes
+	end := maxMessageChunkBytes
 	for end > 0 && !utf8.RuneStart(content[end]) {
 		end--
 	}
 	if end == 0 {
-		return maxLogChunkBytes
+		return maxMessageChunkBytes
 	}
 	return end
 }

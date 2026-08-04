@@ -1,6 +1,9 @@
 package service
 
 import (
+	"encoding/json"
+	"errors"
+
 	remoteModel "apipig/app/apps/remote-agent/model"
 	remoteReq "apipig/app/apps/remote-agent/model/request"
 	coreReq "apipig/core/api/request"
@@ -14,18 +17,24 @@ import (
 
 type agentRepository interface {
 	FindByKey(string) (remoteModel.Agent, error)
+	FindByRegistrationTokenHash(string) (remoteModel.Agent, error)
 	FindByTokenHash(string) (remoteModel.Agent, error)
 	Create(*remoteModel.Agent) error
+	UpdateConfiguration(*remoteModel.Agent) error
 	UpdateRegistration(*remoteModel.Agent) error
-	RecoverTask(snowflake.ID, snowflake.ID, int64) error
+	RecoverInterruptedTurn(snowflake.ID, snowflake.ID, int64) error
+	UpdateRegistrationToken(snowflake.ID, string, int64) error
+	SetStatus(snowflake.ID, string, int64) error
+	Delete(snowflake.ID) error
 	RecordHeartbeat(remoteModel.Agent, remoteModel.Heartbeat) error
 	MarkOffline(int64, int64) error
 	Page(*remoteReq.AgentPageParams) (response.PageResult, error)
 	Get(snowflake.ID) (remoteModel.Agent, error)
 	RecentHeartbeats(snowflake.ID, int) ([]remoteModel.Heartbeat, error)
-	RecentTasks(snowflake.ID, int) ([]remoteModel.Task, error)
+	RecentConversations(snowflake.ID, int) ([]remoteModel.Conversation, error)
 }
 
+// gormAgentRepository 使用全局 GORM 连接实现 Agent 数据访问。
 type gormAgentRepository struct{}
 
 func (gormAgentRepository) db() *gorm.DB { return global.DB }
@@ -33,6 +42,12 @@ func (gormAgentRepository) db() *gorm.DB { return global.DB }
 func (r gormAgentRepository) FindByKey(key string) (remoteModel.Agent, error) {
 	var agent remoteModel.Agent
 	err := r.db().Where("agent_key = ?", key).First(&agent).Error
+	return agent, err
+}
+
+func (r gormAgentRepository) FindByRegistrationTokenHash(tokenHash string) (remoteModel.Agent, error) {
+	var agent remoteModel.Agent
+	err := r.db().Where("registration_token_hash = ?", tokenHash).First(&agent).Error
 	return agent, err
 }
 
@@ -46,15 +61,31 @@ func (r gormAgentRepository) Create(agent *remoteModel.Agent) error {
 	return r.db().Create(agent).Error
 }
 
+func (r gormAgentRepository) UpdateConfiguration(agent *remoteModel.Agent) error {
+	// 显式序列化切片，确保不同数据库驱动下 Codex 参数的存储格式一致。
+	codexArgs, err := json.Marshal(agent.CodexArgs)
+	if err != nil {
+		return err
+	}
+	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", agent.ID).Updates(map[string]any{
+		"agent_key": agent.AgentKey, "name": agent.Name,
+		"workspace_root": agent.WorkspaceRoot, "codex_command": agent.CodexCommand,
+		"codex_args": string(codexArgs), "poll_wait_seconds": agent.PollWaitSeconds,
+		"request_timeout_seconds": agent.RequestTimeoutSeconds, "log_file": agent.LogFile,
+		"updated_at": agent.UpdatedAt,
+	}).Error
+}
+
 func (r gormAgentRepository) UpdateRegistration(agent *remoteModel.Agent) error {
+	// 将“未禁用”放入更新条件，避免注册请求与管理员禁用操作并发时重新启用 Agent。
 	result := r.db().Model(&remoteModel.Agent{}).
 		Where("id = ? AND status <> ?", agent.ID, remoteModel.AgentStatusDisabled).
 		Updates(map[string]any{
-			"name": agent.Name, "token_hash": agent.TokenHash, "ip_address": agent.IPAddress,
-			"hostname": agent.Hostname, "operating_system": agent.OperatingSystem,
-			"architecture": agent.Architecture, "cpu_info": agent.CPUInfo,
-			"memory_total": agent.MemoryTotal, "codex_version": agent.CodexVersion,
-			"agent_version": agent.AgentVersion, "status": agent.Status,
+			"token_hash": agent.TokenHash, "ip_address": agent.IPAddress, "hostname": agent.Hostname,
+			"operating_system": agent.OperatingSystem, "architecture": agent.Architecture,
+			"cpu_info": agent.CPUInfo, "memory_total": agent.MemoryTotal,
+			"codex_version": agent.CodexVersion, "agent_version": agent.AgentVersion,
+			"status": agent.Status, "current_message_id": agent.CurrentMessageID,
 			"last_seen_at": agent.LastSeenAt, "updated_at": agent.UpdatedAt,
 		})
 	if result.Error != nil {
@@ -66,28 +97,102 @@ func (r gormAgentRepository) UpdateRegistration(agent *remoteModel.Agent) error 
 	return nil
 }
 
-func (r gormAgentRepository) RecoverTask(agentID, taskID snowflake.ID, now int64) error {
+func (r gormAgentRepository) RecoverInterruptedTurn(agentID, messageID snowflake.ID, now int64) error {
+	// 恢复消息、命令和 Agent 占用状态必须在同一事务内完成，避免命令重复或永久卡在忙碌状态。
 	return r.db().Transaction(func(tx *gorm.DB) error {
-		update := tx.Model(&remoteModel.Task{}).
-			Where("id = ? AND agent_id = ? AND status = ?", taskID, agentID, remoteModel.TaskStatusRunning).
-			Updates(map[string]any{
-				"status": remoteModel.TaskStatusPending, "started_at": 0,
-				"error_message": "", "updated_at": now,
-			})
-		if update.Error != nil || update.RowsAffected == 0 {
-			return update.Error
+		var message remoteModel.Message
+		if err := tx.Where("id = ? AND agent_id = ? AND role = ?", messageID, agentID, remoteModel.MessageRoleAssistant).
+			First(&message).Error; err != nil {
+			return err
 		}
-		return tx.Model(&remoteModel.Command{}).
-			Where("task_id = ? AND agent_id = ? AND type = ?", taskID, agentID, remoteModel.CommandTypeExecuteTask).
+		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+			// 终态消息无需重试，仅清除客户端异常退出后残留的占用标记。
+			return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
+				Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
+		}
+		// 未完成输出从头重试，因此先清除已有分片和助手消息中的部分内容。
+		if err := tx.Where("message_id = ?", messageID).Delete(&remoteModel.MessageChunk{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&remoteModel.Message{}).Where("id = ?", messageID).Updates(map[string]any{
+			"status": remoteModel.MessageStatusPending, "content": "", "error_message": "", "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		command := tx.Model(&remoteModel.Command{}).
+			Where("assistant_message_id = ? AND agent_id = ? AND status IN ?", messageID, agentID, []string{
+				remoteModel.CommandStatusPending,
+				remoteModel.CommandStatusDispatched,
+				remoteModel.CommandStatusAcknowledged,
+			}).
 			Updates(map[string]any{
 				"status": remoteModel.CommandStatusPending, "dispatched_at": 0,
 				"acknowledged_at": 0, "updated_at": now,
-			}).Error
+			})
+		if command.Error != nil {
+			return command.Error
+		}
+		if command.RowsAffected == 0 {
+			return errors.New("interrupted conversation command cannot be recovered")
+		}
+		return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
+			Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
+	})
+}
+
+func (r gormAgentRepository) UpdateRegistrationToken(id snowflake.ID, tokenHash string, updatedAt int64) error {
+	// 重置注册令牌时清空运行令牌，强制客户端使用新配置重新注册。
+	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", id).
+		Updates(map[string]any{"registration_token_hash": tokenHash, "token_hash": "", "updated_at": updatedAt}).Error
+}
+
+func (r gormAgentRepository) SetStatus(id snowflake.ID, status string, updatedAt int64) error {
+	updates := map[string]any{"status": status, "updated_at": updatedAt}
+	if status == remoteModel.AgentStatusDisabled {
+		// 禁用立即撤销运行令牌，阻止已启动客户端继续访问控制端。
+		updates["token_hash"] = ""
+	}
+	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r gormAgentRepository) Delete(id snowflake.ID) error {
+	// 使用物理删除释放 Agent Key，并在同一事务内清除所有关联存档数据。
+	return r.db().Transaction(func(tx *gorm.DB) error {
+		// current_message_id 条件是服务层检查之外的并发保护，防止响应刚开始时误删 Agent。
+		deleted := tx.Unscoped().Where("id = ? AND current_message_id = 0", id).Delete(&remoteModel.Agent{})
+		if deleted.Error != nil {
+			return deleted.Error
+		}
+		if deleted.RowsAffected == 0 {
+			return errors.New("cannot delete an agent while it is responding")
+		}
+
+		// 消息分片只关联消息 ID，需要在删除消息前通过子查询先行清理。
+		messageIDs := tx.Unscoped().Model(&remoteModel.Message{}).Select("id").Where("agent_id = ?", id)
+		if err := tx.Unscoped().Where("message_id IN (?)", messageIDs).Delete(&remoteModel.MessageChunk{}).Error; err != nil {
+			return err
+		}
+		for _, cleanup := range []struct {
+			model any
+			query string
+		}{
+			{model: &remoteModel.Command{}, query: "agent_id = ?"},
+			{model: &remoteModel.Message{}, query: "agent_id = ?"},
+			{model: &remoteModel.Conversation{}, query: "agent_id = ?"},
+			{model: &remoteModel.Heartbeat{}, query: "agent_id = ?"},
+		} {
+			if err := tx.Unscoped().Where(cleanup.query, id).Delete(cleanup.model).Error; err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
 func (r gormAgentRepository) RecordHeartbeat(agent remoteModel.Agent, heartbeat remoteModel.Heartbeat) error {
+	// 最新快照与心跳历史原子写入，保证详情页当前状态和历史记录一致。
 	return r.db().Transaction(func(tx *gorm.DB) error {
+		// 条件更新避免心跳请求与管理员禁用并发时把 Agent 状态改回在线。
 		result := tx.Model(&remoteModel.Agent{}).
 			Where("id = ? AND status <> ?", agent.ID, remoteModel.AgentStatusDisabled).
 			Updates(map[string]any{
@@ -106,6 +211,7 @@ func (r gormAgentRepository) RecordHeartbeat(agent remoteModel.Agent, heartbeat 
 }
 
 func (r gormAgentRepository) MarkOffline(cutoff, updatedAt int64) error {
+	// DISABLED 状态不参与自动离线转换，只有在线和忙碌节点受心跳超时影响。
 	return r.db().Model(&remoteModel.Agent{}).
 		Where("status IN ? AND last_seen_at < ?", []string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}, cutoff).
 		Updates(map[string]any{"status": remoteModel.AgentStatusOffline, "updated_at": updatedAt}).Error
@@ -119,7 +225,7 @@ func (r gormAgentRepository) Page(params *remoteReq.AgentPageParams) (response.P
 		}
 		if params.Keyword != "" {
 			like := "%" + params.Keyword + "%"
-			query = query.Where("name LIKE ? OR hostname LIKE ? OR ip_address LIKE ?", like, like, like)
+			query = query.Where("name LIKE ? OR agent_key LIKE ? OR hostname LIKE ? OR ip_address LIKE ?", like, like, like, like)
 		}
 	}
 	var agents []remoteModel.Agent
@@ -142,8 +248,9 @@ func (r gormAgentRepository) RecentHeartbeats(agentID snowflake.ID, limit int) (
 	return heartbeats, err
 }
 
-func (r gormAgentRepository) RecentTasks(agentID snowflake.ID, limit int) ([]remoteModel.Task, error) {
-	var tasks []remoteModel.Task
-	err := r.db().Where("agent_id = ?", agentID).Order("created_at DESC").Limit(limit).Find(&tasks).Error
-	return tasks, err
+func (r gormAgentRepository) RecentConversations(agentID snowflake.ID, limit int) ([]remoteModel.Conversation, error) {
+	var conversations []remoteModel.Conversation
+	err := r.db().Where("agent_id = ?", agentID).
+		Order("pinned DESC, pinned_at DESC, last_message_at DESC").Limit(limit).Find(&conversations).Error
+	return conversations, err
 }

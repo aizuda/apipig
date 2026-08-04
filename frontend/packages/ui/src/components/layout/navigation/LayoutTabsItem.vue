@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { X, Pin, GripVertical, RefreshCw, Loader2 } from '@lucide/vue'
 import { isComponent } from '../composables'
 import type { TabItem } from '../types'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 
 export type { TabItem }
 
@@ -102,7 +103,16 @@ function handleDragEnd(e: DragEvent) {
       v-else-if="tab.icon && isComponent(tab.icon)"
       class="h-3.5 w-3.5 shrink-0"
     />
-    <span class="max-w-[120px] truncate">{{ tab.title }}</span>
+    <TooltipProvider :delay-duration="300">
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span class="max-w-[120px] truncate">{{ tab.title }}</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" class="max-w-sm break-all whitespace-normal">
+          {{ tab.title }}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
     <Pin
       v-if="tab.affix"
       class="h-3 w-3 shrink-0"

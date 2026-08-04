@@ -1,5 +1,5 @@
 controller-url: http://127.0.0.1:8090
-registration-token: replace-with-controller-registration-token
+registration-token: replace-with-agent-registration-token
 agent-key: workstation-01
 name: Workstation 01
 workspace-root: ./remote-agent-workspaces
@@ -8,7 +8,6 @@ codex-args:
   - exec
   - --skip-git-repo-check
   - "-"
-git-command: git
 poll-wait-seconds: 25
 request-timeout-seconds: 40
 log-file: ./logs/remote-agent.log

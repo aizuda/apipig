@@ -8,6 +8,7 @@ import (
 	remoteReq "apipig/app/apps/remote-agent/model/request"
 	coreAPI "apipig/core/api"
 	"apipig/global"
+	"apipig/toolkit/snowflake"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -16,133 +17,252 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func TestRegisterAndHeartbeat(t *testing.T) {
+func TestCreateAndRegisterUsesOneAgentRecord(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
-	currentTime := time.UnixMilli(1_800_000_000_000)
 	service := NewAgentService()
-	service.registrationToken = func() string { return "bootstrap-secret" }
-	service.now = func() time.Time { return currentTime }
-
-	registration, err := service.Register(&remoteReq.RegisterParams{
-		BootstrapToken: "bootstrap-secret",
-		IPAddress:      "192.0.2.10",
-		Request: remoteReq.RegisterRequest{
-			AgentKey: "node-key-1", Name: "builder-1", Hostname: "workstation-1",
-			OperatingSystem: "linux", Architecture: "amd64", CPUInfo: "8 cores",
-			MemoryTotal: 16 << 30, CodexVersion: "1.2.3", AgentVersion: "0.1.0",
+	service.now = func() time.Time { return time.UnixMilli(1_800_000_000_000) }
+	credential, err := service.Create(&remoteReq.AgentCreateParams{
+		ControllerURL: "https://controller.example.com/admin/",
+		Request: remoteReq.AgentSaveRequest{
+			AgentKey: "node-key-1", Name: "builder-1",
+			WorkspaceRoot: "./workspaces", CodexCommand: "codex",
 		},
 	})
 	require.NoError(t, err)
-	assert.NotEmpty(t, registration.AgentToken)
-	assert.Equal(t, remoteModel.AgentStatusOnline, registration.Status)
-
+	assert.Contains(t, credential.ConfigYAML, "controller-url: https://controller.example.com/admin")
+	registration, err := service.Register(&remoteReq.RegisterParams{
+		BootstrapToken: credential.RegistrationToken, IPAddress: "192.0.2.10",
+		Request: remoteReq.RegisterRequest{AgentKey: "node-key-1", Hostname: "workstation-1", OperatingSystem: "linux"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, credential.Agent.ID, registration.AgentID)
+	var count int64
+	require.NoError(t, database.Model(&remoteModel.Agent{}).Count(&count).Error)
+	assert.EqualValues(t, 1, count)
 	var stored remoteModel.Agent
 	require.NoError(t, database.First(&stored, registration.AgentID).Error)
+	assert.Equal(t, remoteModel.AgentStatusOnline, stored.Status)
+	assert.Equal(t, "workstation-1", stored.Hostname)
 	assert.Equal(t, hashAgentToken(registration.AgentToken), stored.TokenHash)
-	assert.NotContains(t, stored.TokenHash, registration.AgentToken)
-	assert.Equal(t, "192.0.2.10", stored.IPAddress)
+}
 
-	currentTime = currentTime.Add(30 * time.Second)
+func TestRegistrationRequiresPreconfiguredAgent(t *testing.T) {
+	setupAgentServiceTestDB(t)
+	service := NewAgentService()
+	_, err := service.Register(&remoteReq.RegisterParams{
+		BootstrapToken: "unknown",
+		Request:        remoteReq.RegisterRequest{AgentKey: "missing", Hostname: "host"},
+	})
+	require.EqualError(t, err, "remote agent \"missing\" has not been added in the controller")
+}
+
+func TestAgentKeyAllowsOnlyLettersNumbersHyphensAndUnderscores(t *testing.T) {
+	for _, valid := range []string{"agent01", "Agent-01", "agent_node_01"} {
+		assert.NoError(t, validateAgentKey(valid), valid)
+	}
+	for _, invalid := range []string{"agent key", "agent.key", "节点-01", "agent@01"} {
+		require.EqualError(t, validateAgentKey(invalid), "agentKey can only contain letters, numbers, hyphens, and underscores", invalid)
+	}
+}
+
+func TestRotateTokenRejectsOnlineAgent(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "online-node", "secret", remoteModel.AgentStatusOnline)
+	service := NewAgentService()
+	_, err := service.RotateToken(&remoteReq.AgentRotateTokenParams{
+		ID: agent.ID, ControllerURL: "https://controller.example.com",
+	})
+	require.EqualError(t, err, "registration token can only be reset while the agent is offline or disabled")
+}
+
+func TestDeleteAgentRemovesAssociatedArchiveData(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	now := time.Now().UnixMilli()
+	agent := seedTestAgent(t, database, "delete-node", "secret", remoteModel.AgentStatusOffline)
+	conversation := remoteModel.Conversation{
+		MODEL: coreAPI.MODEL{ID: 201, CreatedBy: "test", CreatedAt: now}, AgentID: agent.ID,
+		Title: "Archived conversation", Status: remoteModel.ConversationStatusArchived, LastMessageAt: now,
+	}
+	messages := []remoteModel.Message{
+		{MODEL: coreAPI.MODEL{ID: 202, CreatedBy: "test", CreatedAt: now}, ConversationID: conversation.ID, AgentID: agent.ID, Sequence: 1, Role: remoteModel.MessageRoleUser, Status: remoteModel.MessageStatusCompleted, Content: "request"},
+		{MODEL: coreAPI.MODEL{ID: 203, CreatedBy: "test", CreatedAt: now}, ConversationID: conversation.ID, AgentID: agent.ID, Sequence: 2, Role: remoteModel.MessageRoleAssistant, Status: remoteModel.MessageStatusCompleted, Content: "response"},
+	}
+	chunk := remoteModel.MessageChunk{
+		MODEL: coreAPI.MODEL{ID: 204, CreatedBy: "test", CreatedAt: now}, MessageID: messages[1].ID, Sequence: 1, Content: "response",
+	}
+	command := remoteModel.Command{
+		MODEL: coreAPI.MODEL{ID: 205, CreatedBy: "test", CreatedAt: now}, AgentID: agent.ID,
+		ConversationID: conversation.ID, UserMessageID: messages[0].ID, AssistantMessageID: messages[1].ID,
+		Type: remoteModel.CommandTypeConversationTurn, Status: remoteModel.CommandStatusCompleted,
+	}
+	heartbeat := remoteModel.Heartbeat{
+		MODEL: coreAPI.MODEL{ID: 206, CreatedBy: "test", CreatedAt: now}, AgentID: agent.ID,
+		Status: remoteModel.AgentStatusOffline, OccurredAt: now,
+	}
+	require.NoError(t, database.Create(&conversation).Error)
+	require.NoError(t, database.Create(&messages).Error)
+	require.NoError(t, database.Create(&chunk).Error)
+	require.NoError(t, database.Create(&command).Error)
+	require.NoError(t, database.Create(&heartbeat).Error)
+
+	service := NewAgentService()
+	deleted, err := service.Delete(&remoteReq.AgentDeleteRequest{ID: agent.ID})
+	require.NoError(t, err)
+	assert.True(t, deleted)
+
+	checks := []struct {
+		model any
+		where string
+		value any
+	}{
+		{model: &remoteModel.Agent{}, where: "id = ?", value: agent.ID},
+		{model: &remoteModel.Heartbeat{}, where: "agent_id = ?", value: agent.ID},
+		{model: &remoteModel.Conversation{}, where: "agent_id = ?", value: agent.ID},
+		{model: &remoteModel.Message{}, where: "agent_id = ?", value: agent.ID},
+		{model: &remoteModel.MessageChunk{}, where: "message_id = ?", value: messages[1].ID},
+		{model: &remoteModel.Command{}, where: "agent_id = ?", value: agent.ID},
+	}
+	for _, check := range checks {
+		var count int64
+		require.NoError(t, database.Unscoped().Model(check.model).Where(check.where, check.value).Count(&count).Error)
+		assert.Zero(t, count)
+	}
+
+	_, err = service.Create(&remoteReq.AgentCreateParams{
+		ControllerURL: "https://controller.example.com",
+		Request:       remoteReq.AgentSaveRequest{AgentKey: agent.AgentKey, Name: "replacement"},
+	})
+	require.NoError(t, err)
+}
+
+func TestDeleteAgentRejectsActiveResponse(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "busy-node", "secret", remoteModel.AgentStatusBusy)
+	require.NoError(t, database.Model(&remoteModel.Agent{}).Where("id = ?", agent.ID).Update("current_message_id", 999).Error)
+
+	_, err := NewAgentService().Delete(&remoteReq.AgentDeleteRequest{ID: agent.ID})
+
+	require.EqualError(t, err, "cannot delete an agent while it is responding")
+}
+
+func TestHeartbeatAndMarkOffline(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	now := time.UnixMilli(1_800_000_000_000)
+	agent := seedTestAgent(t, database, "node", "secret", remoteModel.AgentStatusOffline)
+	service := NewAgentService()
+	service.now = func() time.Time { return now }
+	registration, err := service.Register(&remoteReq.RegisterParams{
+		BootstrapToken: "secret", Request: remoteReq.RegisterRequest{AgentKey: agent.AgentKey, Hostname: "host"},
+	})
+	require.NoError(t, err)
 	heartbeat, err := service.Heartbeat(&remoteReq.HeartbeatParams{
-		AgentToken: registration.AgentToken,
-		IPAddress:  "192.0.2.11",
-		Request: remoteReq.HeartbeatRequest{
-			CPUUsage: 37.5, MemoryUsed: 8 << 30, CodexVersion: "1.2.4", Busy: true,
-		},
+		AgentToken: registration.AgentToken, Request: remoteReq.HeartbeatRequest{CPUUsage: 10, MemoryUsed: 20, Busy: true},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, remoteModel.AgentStatusBusy, heartbeat.Status)
-
-	require.NoError(t, database.First(&stored, registration.AgentID).Error)
-	assert.Equal(t, remoteModel.AgentStatusBusy, stored.Status)
-	assert.Equal(t, "192.0.2.11", stored.IPAddress)
-	assert.Equal(t, "1.2.4", stored.CodexVersion)
-	var heartbeatCount int64
-	require.NoError(t, database.Model(&remoteModel.Heartbeat{}).Where("agent_id = ?", stored.ID).Count(&heartbeatCount).Error)
-	assert.EqualValues(t, 1, heartbeatCount)
-}
-
-func TestRegistrationRejectsInvalidBootstrapToken(t *testing.T) {
-	setupAgentServiceTestDB(t)
-	service := NewAgentService()
-	service.registrationToken = func() string { return "bootstrap-secret" }
-
-	_, err := service.Register(&remoteReq.RegisterParams{
-		BootstrapToken: "wrong",
-		Request:        remoteReq.RegisterRequest{AgentKey: "node-key", Name: "node", Hostname: "host"},
-	})
-	require.EqualError(t, err, "invalid registration token")
-}
-
-func TestReregisterRotatesAgentToken(t *testing.T) {
-	setupAgentServiceTestDB(t)
-	service := NewAgentService()
-	service.registrationToken = func() string { return "bootstrap-secret" }
-
-	params := &remoteReq.RegisterParams{
-		BootstrapToken: "bootstrap-secret",
-		Request:        remoteReq.RegisterRequest{AgentKey: "stable-node-key", Name: "node", Hostname: "host"},
-	}
-	first, err := service.Register(params)
-	require.NoError(t, err)
-	second, err := service.Register(params)
-	require.NoError(t, err)
-	assert.Equal(t, first.AgentID, second.AgentID)
-	assert.NotEqual(t, first.AgentToken, second.AgentToken)
-
-	_, err = service.Heartbeat(&remoteReq.HeartbeatParams{AgentToken: first.AgentToken})
-	require.EqualError(t, err, "invalid agent token")
-	_, err = service.Heartbeat(&remoteReq.HeartbeatParams{AgentToken: second.AgentToken})
-	require.NoError(t, err)
-}
-
-func TestMarkOfflinePreservesDisabledAgents(t *testing.T) {
-	database := setupAgentServiceTestDB(t)
-	currentTime := time.UnixMilli(1_800_000_000_000)
-	staleTime := currentTime.Add(-2 * time.Minute).UnixMilli()
-	agents := []remoteModel.Agent{
-		{MODEL: coreAPI.MODEL{ID: 101, CreatedBy: "test", CreatedAt: staleTime}, AgentKey: "online", Name: "online", TokenHash: "hash-1", Hostname: "host-1", Status: remoteModel.AgentStatusOnline, LastSeenAt: staleTime},
-		{MODEL: coreAPI.MODEL{ID: 102, CreatedBy: "test", CreatedAt: staleTime}, AgentKey: "disabled", Name: "disabled", TokenHash: "hash-2", Hostname: "host-2", Status: remoteModel.AgentStatusDisabled, LastSeenAt: staleTime},
-	}
-	require.NoError(t, database.Create(&agents).Error)
-	global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds = 90
-	service := NewAgentService()
-	service.now = func() time.Time { return currentTime }
+	now = now.Add(2 * time.Minute)
 	require.NoError(t, service.MarkOffline())
-
-	var stored []remoteModel.Agent
-	require.NoError(t, database.Order("id").Find(&stored).Error)
-	require.Len(t, stored, 2)
-	assert.Equal(t, remoteModel.AgentStatusOffline, stored[0].Status)
-	assert.Equal(t, currentTime.UnixMilli(), stored[0].UpdatedAt)
-	assert.Equal(t, remoteModel.AgentStatusDisabled, stored[1].Status)
+	var stored remoteModel.Agent
+	require.NoError(t, database.First(&stored, agent.ID).Error)
+	assert.Equal(t, remoteModel.AgentStatusOffline, stored.Status)
 }
 
-func TestRemoteModelsMigrate(t *testing.T) {
+func TestRegisterRecoversInterruptedConversationTurn(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
-	require.NoError(t, database.AutoMigrate(
-		&remoteModel.Task{}, &remoteModel.TaskLog{}, &remoteModel.Workspace{}, &remoteModel.Command{},
-	))
-	for _, table := range []string{
-		"ap_remote_agent", "ap_remote_heartbeat", "ap_remote_task", "ap_remote_task_log",
-		"ap_remote_workspace", "ap_remote_command",
-	} {
+	now := time.UnixMilli(1_800_000_000_000)
+	agent := seedTestAgent(t, database, "node", "secret", remoteModel.AgentStatusBusy)
+	conversation := remoteModel.Conversation{
+		MODEL:         coreAPI.MODEL{ID: snowflake.ID(101), CreatedBy: "test", CreatedAt: now.UnixMilli()},
+		AgentID:       agent.ID,
+		Title:         "Recovery",
+		Status:        remoteModel.ConversationStatusActive,
+		LastMessageAt: now.UnixMilli(),
+	}
+	message := remoteModel.Message{
+		MODEL:          coreAPI.MODEL{ID: snowflake.ID(102), CreatedBy: "test", CreatedAt: now.UnixMilli()},
+		ConversationID: conversation.ID,
+		AgentID:        agent.ID,
+		Sequence:       2,
+		Role:           remoteModel.MessageRoleAssistant,
+		Status:         remoteModel.MessageStatusStreaming,
+		Content:        "partial response",
+	}
+	command := remoteModel.Command{
+		MODEL:              coreAPI.MODEL{ID: snowflake.ID(103), CreatedBy: "test", CreatedAt: now.UnixMilli()},
+		AgentID:            agent.ID,
+		ConversationID:     conversation.ID,
+		AssistantMessageID: message.ID,
+		Type:               remoteModel.CommandTypeConversationTurn,
+		Status:             remoteModel.CommandStatusAcknowledged,
+		DispatchedAt:       now.UnixMilli() - 2_000,
+		AcknowledgedAt:     now.UnixMilli() - 1_000,
+	}
+	chunk := remoteModel.MessageChunk{
+		MODEL:     coreAPI.MODEL{ID: snowflake.ID(104), CreatedBy: "test", CreatedAt: now.UnixMilli()},
+		MessageID: message.ID, Sequence: 1, Content: message.Content,
+	}
+	require.NoError(t, database.Create(&conversation).Error)
+	require.NoError(t, database.Create(&message).Error)
+	require.NoError(t, database.Create(&command).Error)
+	require.NoError(t, database.Create(&chunk).Error)
+	require.NoError(t, database.Model(&remoteModel.Agent{}).Where("id = ?", agent.ID).
+		Update("current_message_id", message.ID).Error)
+
+	service := NewAgentService()
+	service.now = func() time.Time { return now }
+	registration, err := service.Register(&remoteReq.RegisterParams{
+		BootstrapToken: "secret",
+		Request:        remoteReq.RegisterRequest{AgentKey: agent.AgentKey, Hostname: "restarted-host"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.AgentStatusOnline, registration.Status)
+
+	var storedAgent remoteModel.Agent
+	require.NoError(t, database.First(&storedAgent, agent.ID).Error)
+	assert.Zero(t, storedAgent.CurrentMessageID)
+	assert.Equal(t, remoteModel.AgentStatusOnline, storedAgent.Status)
+	require.NoError(t, database.First(&message, message.ID).Error)
+	assert.Equal(t, remoteModel.MessageStatusPending, message.Status)
+	assert.Empty(t, message.Content)
+	require.NoError(t, database.First(&command, command.ID).Error)
+	assert.Equal(t, remoteModel.CommandStatusPending, command.Status)
+	assert.Zero(t, command.DispatchedAt)
+	assert.Zero(t, command.AcknowledgedAt)
+	var chunkCount int64
+	require.NoError(t, database.Model(&remoteModel.MessageChunk{}).Where("message_id = ?", message.ID).Count(&chunkCount).Error)
+	assert.Zero(t, chunkCount)
+}
+
+func TestRemoteConversationModelsMigrate(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	for _, table := range []string{"ap_remote_agent", "ap_remote_heartbeat", "ap_remote_agent_conversation", "ap_remote_agent_message", "ap_remote_agent_message_chunk", "ap_remote_agent_command"} {
 		assert.True(t, database.Migrator().HasTable(table), table)
 	}
+	assert.True(t, database.Migrator().HasColumn(&remoteModel.Conversation{}, "Pinned"))
+	assert.True(t, database.Migrator().HasColumn(&remoteModel.Conversation{}, "PinnedAt"))
 }
 
 func setupAgentServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	database, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(&remoteModel.Agent{}, &remoteModel.Heartbeat{}))
-	previousDB := global.DB
-	previousConfig := global.CONFIG
+	require.NoError(t, database.AutoMigrate(&remoteModel.Agent{}, &remoteModel.Heartbeat{}, &remoteModel.Conversation{}, &remoteModel.Message{}, &remoteModel.MessageChunk{}, &remoteModel.Command{}))
+	previousDB, previousConfig := global.DB, global.CONFIG
 	global.DB = database
 	global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds = 90
-	t.Cleanup(func() {
-		global.DB = previousDB
-		global.CONFIG = previousConfig
-	})
+	t.Cleanup(func() { global.DB, global.CONFIG = previousDB, previousConfig })
 	return database
+}
+
+func seedTestAgent(t *testing.T, database *gorm.DB, key, registrationToken, status string) remoteModel.Agent {
+	t.Helper()
+	agent := remoteModel.Agent{
+		MODEL:    coreAPI.MODEL{ID: snowflake.ID(time.Now().UnixNano()), CreatedBy: "test", CreatedAt: time.Now().UnixMilli()},
+		AgentKey: key, Name: key, RegistrationTokenHash: hashAgentToken(registrationToken),
+		WorkspaceRoot: "./workspaces", CodexCommand: "codex",
+		CodexArgs: []string{"exec", "-"}, PollWaitSeconds: 25, RequestTimeoutSeconds: 40,
+		LogFile: "agent.log", Status: status,
+	}
+	require.NoError(t, database.Create(&agent).Error)
+	return agent
 }

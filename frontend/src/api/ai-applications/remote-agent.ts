@@ -2,12 +2,20 @@ import { get, post, postStream } from '../request'
 import type { PageResult } from '../ai-gateway'
 
 export type AgentStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'DISABLED'
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
+export type ConversationStatus = 'ACTIVE' | 'ARCHIVED'
+export type MessageRole = 'USER' | 'ASSISTANT'
+export type MessageStatus = 'PENDING' | 'STREAMING' | 'COMPLETED' | 'FAILED'
 
 export interface RemoteAgent {
   id: string
   agentKey: string
   name: string
+  workspaceRoot: string
+  codexCommand: string
+  codexArgs: string[]
+  pollWaitSeconds: number
+  requestTimeoutSeconds: number
+  logFile: string
   ipAddress: string
   hostname: string
   operatingSystem: string
@@ -19,9 +27,28 @@ export interface RemoteAgent {
   codexVersion: string
   agentVersion: string
   status: AgentStatus
-  currentTaskId?: string
+  currentMessageId?: string
   lastSeenAt: number
   createdAt: number
+  updatedAt: number
+}
+
+export interface RemoteAgentSaveParams {
+  id?: string
+  agentKey: string
+  name: string
+  workspaceRoot: string
+  codexCommand: string
+  codexArgs: string[]
+  pollWaitSeconds: number
+  requestTimeoutSeconds: number
+  logFile: string
+}
+
+export interface RemoteAgentCredential {
+  agent: RemoteAgent
+  registrationToken: string
+  configYaml: string
 }
 
 export interface AgentHeartbeat {
@@ -33,63 +60,52 @@ export interface AgentHeartbeat {
   occurredAt: number
 }
 
-export interface RemoteTask {
+export interface RemoteConversation {
   id: string
-  name: string
   agentId: string
-  workspaceId?: string
-  repositoryUrl: string
-  workingDir: string
-  prompt: string
-  status: TaskStatus
-  result: string
-  errorMessage: string
-  changedFiles: string
-  startedAt: number
-  finishedAt: number
+  title: string
+  status: ConversationStatus
+  pinned: boolean
+  pinnedAt: number
+  lastMessageAt: number
   createdAt: number
+  updatedAt: number
 }
 
-export interface TaskLog {
+export interface RemoteMessage {
   id: string
-  taskId: string
+  conversationId: string
   agentId: string
   sequence: number
-  stream: 'stdout' | 'stderr'
+  role: MessageRole
+  status: MessageStatus
   content: string
+  errorMessage: string
   createdAt: number
+  updatedAt: number
 }
 
-export interface RemoteWorkspace {
+export interface MessageChunk {
   id: string
-  agentId: string
-  name: string
-  path: string
-  repositoryUrl: string
-  status: number
-}
-
-export interface RemoteCommand {
-  id: string
-  taskId: string
-  type: string
-  status: string
-  attempt: number
-  dispatchedAt: number
-  acknowledgedAt: number
+  messageId: string
+  sequence: number
+  content: string
 }
 
 export interface AgentDetailResult {
   agent: RemoteAgent
   heartbeats: AgentHeartbeat[]
-  tasks: RemoteTask[]
+  conversations: RemoteConversation[]
 }
 
-export interface TaskDetailResult {
-  task: RemoteTask
-  workspace: RemoteWorkspace
-  commands: RemoteCommand[]
-  logs: TaskLog[]
+export interface ConversationDetailResult {
+  conversation: RemoteConversation
+  messages: RemoteMessage[]
+}
+
+export interface SendMessageResult {
+  userMessage: RemoteMessage
+  assistantMessage: RemoteMessage
 }
 
 export interface AgentPageParams {
@@ -99,20 +115,10 @@ export interface AgentPageParams {
   status?: AgentStatus | ''
 }
 
-export interface TaskPageParams {
+export interface ConversationPageParams {
   page: number
   pageSize: number
-  agentId?: string
-  status?: TaskStatus | ''
-  keyword?: string
-}
-
-export interface TaskCreateParams {
-  name: string
   agentId: string
-  repositoryUrl: string
-  workingDir?: string
-  prompt: string
 }
 
 export const remoteAgentApi = {
@@ -122,13 +128,44 @@ export const remoteAgentApi = {
     get<AgentDetailResult>(
       `/ai-applications/remote-agent/agent/get?${new URLSearchParams({ id })}`,
     ),
-  taskPage: (params: TaskPageParams) =>
-    post<PageResult<RemoteTask>>('/ai-applications/remote-agent/task/page', params),
-  createTask: (params: TaskCreateParams) =>
-    post<RemoteTask>('/ai-applications/remote-agent/task/create', params),
-  getTask: (id: string) =>
-    get<TaskDetailResult>(`/ai-applications/remote-agent/task/get?${new URLSearchParams({ id })}`),
-  cancelTask: (id: string) => post<boolean>('/ai-applications/remote-agent/task/cancel', { id }),
-  streamTaskLogs: (taskId: string, afterSequence: number, signal?: AbortSignal) =>
-    postStream('/ai-applications/remote-agent/task/log/stream', { taskId, afterSequence }, signal),
+  createAgent: (params: RemoteAgentSaveParams) =>
+    post<RemoteAgentCredential>('/ai-applications/remote-agent/agent/create', params),
+  updateAgent: (params: RemoteAgentSaveParams) =>
+    post<RemoteAgent>('/ai-applications/remote-agent/agent/update', params),
+  rotateAgentToken: (id: string) =>
+    post<RemoteAgentCredential>(
+      `/ai-applications/remote-agent/agent/rotate-token?${new URLSearchParams({ id })}`,
+      {},
+    ),
+  setAgentStatus: (id: string, enabled: boolean) =>
+    post<boolean>('/ai-applications/remote-agent/agent/status', { id, enabled }),
+  deleteAgent: (id: string) => post<boolean>('/ai-applications/remote-agent/agent/delete', { id }),
+  conversationPage: (params: ConversationPageParams) =>
+    post<PageResult<RemoteConversation>>('/ai-applications/remote-agent/conversation/page', params),
+  createConversation: (agentId: string, title = '') =>
+    post<RemoteConversation>('/ai-applications/remote-agent/conversation/create', {
+      agentId,
+      title,
+    }),
+  getConversation: (id: string) =>
+    get<ConversationDetailResult>(
+      `/ai-applications/remote-agent/conversation/get?${new URLSearchParams({ id })}`,
+    ),
+  pinConversation: (id: string, pinned: boolean) =>
+    post<RemoteConversation>('/ai-applications/remote-agent/conversation/pin', { id, pinned }),
+  renameConversation: (id: string, title: string) =>
+    post<RemoteConversation>('/ai-applications/remote-agent/conversation/rename', { id, title }),
+  deleteConversation: (id: string) =>
+    post<boolean>('/ai-applications/remote-agent/conversation/delete', { id }),
+  sendMessage: (conversationId: string, content: string) =>
+    post<SendMessageResult>('/ai-applications/remote-agent/conversation/message/send', {
+      conversationId,
+      content,
+    }),
+  streamMessage: (messageId: string, afterSequence: number, signal?: AbortSignal) =>
+    postStream(
+      '/ai-applications/remote-agent/conversation/message/stream',
+      { messageId, afterSequence },
+      signal,
+    ),
 }

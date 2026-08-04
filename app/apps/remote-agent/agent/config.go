@@ -19,11 +19,11 @@ type Config struct {
 	WorkspaceRoot         string   `yaml:"workspace-root"`
 	CodexCommand          string   `yaml:"codex-command"`
 	CodexArgs             []string `yaml:"codex-args"`
-	GitCommand            string   `yaml:"git-command"`
 	PollWaitSeconds       int      `yaml:"poll-wait-seconds"`
 	RequestTimeoutSeconds int      `yaml:"request-timeout-seconds"`
 	LogFile               string   `yaml:"log-file"`
 	hostname              string
+	sourcePath            string
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -38,6 +38,10 @@ func LoadConfig(path string) (Config, error) {
 	if err := config.normalize(); err != nil {
 		return Config{}, err
 	}
+	config.sourcePath, err = filepath.Abs(path)
+	if err != nil {
+		return Config{}, err
+	}
 	return config, nil
 }
 
@@ -48,7 +52,6 @@ func (c *Config) normalize() error {
 	c.Name = strings.TrimSpace(c.Name)
 	c.WorkspaceRoot = strings.TrimSpace(c.WorkspaceRoot)
 	c.CodexCommand = strings.TrimSpace(c.CodexCommand)
-	c.GitCommand = strings.TrimSpace(c.GitCommand)
 	c.LogFile = strings.TrimSpace(c.LogFile)
 	controllerURL, err := url.ParseRequestURI(c.ControllerURL)
 	if err != nil || (controllerURL.Scheme != "http" && controllerURL.Scheme != "https") || controllerURL.Host == "" {
@@ -87,9 +90,6 @@ func (c *Config) normalize() error {
 	if len(c.CodexArgs) == 0 {
 		c.CodexArgs = []string{"exec", "--skip-git-repo-check", "-"}
 	}
-	if c.GitCommand == "" {
-		c.GitCommand = "git"
-	}
 	if c.PollWaitSeconds <= 0 || c.PollWaitSeconds > 25 {
 		c.PollWaitSeconds = 25
 	}
@@ -110,7 +110,7 @@ func (c *Config) normalize() error {
 
 func (c Config) Registration() RegistrationInfo {
 	return RegistrationInfo{
-		AgentKey: c.AgentKey, Name: c.Name, Hostname: c.hostname, OperatingSystem: runtime.GOOS,
+		AgentKey: c.AgentKey, Hostname: c.hostname, OperatingSystem: runtime.GOOS,
 		Architecture: runtime.GOARCH, CPUInfo: logicalCPUInfo(), AgentVersion: Version,
 	}
 }

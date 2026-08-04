@@ -1,5 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { Bot, GitPullRequest, ListChecks, MonitorCog } from '@lucide/vue'
+import { Bot, GitPullRequest, MonitorCog } from '@lucide/vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -28,7 +28,7 @@ const routes: RouteRecordRaw[] = [
           titleKey: 'menu.remoteAgentAgents',
           title: 'Agent 节点',
           icon: MonitorCog,
-          order: 3,
+          order: 4,
           hideInMenu: true,
         },
       },
@@ -37,24 +37,6 @@ const routes: RouteRecordRaw[] = [
         name: 'RemoteAgentAgentDetail',
         component: () => import('@/views/ai-applications/remote-agent/AgentDetail.vue'),
         meta: { title: 'Agent 详情', icon: MonitorCog, order: 4, hideInMenu: true },
-      },
-      {
-        path: '/ai-applications/remote-agent/tasks',
-        name: 'RemoteAgentTasks',
-        component: () => import('@/views/ai-applications/remote-agent/TaskManagement.vue'),
-        meta: {
-          titleKey: 'menu.remoteAgentTasks',
-          title: '远程任务',
-          icon: ListChecks,
-          order: 5,
-          hideInMenu: true,
-        },
-      },
-      {
-        path: '/ai-applications/remote-agent/tasks/:id',
-        name: 'RemoteAgentTaskDetail',
-        component: () => import('@/views/ai-applications/remote-agent/TaskDetail.vue'),
-        meta: { title: '任务详情', icon: ListChecks, order: 6, hideInMenu: true },
       },
       {
         path: '/ai-applications/code-review/projects',

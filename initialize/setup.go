@@ -258,10 +258,6 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 	if err != nil {
 		return setupConfig{}, err
 	}
-	remoteAgentToken, err := secureRandomString(48)
-	if err != nil {
-		return setupConfig{}, err
-	}
 
 	database := config.Database{
 		DbType:       request.DBType,
@@ -319,7 +315,6 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 			MaxChangedFiles: 200,
 		},
 		RemoteAgent: config.RemoteAgent{
-			RegistrationToken:         remoteAgentToken,
 			HeartbeatTimeoutSeconds:   90,
 			OfflineCheckCron:          "* * * * *",
 			CommandPollTimeoutSeconds: 25,
