@@ -19,7 +19,7 @@ import (
 	"apipig/toolkit/snowflake"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type Runner struct {
 	config            Config
@@ -56,6 +56,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer r.disconnect()
 	heartbeatInterval := time.Duration(registration.HeartbeatIntervalSeconds) * time.Second
 	if heartbeatInterval <= 0 {
 		heartbeatInterval = 30 * time.Second
@@ -82,6 +83,14 @@ func (r *Runner) Run(ctx context.Context) error {
 		if command != nil {
 			r.handleCommand(ctx, *command)
 		}
+	}
+}
+
+func (r *Runner) disconnect() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.client.Disconnect(ctx); err != nil {
+		r.logger.Printf("report agent disconnect failed: %v", err)
 	}
 }
 
@@ -164,7 +173,7 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 	}()
 	r.logger.Printf("starting conversation turn %s", command.AssistantMessageID.String())
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)
-	result := r.executor.ExecuteTurn(executionCtx, command.ConversationID, command.Prompt, uploader.Append)
+	result := r.executor.ExecuteTurn(executionCtx, command.CLIType, command.WorkingDirectory, command.Prompt, uploader.Append)
 	if err := uploader.Close(lifecycleCtx); err != nil {
 		result.Success = false
 		if result.ErrorMessage == "" {

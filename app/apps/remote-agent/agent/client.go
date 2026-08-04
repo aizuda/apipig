@@ -22,7 +22,9 @@ type MessageResult = remoteReq.MessageResultRequest
 type Command = remoteResp.CommandDispatch
 
 type APIError struct {
-	Message string
+	Message    string
+	Code       string
+	StatusCode int
 }
 
 func (e *APIError) Error() string { return e.Message }
@@ -58,6 +60,10 @@ func (c *Client) Register(ctx context.Context, info RegistrationInfo) (remoteRes
 
 func (c *Client) Heartbeat(ctx context.Context, heartbeat remoteReq.HeartbeatRequest) error {
 	return c.doAgent(ctx, http.MethodPost, "/heartbeat", heartbeat, nil)
+}
+
+func (c *Client) Disconnect(ctx context.Context) error {
+	return c.doAgent(ctx, http.MethodPost, "/disconnect", nil, nil)
 }
 
 func (c *Client) NextCommand(ctx context.Context, waitSeconds int) (*Command, error) {
@@ -128,7 +134,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, headers 
 		if message == "" {
 			message = response.Status
 		}
-		return &APIError{Message: message}
+		return &APIError{Message: message, Code: envelope.Code, StatusCode: response.StatusCode}
 	}
 	if result == nil || len(envelope.Data) == 0 || bytes.Equal(envelope.Data, []byte("null")) {
 		return nil

@@ -67,6 +67,18 @@ func TestAgentRegisterAndHeartbeatRoutes(t *testing.T) {
 	var heartbeat coreResp.Response
 	require.NoError(t, json.NewDecoder(heartbeatResponse.Body).Decode(&heartbeat))
 	assert.Equal(t, coreResp.Success, heartbeat.Code)
+
+	disconnectRequest := httptest.NewRequest(http.MethodPost, "/remote-agent/disconnect", nil)
+	disconnectRequest.Header.Set(fiber.HeaderAuthorization, "Bearer "+registration.Data.AgentToken)
+	disconnectResponse, err := app.Test(disconnectRequest)
+	require.NoError(t, err)
+	defer disconnectResponse.Body.Close()
+	var disconnect coreResp.Response
+	require.NoError(t, json.NewDecoder(disconnectResponse.Body).Decode(&disconnect))
+	assert.Equal(t, coreResp.Success, disconnect.Code)
+	var storedAgent remoteModel.Agent
+	require.NoError(t, database.First(&storedAgent, registration.Data.AgentID).Error)
+	assert.Equal(t, remoteModel.AgentStatusOffline, storedAgent.Status)
 }
 
 func TestAgentDeleteAdminRoute(t *testing.T) {
@@ -81,6 +93,14 @@ func TestAgentDeleteAdminRoute(t *testing.T) {
 	app := fiber.New()
 	group := app.Group("/admin/")
 	RemoteAgentRoutes.InitAdminRouter(group)
+	statusRequest := httptest.NewRequest(http.MethodGet, "/admin/agent/status?id="+agent.ID.String(), nil)
+	statusResult, err := app.Test(statusRequest)
+	require.NoError(t, err)
+	defer statusResult.Body.Close()
+	var statusEnvelope coreResp.Response
+	require.NoError(t, json.NewDecoder(statusResult.Body).Decode(&statusEnvelope))
+	assert.Equal(t, coreResp.Success, statusEnvelope.Code)
+
 	body, err := json.Marshal(map[string]string{"id": agent.ID.String()})
 	require.NoError(t, err)
 	request := httptest.NewRequest(http.MethodPost, "/admin/agent/delete", bytes.NewReader(body))
@@ -107,7 +127,8 @@ func TestConversationPinRenameAndDeleteAdminRoutes(t *testing.T) {
 	agent := seedRouterAgent(t, database, "conversation-delete-node", "conversation delete node", "bootstrap-secret")
 	conversation := remoteModel.Conversation{
 		MODEL:   coreAPI.MODEL{ID: snowflake.ID(30_001), CreatedBy: "test", CreatedAt: time.Now().UnixMilli()},
-		AgentID: agent.ID, Title: "Delete me", Status: remoteModel.ConversationStatusArchived,
+		AgentID: agent.ID, Title: "Delete me", CLIType: remoteModel.CLITypeCodex,
+		WorkingDirectory: ".apipig/conversations/1", Status: remoteModel.ConversationStatusActive,
 		LastMessageAt: time.Now().UnixMilli(),
 	}
 	require.NoError(t, database.Create(&conversation).Error)

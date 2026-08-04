@@ -43,6 +43,8 @@ type AgentSaveRequest struct {
 	WorkspaceRoot         string       `json:"workspaceRoot"`
 	CodexCommand          string       `json:"codexCommand"`
 	CodexArgs             []string     `json:"codexArgs"`
+	ClaudeCommand         string       `json:"claudeCommand"`
+	ClaudeArgs            []string     `json:"claudeArgs"`
 	PollWaitSeconds       int          `json:"pollWaitSeconds"`
 	RequestTimeoutSeconds int          `json:"requestTimeoutSeconds"`
 	LogFile               string       `json:"logFile"`
@@ -81,8 +83,10 @@ type AgentDeleteRequest struct {
 }
 
 type ConversationCreateRequest struct {
-	AgentID snowflake.ID `json:"agentId" swaggertype:"string"`
-	Title   string       `json:"title"`
+	AgentID          snowflake.ID `json:"agentId" swaggertype:"string"`
+	Title            string       `json:"title"`
+	CLIType          string       `json:"cliType"`
+	WorkingDirectory string       `json:"workingDirectory"`
 }
 
 type ConversationPageParams struct {

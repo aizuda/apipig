@@ -19,6 +19,8 @@ type Config struct {
 	WorkspaceRoot         string   `yaml:"workspace-root"`
 	CodexCommand          string   `yaml:"codex-command"`
 	CodexArgs             []string `yaml:"codex-args"`
+	ClaudeCommand         string   `yaml:"claude-command"`
+	ClaudeArgs            []string `yaml:"claude-args"`
 	PollWaitSeconds       int      `yaml:"poll-wait-seconds"`
 	RequestTimeoutSeconds int      `yaml:"request-timeout-seconds"`
 	LogFile               string   `yaml:"log-file"`
@@ -52,6 +54,7 @@ func (c *Config) normalize() error {
 	c.Name = strings.TrimSpace(c.Name)
 	c.WorkspaceRoot = strings.TrimSpace(c.WorkspaceRoot)
 	c.CodexCommand = strings.TrimSpace(c.CodexCommand)
+	c.ClaudeCommand = strings.TrimSpace(c.ClaudeCommand)
 	c.LogFile = strings.TrimSpace(c.LogFile)
 	controllerURL, err := url.ParseRequestURI(c.ControllerURL)
 	if err != nil || (controllerURL.Scheme != "http" && controllerURL.Scheme != "https") || controllerURL.Host == "" {
@@ -78,17 +81,30 @@ func (c *Config) normalize() error {
 		return errors.New("agent-key and name cannot be empty")
 	}
 	if c.WorkspaceRoot == "" {
-		c.WorkspaceRoot = "./remote-agent-workspaces"
+		c.WorkspaceRoot = "."
 	}
 	c.WorkspaceRoot, err = filepath.Abs(c.WorkspaceRoot)
 	if err != nil {
 		return err
 	}
+	workspaceInfo, err := os.Stat(c.WorkspaceRoot)
+	if err != nil {
+		return errors.New("workspace-root must reference an existing directory: " + err.Error())
+	}
+	if !workspaceInfo.IsDir() {
+		return errors.New("workspace-root must reference a directory")
+	}
 	if c.CodexCommand == "" {
 		c.CodexCommand = "codex"
 	}
 	if len(c.CodexArgs) == 0 {
-		c.CodexArgs = []string{"exec", "--skip-git-repo-check", "-"}
+		c.CodexArgs = []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}
+	}
+	if c.ClaudeCommand == "" {
+		c.ClaudeCommand = "claude"
+	}
+	if len(c.ClaudeArgs) == 0 {
+		c.ClaudeArgs = []string{"-p", "--permission-mode", "acceptEdits"}
 	}
 	if c.PollWaitSeconds <= 0 || c.PollWaitSeconds > 25 {
 		c.PollWaitSeconds = 25

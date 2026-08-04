@@ -98,6 +98,8 @@ func (a *ConversationApi) Stream(c *fiber.Ctx) error {
 	}
 	c.Set(fiber.HeaderContentType, "text/event-stream; charset=utf-8")
 	c.Set(fiber.HeaderCacheControl, "no-cache")
+	c.Set(fiber.HeaderConnection, "keep-alive")
+	c.Set("X-Accel-Buffering", "no")
 	c.Context().SetBodyStreamWriter(func(writer *bufio.Writer) {
 		sequence := params.AfterSequence
 		for {

@@ -315,7 +315,7 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 			MaxChangedFiles: 200,
 		},
 		RemoteAgent: config.RemoteAgent{
-			HeartbeatTimeoutSeconds:   90,
+			HeartbeatTimeoutSeconds:   30,
 			OfflineCheckCron:          "* * * * *",
 			CommandPollTimeoutSeconds: 25,
 			DispatchLeaseSeconds:      30,

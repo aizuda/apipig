@@ -2,12 +2,21 @@ controller-url: http://127.0.0.1:8090
 registration-token: replace-with-agent-registration-token
 agent-key: workstation-01
 name: Workstation 01
-workspace-root: ./remote-agent-workspaces
+workspace-root: D:/gowork
 codex-command: codex
 codex-args:
   - exec
+  - --json
+  - --full-auto
+  - --sandbox
+  - workspace-write
   - --skip-git-repo-check
   - "-"
+claude-command: claude
+claude-args:
+  - -p
+  - --permission-mode
+  - acceptEdits
 poll-wait-seconds: 25
 request-timeout-seconds: 40
 log-file: ./logs/remote-agent.log

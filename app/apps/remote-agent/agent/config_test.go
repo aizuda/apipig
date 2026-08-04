@@ -18,9 +18,22 @@ func TestConfigNormalizeDefaults(t *testing.T) {
 	require.NoError(t, config.normalize())
 	assert.Equal(t, "https://controller.example.com", config.ControllerURL)
 	assert.Equal(t, "codex", config.CodexCommand)
-	assert.Equal(t, []string{"exec", "--skip-git-repo-check", "-"}, config.CodexArgs)
+	assert.Equal(t, []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}, config.CodexArgs)
+	assert.Equal(t, "claude", config.ClaudeCommand)
+	assert.Equal(t, []string{"-p", "--permission-mode", "acceptEdits"}, config.ClaudeArgs)
 	assert.Equal(t, 25, config.PollWaitSeconds)
 	assert.Greater(t, config.RequestTimeoutSeconds, config.PollWaitSeconds)
+}
+
+func TestConfigRejectsMissingWorkspaceRoot(t *testing.T) {
+	config := Config{
+		ControllerURL: "https://controller.example.com", RegistrationToken: "secret",
+		AgentKey: "node", Name: "node", WorkspaceRoot: filepath.Join(t.TempDir(), "missing"),
+	}
+
+	err := config.normalize()
+
+	require.ErrorContains(t, err, "workspace-root must reference an existing directory")
 }
 
 func TestConfigRegistrationIncludesHostname(t *testing.T) {

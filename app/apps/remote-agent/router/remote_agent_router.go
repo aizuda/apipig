@@ -11,6 +11,7 @@ type RemoteAgentRouter struct{}
 func (r *RemoteAgentRouter) InitAgentRouter(router fiber.Router) {
 	router.Post("register", api.RemoteAgentApi.AgentApi.Register)
 	router.Post("heartbeat", api.RemoteAgentApi.AgentApi.Heartbeat)
+	router.Post("disconnect", api.RemoteAgentApi.AgentApi.Disconnect)
 	router.Get("command/next", api.RemoteAgentApi.ConversationApi.NextCommand)
 	router.Post("command/acknowledge", api.RemoteAgentApi.ConversationApi.Acknowledge)
 	router.Post("message/chunks", api.RemoteAgentApi.ConversationApi.AppendChunks)
@@ -21,6 +22,7 @@ func (r *RemoteAgentRouter) InitAdminRouter(router fiber.Router) {
 	agent := router.Group("agent/")
 	agent.Post("page", api.RemoteAgentApi.AgentApi.Page)
 	agent.Get("get", api.RemoteAgentApi.AgentApi.Get)
+	agent.Get("status", api.RemoteAgentApi.AgentApi.Status)
 	agent.Post("create", api.RemoteAgentApi.AgentApi.Create)
 	agent.Post("update", api.RemoteAgentApi.AgentApi.Update)
 	agent.Post("rotate-token", api.RemoteAgentApi.AgentApi.RotateToken)

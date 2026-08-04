@@ -2,7 +2,8 @@ import { get, post, postStream } from '../request'
 import type { PageResult } from '../ai-gateway'
 
 export type AgentStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'DISABLED'
-export type ConversationStatus = 'ACTIVE' | 'ARCHIVED'
+export type ConversationStatus = 'ACTIVE'
+export type CLIType = 'CODEX' | 'CLAUDE'
 export type MessageRole = 'USER' | 'ASSISTANT'
 export type MessageStatus = 'PENDING' | 'STREAMING' | 'COMPLETED' | 'FAILED'
 
@@ -13,6 +14,8 @@ export interface RemoteAgent {
   workspaceRoot: string
   codexCommand: string
   codexArgs: string[]
+  claudeCommand: string
+  claudeArgs: string[]
   pollWaitSeconds: number
   requestTimeoutSeconds: number
   logFile: string
@@ -40,6 +43,8 @@ export interface RemoteAgentSaveParams {
   workspaceRoot: string
   codexCommand: string
   codexArgs: string[]
+  claudeCommand: string
+  claudeArgs: string[]
   pollWaitSeconds: number
   requestTimeoutSeconds: number
   logFile: string
@@ -64,6 +69,8 @@ export interface RemoteConversation {
   id: string
   agentId: string
   title: string
+  cliType: CLIType
+  workingDirectory: string
   status: ConversationStatus
   pinned: boolean
   pinnedAt: number
@@ -128,6 +135,8 @@ export const remoteAgentApi = {
     get<AgentDetailResult>(
       `/ai-applications/remote-agent/agent/get?${new URLSearchParams({ id })}`,
     ),
+  getAgentStatus: (id: string) =>
+    get<RemoteAgent>(`/ai-applications/remote-agent/agent/status?${new URLSearchParams({ id })}`),
   createAgent: (params: RemoteAgentSaveParams) =>
     post<RemoteAgentCredential>('/ai-applications/remote-agent/agent/create', params),
   updateAgent: (params: RemoteAgentSaveParams) =>
@@ -142,10 +151,12 @@ export const remoteAgentApi = {
   deleteAgent: (id: string) => post<boolean>('/ai-applications/remote-agent/agent/delete', { id }),
   conversationPage: (params: ConversationPageParams) =>
     post<PageResult<RemoteConversation>>('/ai-applications/remote-agent/conversation/page', params),
-  createConversation: (agentId: string, title = '') =>
+  createConversation: (agentId: string, cliType: CLIType, workingDirectory: string, title = '') =>
     post<RemoteConversation>('/ai-applications/remote-agent/conversation/create', {
       agentId,
       title,
+      cliType,
+      workingDirectory,
     }),
   getConversation: (id: string) =>
     get<ConversationDetailResult>(

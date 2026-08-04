@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue'
 import {
   ArrowLeft,
   Bot,
@@ -37,6 +46,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   remoteAgentApi,
   type AgentDetailResult,
+  type CLIType,
   type MessageChunk,
   type RemoteConversation,
   type RemoteMessage,
@@ -61,6 +71,12 @@ const renameConversationTitle = ref('')
 const renamingConversation = ref(false)
 const deleteConversationTarget = ref<RemoteConversation | null>(null)
 const deletingConversation = ref(false)
+const newConversationOpen = ref(false)
+const newConversationTitle = ref('')
+const newConversationCLI = ref<CLIType>('CODEX')
+const newConversationWorkingDirectory = ref('')
+const creatingConversation = ref(false)
+const refreshingAgentStatus = ref(false)
 const viewport = ref<HTMLElement | null>(null)
 const agentId = computed(() => String(route.params.id || ''))
 const agent = computed(() => detail.value?.agent)
@@ -77,12 +93,39 @@ const canRenameConversation = computed(() => {
   )
 })
 let streamController: AbortController | null = null
-let lastChunkSequence = 0
+let statusRefreshTimer: number | undefined
+let scrollFrame: number | undefined
+let viewportResizeObserver: ResizeObserver | undefined
 
 async function scrollToBottom() {
   await nextTick()
-  if (viewport.value) viewport.value.scrollTop = viewport.value.scrollHeight
+  window.cancelAnimationFrame(scrollFrame || 0)
+  scrollFrame = window.requestAnimationFrame(() => {
+    if (viewport.value) viewport.value.scrollTop = viewport.value.scrollHeight
+    scrollFrame = undefined
+  })
 }
+
+watch(
+  () =>
+    messages.value.map((message) => [
+      message.id,
+      message.status,
+      message.content,
+      message.errorMessage,
+    ]),
+  () => void scrollToBottom(),
+  { flush: 'post' },
+)
+
+watch(viewport, (element) => {
+  viewportResizeObserver?.disconnect()
+  viewportResizeObserver = undefined
+  if (!element) return
+  viewportResizeObserver = new ResizeObserver(() => void scrollToBottom())
+  viewportResizeObserver.observe(element)
+  void scrollToBottom()
+})
 
 async function loadAgent() {
   if (!agentId.value) return
@@ -99,6 +142,19 @@ async function loadAgent() {
     toast.error(error instanceof Error ? error.message : '加载 Agent 控制台失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function refreshAgentStatus() {
+  if (!agentId.value || !detail.value || refreshingAgentStatus.value) return
+  refreshingAgentStatus.value = true
+  try {
+    const latest = await remoteAgentApi.getAgentStatus(agentId.value)
+    if (detail.value && latest.id === agentId.value) detail.value.agent = latest
+  } catch {
+    // A transient status refresh failure must not interrupt the active conversation.
+  } finally {
+    refreshingAgentStatus.value = false
   }
 }
 
@@ -121,11 +177,23 @@ async function loadConversations(preferredId = '') {
 }
 
 async function createConversation() {
+  const workingDirectory = newConversationWorkingDirectory.value.trim()
+  if (creatingConversation.value) return
+  creatingConversation.value = true
   try {
-    const conversation = await remoteAgentApi.createConversation(agentId.value)
+    const conversation = await remoteAgentApi.createConversation(
+      agentId.value,
+      newConversationCLI.value,
+      workingDirectory,
+      newConversationTitle.value.trim(),
+    )
+    newConversationOpen.value = false
+    newConversationTitle.value = ''
     await loadConversations(conversation.id)
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '创建会话失败')
+  } finally {
+    creatingConversation.value = false
   }
 }
 
@@ -174,29 +242,60 @@ async function streamMessage(message: RemoteMessage) {
   streamController?.abort()
   const controller = new AbortController()
   streamController = controller
-  lastChunkSequence = 0
+  const streamState = { lastChunkSequence: 0, streamedContent: '' }
+  const syncTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      void syncStreamingMessage(message, streamState).then((terminal) => {
+        if (terminal && streamController === controller) controller.abort()
+      })
+    }
+  }, 2000)
+  let retryCount = 0
   try {
-    const response = await remoteAgentApi.streamMessage(message.id, 0, controller.signal)
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('消息流不可读')
-    const decoder = new TextDecoder()
-    let buffer = ''
     let finished = false
-    while (!finished) {
-      const { done, value } = await reader.read()
-      buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
-      let boundary = buffer.indexOf('\n\n')
-      while (boundary >= 0) {
-        finished = parseFrame(message, buffer.slice(0, boundary)) || finished
-        buffer = buffer.slice(boundary + 2)
-        boundary = buffer.indexOf('\n\n')
+    while (!finished && !controller.signal.aborted) {
+      try {
+        const response = await remoteAgentApi.streamMessage(
+          message.id,
+          streamState.lastChunkSequence,
+          controller.signal,
+        )
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('消息流不可读')
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (!finished) {
+          const { done, value } = await reader.read()
+          buffer += decoder
+            .decode(value || new Uint8Array(), { stream: !done })
+            .replace(/\r\n/g, '\n')
+          let boundary = buffer.indexOf('\n\n')
+          while (boundary >= 0) {
+            finished = parseFrame(message, buffer.slice(0, boundary), streamState) || finished
+            retryCount = 0
+            buffer = buffer.slice(boundary + 2)
+            boundary = buffer.indexOf('\n\n')
+          }
+          if (done) break
+        }
+        if (!finished) throw new Error('实时消息连接已关闭')
+      } catch (error) {
+        if (controller.signal.aborted) break
+        retryCount += 1
+        const terminal = await syncStreamingMessage(message, streamState)
+        if (terminal) {
+          finished = true
+          break
+        }
+        if (retryCount >= 5) throw error
+        await new Promise((resolve) => window.setTimeout(resolve, 1000))
       }
-      if (done) break
     }
   } catch (error) {
     if (!(error instanceof DOMException && error.name === 'AbortError'))
       toast.error(error instanceof Error ? error.message : '实时消息连接中断')
   } finally {
+    window.clearInterval(syncTimer)
     if (streamController === controller) {
       streamController = null
       sending.value = false
@@ -204,7 +303,46 @@ async function streamMessage(message: RemoteMessage) {
   }
 }
 
-function parseFrame(message: RemoteMessage, frame: string) {
+async function syncStreamingMessage(
+  message: RemoteMessage,
+  streamState: { lastChunkSequence: number; streamedContent: string },
+) {
+  const conversationId = selectedConversation.value?.id
+  if (!conversationId) return false
+  if (message.status === 'COMPLETED' || message.status === 'FAILED') return true
+  try {
+    const detailResult = await remoteAgentApi.getConversation(conversationId)
+    const stored = detailResult.messages.find((item) => item.id === message.id)
+    if (!stored) return false
+    const terminal = stored.status === 'COMPLETED' || stored.status === 'FAILED'
+    if (terminal) Object.assign(message, stored)
+    else if (
+      message.status !== 'COMPLETED' &&
+      message.status !== 'FAILED' &&
+      stored.content.length >= message.content.length
+    ) {
+      message.content = stored.content
+      message.status = stored.status
+      message.updatedAt = stored.updatedAt
+      if (streamState.streamedContent.length > stored.content.length) {
+        message.content = streamState.streamedContent
+      }
+    }
+    if (terminal) {
+      if (detail.value) detail.value.agent.status = 'ONLINE'
+      void loadConversations(conversationId)
+    }
+    return terminal
+  } catch {
+    return false
+  }
+}
+
+function parseFrame(
+  message: RemoteMessage,
+  frame: string,
+  streamState: { lastChunkSequence: number; streamedContent: string },
+) {
   let event = 'message'
   const data: string[] = []
   for (const line of frame.split(/\r?\n/)) {
@@ -214,9 +352,12 @@ function parseFrame(message: RemoteMessage, frame: string) {
   if (!data.length) return false
   if (event === 'chunk') {
     const chunk = JSON.parse(data.join('\n')) as MessageChunk
-    if (chunk.sequence > lastChunkSequence) {
-      message.content += chunk.content
-      lastChunkSequence = chunk.sequence
+    if (chunk.sequence > streamState.lastChunkSequence) {
+      streamState.streamedContent += chunk.content
+      if (streamState.streamedContent.length >= message.content.length) {
+        message.content = streamState.streamedContent
+      }
+      streamState.lastChunkSequence = chunk.sequence
       void scrollToBottom()
     }
   }
@@ -334,8 +475,31 @@ function handleComposerKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(loadAgent)
-onBeforeUnmount(() => streamController?.abort())
+function startStatusRefresh() {
+  window.clearInterval(statusRefreshTimer)
+  void refreshAgentStatus()
+  statusRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshAgentStatus()
+  }, 3000)
+}
+
+function stopStatusRefresh() {
+  window.clearInterval(statusRefreshTimer)
+  statusRefreshTimer = undefined
+}
+
+onMounted(() => {
+  void loadAgent()
+  startStatusRefresh()
+})
+onActivated(startStatusRefresh)
+onDeactivated(stopStatusRefresh)
+onBeforeUnmount(() => {
+  streamController?.abort()
+  stopStatusRefresh()
+  viewportResizeObserver?.disconnect()
+  window.cancelAnimationFrame(scrollFrame || 0)
+})
 </script>
 
 <template>
@@ -365,7 +529,7 @@ onBeforeUnmount(() => streamController?.abort())
       <aside class="flex min-h-0 flex-col border-b md:border-b-0 md:border-r">
         <div class="flex items-center justify-between border-b px-3 py-2">
           <span class="text-sm font-medium">会话</span>
-          <Button size="icon" variant="ghost" title="新建会话" @click="createConversation"
+          <Button size="icon" variant="ghost" title="新建会话" @click="newConversationOpen = true"
             ><MessageSquarePlus class="h-4 w-4"
           /></Button>
         </div>
@@ -386,6 +550,9 @@ onBeforeUnmount(() => streamController?.abort())
               @click="selectConversation(conversation)"
             >
               <div class="truncate text-sm font-medium">{{ conversation.title }}</div>
+              <div class="mt-1 truncate text-xs text-muted-foreground">
+                {{ conversation.cliType }} · {{ conversation.workingDirectory }}
+              </div>
               <div class="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{{ formatTime(conversation.lastMessageAt) }}</span>
                 <Pin v-if="conversation.pinned" class="h-3.5 w-3.5" />
@@ -438,8 +605,13 @@ onBeforeUnmount(() => streamController?.abort())
 
       <main class="flex min-h-[540px] min-w-0 flex-col">
         <div class="flex h-12 items-center border-b px-4">
-          <div class="truncate text-sm font-medium">
-            {{ selectedConversation?.title || '选择或新建会话' }}
+          <div class="min-w-0">
+            <div class="truncate text-sm font-medium">
+              {{ selectedConversation?.title || '选择或新建会话' }}
+            </div>
+            <div v-if="selectedConversation" class="truncate text-xs text-muted-foreground">
+              {{ selectedConversation.cliType }} · {{ selectedConversation.workingDirectory }}
+            </div>
           </div>
         </div>
 
@@ -448,16 +620,30 @@ onBeforeUnmount(() => streamController?.abort())
             <article
               v-for="message in messages"
               :key="message.id"
-              class="grid grid-cols-[28px_minmax(0,1fr)] gap-3"
+              class="grid gap-3"
+              :class="
+                message.role === 'USER'
+                  ? 'grid-cols-[minmax(0,1fr)_28px]'
+                  : 'grid-cols-[28px_minmax(0,1fr)]'
+              "
             >
-              <div class="flex h-7 w-7 items-center justify-center border bg-muted">
+              <div
+                class="flex h-7 w-7 items-center justify-center border bg-muted"
+                :class="message.role === 'USER' ? 'col-start-2 row-start-1' : ''"
+              >
                 <User v-if="message.role === 'USER'" class="h-4 w-4" /><Bot
                   v-else
                   class="h-4 w-4"
                 />
               </div>
-              <div class="min-w-0">
-                <div class="mb-1 flex items-center gap-2 text-xs font-medium">
+              <div
+                class="min-w-0"
+                :class="message.role === 'USER' ? 'col-start-1 row-start-1 text-right' : ''"
+              >
+                <div
+                  class="mb-1 flex items-center gap-2 text-xs font-medium"
+                  :class="message.role === 'USER' ? 'justify-end' : ''"
+                >
                   <span>{{ message.role === 'USER' ? '你' : agent?.name || 'Agent' }}</span
                   ><span class="font-normal text-muted-foreground">{{
                     formatTime(message.createdAt)
@@ -514,6 +700,64 @@ onBeforeUnmount(() => streamController?.abort())
         </div>
       </main>
     </div>
+
+    <Dialog
+      :open="newConversationOpen"
+      @update:open="(open) => !creatingConversation && (newConversationOpen = open)"
+    >
+      <DialogFixedContent title="新建会话" class="sm:max-w-md">
+        <div class="space-y-4">
+          <div class="space-y-1.5">
+            <Label for="new-conversation-title">会话名称</Label>
+            <Input
+              id="new-conversation-title"
+              v-model="newConversationTitle"
+              placeholder="新会话"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label>开发工具</Label>
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                :variant="newConversationCLI === 'CODEX' ? 'default' : 'outline'"
+                @click="newConversationCLI = 'CODEX'"
+              >
+                Codex CLI
+              </Button>
+              <Button
+                type="button"
+                :variant="newConversationCLI === 'CLAUDE' ? 'default' : 'outline'"
+                @click="newConversationCLI = 'CLAUDE'"
+              >
+                Claude CLI
+              </Button>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-conversation-directory">项目目录</Label>
+            <Input
+              id="new-conversation-directory"
+              v-model="newConversationWorkingDirectory"
+              placeholder="project-name"
+            />
+            <p class="text-xs text-muted-foreground">
+              相对于 Agent 工作区根目录，留空时创建独立的 .apipig 会话目录
+            </p>
+          </div>
+        </div>
+        <template #footer>
+          <Button
+            variant="outline"
+            :disabled="creatingConversation"
+            @click="newConversationOpen = false"
+          >
+            取消
+          </Button>
+          <Button :disabled="creatingConversation" @click="createConversation"> 创建 </Button>
+        </template>
+      </DialogFixedContent>
+    </Dialog>
 
     <Dialog
       :open="Boolean(renameConversationTarget)"

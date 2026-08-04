@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -21,14 +22,25 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	}).Error)
 	agentService := NewAgentService()
 	service := NewConversationService(agentService)
-	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID})
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{
+		AgentID: agent.ID, CLIType: remoteModel.CLITypeClaude, WorkingDirectory: "projects/api",
+	})
 	require.NoError(t, err)
+	assert.Equal(t, remoteModel.CLITypeClaude, conversation.CLIType)
+	assert.Equal(t, "projects/api", conversation.WorkingDirectory)
+	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: "SHELL"})
+	require.EqualError(t, err, "cliType must be CODEX or CLAUDE")
+	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: "../outside"})
+	require.EqualError(t, err, "workingDirectory cannot traverse outside workspace-root")
+	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: `D:\outside`})
+	require.EqualError(t, err, "workingDirectory must be relative to workspace-root")
 
 	turn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "inspect this workspace"})
 	require.NoError(t, err)
 	assert.Equal(t, remoteModel.MessageStatusPending, turn.AssistantMessage.Status)
-	otherConversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, Title: "Other"})
+	otherConversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, Title: "Other", CLIType: remoteModel.CLITypeCodex})
 	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf(".apipig/conversations/%s", otherConversation.ID.String()), otherConversation.WorkingDirectory)
 	renamedConversation, err := service.Rename(&remoteReq.ConversationRenameRequest{ID: otherConversation.ID, Title: "  Renamed conversation  "})
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed conversation", renamedConversation.Title)
@@ -59,14 +71,6 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, conversation.ID, pageRecords[0].ID)
 
-	require.NoError(t, database.Model(&remoteModel.Conversation{}).Where("id = ?", otherConversation.ID).
-		Update("status", remoteModel.ConversationStatusArchived).Error)
-	pageResult, err = service.Page(&remoteReq.ConversationPageParams{AgentID: agent.ID})
-	require.NoError(t, err)
-	pageRecords, ok = pageResult.Records.([]remoteModel.Conversation)
-	require.True(t, ok)
-	require.Len(t, pageRecords, 2)
-
 	_, err = service.Delete(&remoteReq.ConversationDeleteRequest{ID: conversation.ID})
 	require.EqualError(t, err, "cannot delete a conversation while the agent is responding")
 	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "second turn"})
@@ -76,6 +80,8 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, command)
 	assert.Equal(t, turn.AssistantMessage.ID, command.AssistantMessageID)
+	assert.Equal(t, remoteModel.CLITypeClaude, command.CLIType)
+	assert.Equal(t, "projects/api", command.WorkingDirectory)
 	assert.Contains(t, command.Prompt, "inspect this workspace")
 
 	_, err = service.Acknowledge(&remoteReq.AcknowledgeCommandParams{AgentToken: "runtime-token", CommandID: command.CommandID})
@@ -105,6 +111,20 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	_, err = service.Complete(&remoteReq.MessageResultParams{
 		AgentToken: "runtime-token",
 		Request:    remoteReq.MessageResultRequest{MessageID: command.AssistantMessageID, Success: true, Content: "workspace ready"},
+	})
+	require.NoError(t, err)
+
+	managedTurn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: otherConversation.ID, Content: "start managed workspace"})
+	require.NoError(t, err)
+	managedCommand, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	require.NoError(t, err)
+	require.NotNil(t, managedCommand)
+	assert.Equal(t, managedTurn.AssistantMessage.ID, managedCommand.AssistantMessageID)
+	assert.Equal(t, remoteModel.CLITypeCodex, managedCommand.CLIType)
+	assert.Equal(t, fmt.Sprintf(".apipig/conversations/%s", otherConversation.ID.String()), managedCommand.WorkingDirectory)
+	_, err = service.Complete(&remoteReq.MessageResultParams{
+		AgentToken: "runtime-token",
+		Request:    remoteReq.MessageResultRequest{MessageID: managedCommand.AssistantMessageID, Success: true, Content: "managed workspace ready"},
 	})
 	require.NoError(t, err)
 
@@ -140,21 +160,26 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	assert.EqualValues(t, 1, remainingConversationCount)
 }
 
-func TestLegacyArchivedConversationCanContinue(t *testing.T) {
+func TestConversationRejectsIncompleteExecutionConfiguration(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
-	agent := seedTestAgent(t, database, "legacy-archive-node", "registration", remoteModel.AgentStatusOnline)
+	agent := seedTestAgent(t, database, "invalid-conversation-node", "registration", remoteModel.AgentStatusOnline)
 	require.NoError(t, database.Model(&agent).Updates(map[string]any{
-		"token_hash": hashAgentToken("runtime-token"), "status": remoteModel.AgentStatusOnline,
-		"last_seen_at": time.Now().UnixMilli(),
+		"token_hash": hashAgentToken("runtime-token"), "last_seen_at": time.Now().UnixMilli(),
 	}).Error)
 	service := NewConversationService(NewAgentService())
-	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID})
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{
+		AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex,
+	})
 	require.NoError(t, err)
-	require.NoError(t, database.Model(&conversation).Update("status", remoteModel.ConversationStatusArchived).Error)
+	require.NoError(t, database.Model(&remoteModel.Conversation{}).Where("id = ?", conversation.ID).
+		Update("working_directory", "").Error)
 
-	turn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "continue this conversation"})
-	require.NoError(t, err)
-	assert.Equal(t, remoteModel.MessageStatusPending, turn.AssistantMessage.Status)
+	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "run"})
+	require.EqualError(t, err, "conversation workingDirectory is required")
+
+	var messageCount int64
+	require.NoError(t, database.Model(&remoteModel.Message{}).Where("conversation_id = ?", conversation.ID).Count(&messageCount).Error)
+	assert.Zero(t, messageCount)
 }
 
 func TestBuildConversationPromptPreservesInstructionAndLatestMessage(t *testing.T) {

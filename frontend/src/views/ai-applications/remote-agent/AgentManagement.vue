@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import {
   Ellipsis,
   KeyRound,
@@ -70,9 +70,13 @@ const resetTokenTarget = ref<RemoteAgent | null>(null)
 const resettingToken = ref(false)
 const deleteTarget = ref<RemoteAgent | null>(null)
 const deletingAgent = ref(false)
+const refreshingAgents = ref(false)
+let statusRefreshTimer: number | undefined
 
-async function loadAgents() {
-  loading.value = true
+async function loadAgents(silent = false) {
+  if (silent && (loading.value || refreshingAgents.value)) return
+  if (silent) refreshingAgents.value = true
+  else loading.value = true
   try {
     const result = await remoteAgentApi.agentPage({
       page: page.value,
@@ -83,9 +87,10 @@ async function loadAgents() {
     agents.value = result.records || []
     total.value = result.total || 0
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : '加载 Agent 失败')
+    if (!silent) toast.error(error instanceof Error ? error.message : '加载 Agent 失败')
   } finally {
-    loading.value = false
+    if (silent) refreshingAgents.value = false
+    else loading.value = false
   }
 }
 
@@ -183,7 +188,26 @@ function memoryLabel(agent: RemoteAgent) {
   if (!agent.memoryTotal) return formatBytes(agent.memoryUsed)
   return `${formatBytes(agent.memoryUsed)} / ${formatBytes(agent.memoryTotal)} (${formatPercent((agent.memoryUsed / agent.memoryTotal) * 100)})`
 }
-onMounted(loadAgents)
+function startStatusRefresh() {
+  window.clearInterval(statusRefreshTimer)
+  void loadAgents(true)
+  statusRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void loadAgents(true)
+  }, 3000)
+}
+
+function stopStatusRefresh() {
+  window.clearInterval(statusRefreshTimer)
+  statusRefreshTimer = undefined
+}
+
+onMounted(() => {
+  void loadAgents()
+  startStatusRefresh()
+})
+onActivated(startStatusRefresh)
+onDeactivated(stopStatusRefresh)
+onBeforeUnmount(stopStatusRefresh)
 </script>
 
 <template>
@@ -192,7 +216,7 @@ onMounted(loadAgents)
       title="Remote Agent"
       description="管理 Agent 接入配置、在线状态与 Web 对话控制台。"
       :loading="loading"
-      @refresh="loadAgents"
+      @refresh="() => loadAgents()"
     >
       <template #actions>
         <Button size="sm" class="gap-2" @click="openAdd"><Plus class="h-4 w-4" />添加 Agent</Button>

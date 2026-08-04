@@ -35,6 +35,10 @@ func (a *AgentApi) Heartbeat(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Heartbeat, params, err)
 }
 
+func (a *AgentApi) Disconnect(c *fiber.Ctx) error {
+	return response.Execute(c, a.service.Disconnect, bearerToken(c.Get(fiber.HeaderAuthorization)), nil)
+}
+
 func (a *AgentApi) Page(c *fiber.Ctx) error {
 	var params remoteReq.AgentPageParams
 	err := a.BodyParser(c, &params, "Remote Agent page")
@@ -44,6 +48,11 @@ func (a *AgentApi) Page(c *fiber.Ctx) error {
 func (a *AgentApi) Get(c *fiber.Ctx) error {
 	id, err := a.IdParser(c)
 	return response.Execute(c, a.service.Get, id, err)
+}
+
+func (a *AgentApi) Status(c *fiber.Ctx) error {
+	id, err := a.IdParser(c)
+	return response.Execute(c, a.service.Status, id, err)
 }
 
 func (a *AgentApi) Create(c *fiber.Ctx) error {

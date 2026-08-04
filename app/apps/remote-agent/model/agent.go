@@ -33,7 +33,9 @@ type Agent struct {
 	// CodexCommand 是 Agent 执行会话任务时调用的 Codex 命令。
 	CodexCommand string `gorm:"size:255;not null;default:'codex'" json:"codexCommand"`
 	// CodexArgs 是 Codex 命令参数，以 JSON 序列化后存入文本列。
-	CodexArgs []string `gorm:"type:text;serializer:json" json:"codexArgs"`
+	CodexArgs     []string `gorm:"type:text;serializer:json" json:"codexArgs"`
+	ClaudeCommand string   `gorm:"size:255;not null;default:'claude'" json:"claudeCommand"`
+	ClaudeArgs    []string `gorm:"type:text;serializer:json" json:"claudeArgs"`
 	// PollWaitSeconds 是客户端长轮询等待新命令的秒数。
 	PollWaitSeconds int `gorm:"not null;default:25" json:"pollWaitSeconds"`
 	// RequestTimeoutSeconds 是客户端请求控制端接口的超时秒数。

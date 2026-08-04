@@ -5,14 +5,19 @@ import type { RemoteAgent, RemoteAgentSaveParams } from '@/api/ai-applications/r
 
 const props = defineProps<{ open: boolean; loading: boolean; agent: RemoteAgent | null }>()
 const emit = defineEmits<{ close: []; submit: [form: RemoteAgentSaveParams] }>()
-type AgentForm = Omit<RemoteAgentSaveParams, 'codexArgs'> & { codexArgsText: string }
+type AgentForm = Omit<RemoteAgentSaveParams, 'codexArgs' | 'claudeArgs'> & {
+  codexArgsText: string
+  claudeArgsText: string
+}
 
 const form = reactive<AgentForm>({
   agentKey: '',
   name: '',
-  workspaceRoot: './remote-agent-workspaces',
+  workspaceRoot: '.',
   codexCommand: 'codex',
-  codexArgsText: 'exec\n--skip-git-repo-check\n-',
+  codexArgsText: 'exec\n--json\n--full-auto\n--sandbox\nworkspace-write\n--skip-git-repo-check\n-',
+  claudeCommand: 'claude',
+  claudeArgsText: '-p\n--permission-mode\nacceptEdits',
   pollWaitSeconds: 25,
   requestTimeoutSeconds: 40,
   logFile: './logs/remote-agent.log',
@@ -28,9 +33,21 @@ watch(
       id: agent?.id,
       agentKey: agent?.agentKey || '',
       name: agent?.name || '',
-      workspaceRoot: agent?.workspaceRoot || './remote-agent-workspaces',
+      workspaceRoot: agent?.workspaceRoot || '.',
       codexCommand: agent?.codexCommand || 'codex',
-      codexArgsText: (agent?.codexArgs || ['exec', '--skip-git-repo-check', '-']).join('\n'),
+      codexArgsText: (
+        agent?.codexArgs || [
+          'exec',
+          '--json',
+          '--full-auto',
+          '--sandbox',
+          'workspace-write',
+          '--skip-git-repo-check',
+          '-',
+        ]
+      ).join('\n'),
+      claudeCommand: agent?.claudeCommand || 'claude',
+      claudeArgsText: (agent?.claudeArgs || ['-p', '--permission-mode', 'acceptEdits']).join('\n'),
       pollWaitSeconds: agent?.pollWaitSeconds || 25,
       requestTimeoutSeconds: agent?.requestTimeoutSeconds || 40,
       logFile: agent?.logFile || './logs/remote-agent.log',
@@ -48,6 +65,11 @@ function submit() {
     workspaceRoot: form.workspaceRoot.trim(),
     codexCommand: form.codexCommand.trim(),
     codexArgs: form.codexArgsText
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+    claudeCommand: form.claudeCommand.trim(),
+    claudeArgs: form.claudeArgsText
       .split(/\r?\n/)
       .map((item) => item.trim())
       .filter(Boolean),
@@ -87,8 +109,9 @@ function updateAgentKey(value: string | number) {
           <p class="text-xs text-muted-foreground">仅支持字母、数字、中划线和下划线</p>
         </div>
         <div class="space-y-1.5">
-          <Label for="agent-workspace">会话工作区根目录</Label>
+          <Label for="agent-workspace">项目根目录</Label>
           <Input id="agent-workspace" v-model="form.workspaceRoot" />
+          <p class="text-xs text-muted-foreground">必须是客户端上已存在且允许远程开发的目录</p>
         </div>
         <div class="space-y-1.5">
           <Label for="agent-log">Agent 日志文件</Label>
@@ -103,6 +126,19 @@ function updateAgentKey(value: string | number) {
           <Textarea
             id="agent-codex-args"
             v-model="form.codexArgsText"
+            rows="4"
+            class="font-mono text-xs"
+          />
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <Label for="agent-claude">Claude 命令</Label>
+          <Input id="agent-claude" v-model="form.claudeCommand" />
+        </div>
+        <div class="space-y-1.5 sm:col-span-2">
+          <Label for="agent-claude-args">Claude 参数</Label>
+          <Textarea
+            id="agent-claude-args"
+            v-model="form.claudeArgsText"
             rows="4"
             class="font-mono text-xs"
           />

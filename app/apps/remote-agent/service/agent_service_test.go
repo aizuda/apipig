@@ -75,13 +75,14 @@ func TestRotateTokenRejectsOnlineAgent(t *testing.T) {
 	require.EqualError(t, err, "registration token can only be reset while the agent is offline or disabled")
 }
 
-func TestDeleteAgentRemovesAssociatedArchiveData(t *testing.T) {
+func TestDeleteAgentRemovesAssociatedData(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
 	now := time.Now().UnixMilli()
 	agent := seedTestAgent(t, database, "delete-node", "secret", remoteModel.AgentStatusOffline)
 	conversation := remoteModel.Conversation{
 		MODEL: coreAPI.MODEL{ID: 201, CreatedBy: "test", CreatedAt: now}, AgentID: agent.ID,
-		Title: "Archived conversation", Status: remoteModel.ConversationStatusArchived, LastMessageAt: now,
+		Title: "Active conversation", CLIType: remoteModel.CLITypeCodex,
+		WorkingDirectory: ".apipig/conversations/200", Status: remoteModel.ConversationStatusActive, LastMessageAt: now,
 	}
 	messages := []remoteModel.Message{
 		{MODEL: coreAPI.MODEL{ID: 202, CreatedBy: "test", CreatedAt: now}, ConversationID: conversation.ID, AgentID: agent.ID, Sequence: 1, Role: remoteModel.MessageRoleUser, Status: remoteModel.MessageStatusCompleted, Content: "request"},
@@ -172,11 +173,13 @@ func TestRegisterRecoversInterruptedConversationTurn(t *testing.T) {
 	now := time.UnixMilli(1_800_000_000_000)
 	agent := seedTestAgent(t, database, "node", "secret", remoteModel.AgentStatusBusy)
 	conversation := remoteModel.Conversation{
-		MODEL:         coreAPI.MODEL{ID: snowflake.ID(101), CreatedBy: "test", CreatedAt: now.UnixMilli()},
-		AgentID:       agent.ID,
-		Title:         "Recovery",
-		Status:        remoteModel.ConversationStatusActive,
-		LastMessageAt: now.UnixMilli(),
+		MODEL:            coreAPI.MODEL{ID: snowflake.ID(101), CreatedBy: "test", CreatedAt: now.UnixMilli()},
+		AgentID:          agent.ID,
+		Title:            "Recovery",
+		CLIType:          remoteModel.CLITypeCodex,
+		WorkingDirectory: ".apipig/conversations/101",
+		Status:           remoteModel.ConversationStatusActive,
+		LastMessageAt:    now.UnixMilli(),
 	}
 	message := remoteModel.Message{
 		MODEL:          coreAPI.MODEL{ID: snowflake.ID(102), CreatedBy: "test", CreatedAt: now.UnixMilli()},
@@ -231,6 +234,25 @@ func TestRegisterRecoversInterruptedConversationTurn(t *testing.T) {
 	var chunkCount int64
 	require.NoError(t, database.Model(&remoteModel.MessageChunk{}).Where("message_id = ?", message.ID).Count(&chunkCount).Error)
 	assert.Zero(t, chunkCount)
+}
+
+func TestDisconnectImmediatelyMarksAgentOffline(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "disconnect-node", "secret", remoteModel.AgentStatusOffline)
+	service := NewAgentService()
+	registration, err := service.Register(&remoteReq.RegisterParams{
+		BootstrapToken: "secret", Request: remoteReq.RegisterRequest{AgentKey: agent.AgentKey, Hostname: "host"},
+	})
+	require.NoError(t, err)
+
+	disconnected, err := service.Disconnect(registration.AgentToken)
+
+	require.NoError(t, err)
+	assert.True(t, disconnected)
+	status, err := service.Status(agent.ID)
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.AgentStatusOffline, status.Status)
+	assert.Empty(t, status.TokenHash)
 }
 
 func TestRemoteConversationModelsMigrate(t *testing.T) {

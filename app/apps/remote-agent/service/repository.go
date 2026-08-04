@@ -25,6 +25,7 @@ type agentRepository interface {
 	RecoverInterruptedTurn(snowflake.ID, snowflake.ID, int64) error
 	UpdateRegistrationToken(snowflake.ID, string, int64) error
 	SetStatus(snowflake.ID, string, int64) error
+	Disconnect(snowflake.ID, int64) error
 	Delete(snowflake.ID) error
 	RecordHeartbeat(remoteModel.Agent, remoteModel.Heartbeat) error
 	MarkOffline(int64, int64) error
@@ -67,10 +68,15 @@ func (r gormAgentRepository) UpdateConfiguration(agent *remoteModel.Agent) error
 	if err != nil {
 		return err
 	}
+	claudeArgs, err := json.Marshal(agent.ClaudeArgs)
+	if err != nil {
+		return err
+	}
 	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", agent.ID).Updates(map[string]any{
 		"agent_key": agent.AgentKey, "name": agent.Name,
 		"workspace_root": agent.WorkspaceRoot, "codex_command": agent.CodexCommand,
-		"codex_args": string(codexArgs), "poll_wait_seconds": agent.PollWaitSeconds,
+		"codex_args": string(codexArgs), "claude_command": agent.ClaudeCommand,
+		"claude_args": string(claudeArgs), "poll_wait_seconds": agent.PollWaitSeconds,
 		"request_timeout_seconds": agent.RequestTimeoutSeconds, "log_file": agent.LogFile,
 		"updated_at": agent.UpdatedAt,
 	}).Error
@@ -153,6 +159,12 @@ func (r gormAgentRepository) SetStatus(id snowflake.ID, status string, updatedAt
 		updates["token_hash"] = ""
 	}
 	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r gormAgentRepository) Disconnect(id snowflake.ID, updatedAt int64) error {
+	return r.db().Model(&remoteModel.Agent{}).Where("id = ?", id).Updates(map[string]any{
+		"status": remoteModel.AgentStatusOffline, "token_hash": "", "updated_at": updatedAt,
+	}).Error
 }
 
 func (r gormAgentRepository) Delete(id snowflake.ID) error {

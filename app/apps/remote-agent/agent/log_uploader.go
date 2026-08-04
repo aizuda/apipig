@@ -21,8 +21,12 @@ type messageUploader struct {
 	client    *Client
 	messageID snowflake.ID
 	queue     chan remoteReq.MessageChunkEntry
-	done      chan error
+	ctx       context.Context
+	stopped   chan struct{}
 	mu        sync.Mutex
+	queueOnce sync.Once
+	stopOnce  sync.Once
+	runErr    error
 	next      int64
 }
 
@@ -32,7 +36,7 @@ func newMessageUploader(ctx context.Context, client *Client, messageID snowflake
 	}
 	uploader := &messageUploader{
 		client: client, messageID: messageID, queue: make(chan remoteReq.MessageChunkEntry, chunkUploadQueueSize),
-		done: make(chan error, 1), next: nextSequence,
+		ctx: ctx, stopped: make(chan struct{}), next: nextSequence,
 	}
 	go uploader.run(ctx)
 	return uploader
@@ -43,7 +47,14 @@ func (u *messageUploader) Append(content []byte) {
 	defer u.mu.Unlock()
 	for len(content) > 0 {
 		end := messageChunkEnd(content)
-		u.queue <- remoteReq.MessageChunkEntry{Sequence: u.next, Content: string(content[:end])}
+		entry := remoteReq.MessageChunkEntry{Sequence: u.next, Content: string(content[:end])}
+		select {
+		case u.queue <- entry:
+		case <-u.stopped:
+			return
+		case <-u.ctx.Done():
+			return
+		}
 		u.next++
 		content = content[end:]
 	}
@@ -51,11 +62,11 @@ func (u *messageUploader) Append(content []byte) {
 
 func (u *messageUploader) Close(ctx context.Context) error {
 	u.mu.Lock()
-	close(u.queue)
+	u.queueOnce.Do(func() { close(u.queue) })
 	u.mu.Unlock()
 	select {
-	case err := <-u.done:
-		return err
+	case <-u.stopped:
+		return u.runErr
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -69,13 +80,13 @@ func (u *messageUploader) run(ctx context.Context) {
 		select {
 		case entry, ok := <-u.queue:
 			if !ok {
-				u.done <- u.flush(ctx, batch)
+				u.finish(u.flush(ctx, batch))
 				return
 			}
 			batch = append(batch, entry)
 			if len(batch) >= chunkUploadBatchSize {
 				if err := u.flush(ctx, batch); err != nil {
-					u.done <- err
+					u.finish(err)
 					return
 				}
 				batch = batch[:0]
@@ -83,13 +94,13 @@ func (u *messageUploader) run(ctx context.Context) {
 		case <-ticker.C:
 			if len(batch) > 0 {
 				if err := u.flush(ctx, batch); err != nil {
-					u.done <- err
+					u.finish(err)
 					return
 				}
 				batch = batch[:0]
 			}
 		case <-ctx.Done():
-			u.done <- ctx.Err()
+			u.finish(ctx.Err())
 			return
 		}
 	}
@@ -105,10 +116,31 @@ func (u *messageUploader) flush(ctx context.Context, batch []remoteReq.MessageCh
 		if err == nil {
 			return nil
 		}
+		if !retryableUploadError(err) {
+			return err
+		}
 		if !sleepContext(ctx, 2*time.Second) {
 			return errors.Join(err, ctx.Err())
 		}
 	}
+}
+
+func (u *messageUploader) finish(err error) {
+	u.stopOnce.Do(func() {
+		u.runErr = err
+		close(u.stopped)
+	})
+}
+
+func retryableUploadError(err error) bool {
+	var apiError *APIError
+	if !errors.As(err, &apiError) {
+		return true
+	}
+	if isAuthenticationError(err) {
+		return true
+	}
+	return apiError.StatusCode == 429 || apiError.StatusCode >= 500
 }
 
 func messageChunkEnd(content []byte) int {

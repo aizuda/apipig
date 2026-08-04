@@ -29,7 +29,8 @@ var (
 	// errAgentDisabled 用于并发更新时统一表示 Agent 已被管理员禁用。
 	errAgentDisabled = errors.New("agent is disabled")
 	// defaultCodexArgs 通过标准输入向 Codex CLI 传递会话提示词。
-	defaultCodexArgs = []string{"exec", "--skip-git-repo-check", "-"}
+	defaultCodexArgs  = []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}
+	defaultClaudeArgs = []string{"-p", "--permission-mode", "acceptEdits"}
 	// agentKeyPattern 限制 Agent Key 仅包含适合作为稳定标识的安全字符。
 	agentKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )
@@ -327,11 +328,34 @@ func (s *AgentService) Get(id snowflake.ID) (remoteResp.AgentDetail, error) {
 	return remoteResp.AgentDetail{Agent: agent, Heartbeats: heartbeats, Conversations: conversations}, nil
 }
 
+// Status returns the latest liveness snapshot without loading heartbeat or conversation history.
+func (s *AgentService) Status(id snowflake.ID) (remoteModel.Agent, error) {
+	if id == 0 {
+		return remoteModel.Agent{}, errors.New("agent ID is required")
+	}
+	if err := s.MarkOffline(); err != nil {
+		return remoteModel.Agent{}, err
+	}
+	return s.repository.Get(id)
+}
+
+// Disconnect immediately marks a gracefully stopped client as offline.
+func (s *AgentService) Disconnect(rawToken string) (bool, error) {
+	agent, err := s.Authenticate(rawToken)
+	if err != nil {
+		return false, err
+	}
+	if err := s.repository.Disconnect(agent.ID, s.now().UnixMilli()); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // MarkOffline 将超过心跳阈值的在线或忙碌 Agent 标记为离线。
 func (s *AgentService) MarkOffline() error {
 	timeout := global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds
 	if timeout <= 0 {
-		timeout = 90
+		timeout = 30
 	}
 	now := s.now()
 	return s.repository.MarkOffline(now.Add(-time.Duration(timeout)*time.Second).UnixMilli(), now.UnixMilli())
@@ -341,7 +365,7 @@ func (s *AgentService) MarkOffline() error {
 func (s *AgentService) heartbeatIntervalSeconds() int {
 	timeout := global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds
 	if timeout <= 0 {
-		timeout = 90
+		timeout = 30
 	}
 	interval := timeout / 3
 	if interval < 10 {
@@ -358,6 +382,7 @@ func normalizeAgent(request remoteReq.AgentSaveRequest) (remoteModel.Agent, erro
 	agent := remoteModel.Agent{
 		AgentKey: strings.TrimSpace(request.AgentKey), Name: strings.TrimSpace(request.Name),
 		WorkspaceRoot: strings.TrimSpace(request.WorkspaceRoot), CodexCommand: strings.TrimSpace(request.CodexCommand),
+		ClaudeCommand:   strings.TrimSpace(request.ClaudeCommand),
 		PollWaitSeconds: request.PollWaitSeconds, RequestTimeoutSeconds: request.RequestTimeoutSeconds,
 		LogFile: strings.TrimSpace(request.LogFile),
 	}
@@ -368,7 +393,7 @@ func normalizeAgent(request remoteReq.AgentSaveRequest) (remoteModel.Agent, erro
 		return remoteModel.Agent{}, errors.New("name is required and cannot exceed 100 characters")
 	}
 	if agent.WorkspaceRoot == "" {
-		agent.WorkspaceRoot = "./remote-agent-workspaces"
+		agent.WorkspaceRoot = "."
 	}
 	if agent.CodexCommand == "" {
 		agent.CodexCommand = "codex"
@@ -380,6 +405,17 @@ func normalizeAgent(request remoteReq.AgentSaveRequest) (remoteModel.Agent, erro
 	}
 	if len(agent.CodexArgs) == 0 {
 		agent.CodexArgs = append([]string(nil), defaultCodexArgs...)
+	}
+	if agent.ClaudeCommand == "" {
+		agent.ClaudeCommand = "claude"
+	}
+	for _, arg := range request.ClaudeArgs {
+		if trimmed := strings.TrimSpace(arg); trimmed != "" {
+			agent.ClaudeArgs = append(agent.ClaudeArgs, trimmed)
+		}
+	}
+	if len(agent.ClaudeArgs) == 0 {
+		agent.ClaudeArgs = append([]string(nil), defaultClaudeArgs...)
 	}
 	if agent.PollWaitSeconds <= 0 || agent.PollWaitSeconds > 25 {
 		agent.PollWaitSeconds = 25
@@ -408,10 +444,12 @@ func credentialResult(agent remoteModel.Agent, token, controllerURL string) (rem
 		WorkspaceRoot         string   `yaml:"workspace-root"`
 		CodexCommand          string   `yaml:"codex-command"`
 		CodexArgs             []string `yaml:"codex-args"`
+		ClaudeCommand         string   `yaml:"claude-command"`
+		ClaudeArgs            []string `yaml:"claude-args"`
 		PollWaitSeconds       int      `yaml:"poll-wait-seconds"`
 		RequestTimeoutSeconds int      `yaml:"request-timeout-seconds"`
 		LogFile               string   `yaml:"log-file"`
-	}{controllerURL, token, agent.AgentKey, agent.Name, agent.WorkspaceRoot, agent.CodexCommand, agent.CodexArgs, agent.PollWaitSeconds, agent.RequestTimeoutSeconds, agent.LogFile}
+	}{controllerURL, token, agent.AgentKey, agent.Name, agent.WorkspaceRoot, agent.CodexCommand, agent.CodexArgs, agent.ClaudeCommand, agent.ClaudeArgs, agent.PollWaitSeconds, agent.RequestTimeoutSeconds, agent.LogFile}
 	content, err := yaml.Marshal(config)
 	if err != nil {
 		return remoteResp.AgentCredential{}, err

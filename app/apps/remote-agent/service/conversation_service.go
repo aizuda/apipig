@@ -49,10 +49,36 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 	if len([]rune(title)) > 200 {
 		return remoteModel.Conversation{}, errors.New("title cannot exceed 200 characters")
 	}
+	cliType := strings.ToUpper(strings.TrimSpace(request.CLIType))
+	if cliType != remoteModel.CLITypeCodex && cliType != remoteModel.CLITypeClaude {
+		return remoteModel.Conversation{}, errors.New("cliType must be CODEX or CLAUDE")
+	}
+	conversationID := db.GetId()
+	workingDirectory := strings.TrimSpace(request.WorkingDirectory)
+	if workingDirectory == "" {
+		workingDirectory = fmt.Sprintf(".apipig/conversations/%s", conversationID.String())
+	}
+	if len([]rune(workingDirectory)) > 500 {
+		return remoteModel.Conversation{}, errors.New("workingDirectory cannot exceed 500 characters")
+	}
+	if strings.ContainsRune(workingDirectory, '\x00') {
+		return remoteModel.Conversation{}, errors.New("workingDirectory contains invalid characters")
+	}
+	normalizedDirectory := strings.ReplaceAll(workingDirectory, "\\", "/")
+	if strings.HasPrefix(normalizedDirectory, "/") ||
+		(len(normalizedDirectory) >= 2 && normalizedDirectory[1] == ':') {
+		return remoteModel.Conversation{}, errors.New("workingDirectory must be relative to workspace-root")
+	}
+	for _, segment := range strings.Split(normalizedDirectory, "/") {
+		if segment == ".." {
+			return remoteModel.Conversation{}, errors.New("workingDirectory cannot traverse outside workspace-root")
+		}
+	}
 	now := s.now().UnixMilli()
 	conversation := remoteModel.Conversation{
-		MODEL:   coreAPI.MODEL{ID: db.GetId(), CreatedBy: "admin", CreatedAt: now, UpdatedAt: now},
-		AgentID: request.AgentID, Title: title, Status: remoteModel.ConversationStatusActive, LastMessageAt: now,
+		MODEL:   coreAPI.MODEL{ID: conversationID, CreatedBy: "admin", CreatedAt: now, UpdatedAt: now},
+		AgentID: request.AgentID, Title: title, CLIType: cliType, WorkingDirectory: workingDirectory,
+		Status: remoteModel.ConversationStatusActive, LastMessageAt: now,
 	}
 	return conversation, s.repository.Create(&conversation)
 }
@@ -156,6 +182,9 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 	if err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
+	if err := validateConversationExecution(conversation); err != nil {
+		return remoteResp.SendMessageResult{}, err
+	}
 	messages, err := s.repository.Messages(conversation.ID)
 	if err != nil {
 		return remoteResp.SendMessageResult{}, err
@@ -212,13 +241,22 @@ func (s *ConversationService) NextCommand(params *remoteReq.NextCommandParams) (
 		now := s.now()
 		command, claimErr := s.repository.Claim(agent.ID, now.Add(-time.Duration(lease)*time.Second).UnixMilli(), now.UnixMilli())
 		if claimErr == nil {
+			conversation, err := s.repository.Get(command.ConversationID)
+			if err != nil {
+				return nil, err
+			}
+			if err := validateConversationExecution(conversation); err != nil {
+				return nil, err
+			}
 			next, err := s.repository.NextChunkSequence(command.AssistantMessageID)
 			if err != nil {
 				return nil, err
 			}
 			return &remoteResp.CommandDispatch{
 				CommandID: command.ID, ConversationID: command.ConversationID, UserMessageID: command.UserMessageID,
-				AssistantMessageID: command.AssistantMessageID, Type: command.Type, Prompt: command.Payload, NextChunkSequence: next,
+				AssistantMessageID: command.AssistantMessageID, Type: command.Type,
+				CLIType: conversation.CLIType, WorkingDirectory: conversation.WorkingDirectory,
+				Prompt: command.Payload, NextChunkSequence: next,
 			}, nil
 		}
 		if !errors.Is(claimErr, gorm.ErrRecordNotFound) {
@@ -295,6 +333,18 @@ func (s *ConversationService) Stream(params *remoteReq.MessageStreamParams) (rem
 		params.AfterSequence = 0
 	}
 	return s.repository.StreamEvent(params.MessageID, params.AfterSequence)
+}
+
+func validateConversationExecution(conversation remoteModel.Conversation) error {
+	switch strings.ToUpper(strings.TrimSpace(conversation.CLIType)) {
+	case remoteModel.CLITypeCodex, remoteModel.CLITypeClaude:
+	default:
+		return errors.New("conversation cliType must be CODEX or CLAUDE")
+	}
+	if strings.TrimSpace(conversation.WorkingDirectory) == "" {
+		return errors.New("conversation workingDirectory is required")
+	}
+	return nil
 }
 
 func buildConversationPrompt(messages []remoteModel.Message, content string) string {
