@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { LoaderCircle, QrCode, RefreshCw } from '@lucide/vue'
+import { nextTick, ref, watch } from 'vue'
+import { LoaderCircle, QrCode as QrCodeIcon, RefreshCw } from '@lucide/vue'
 import { Button, Dialog, DialogFixedContent } from '@tabtab/ui'
+import QRCode from 'qrcode'
 
 const props = defineProps<{
   open: boolean
@@ -15,6 +17,34 @@ const emit = defineEmits<{
   close: []
   restart: []
 }>()
+
+const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const qrRenderError = ref('')
+let renderVersion = 0
+
+async function renderQRCode(open: boolean, content: string) {
+  const version = ++renderVersion
+  qrRenderError.value = ''
+  if (!open || !content) return
+  await nextTick()
+  if (version !== renderVersion || !qrCanvas.value) return
+  try {
+    await QRCode.toCanvas(qrCanvas.value, content, {
+      width: 240,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000', light: '#ffffff' },
+    })
+  } catch {
+    if (version === renderVersion) qrRenderError.value = '二维码生成失败，请重新获取'
+  }
+}
+
+watch(
+  () => [props.open, props.qrCode] as const,
+  ([open, content]) => void renderQRCode(open, content),
+  { immediate: true },
+)
 
 function statusText() {
   if (props.loading) return '正在获取登录二维码...'
@@ -35,14 +65,22 @@ function statusText() {
     >
       <div class="space-y-5">
         <div class="flex min-h-[292px] flex-col items-center justify-center border bg-muted/20 p-5">
-          <img
-            v-if="qrCode"
-            :src="qrCode"
-            alt="微信 Bot 登录二维码"
-            class="h-60 w-60 bg-white object-contain p-2"
-          />
+          <div v-if="qrCode" class="relative h-60 w-60 bg-white">
+            <canvas
+              ref="qrCanvas"
+              class="block h-60 w-60"
+              role="img"
+              aria-label="微信 Bot 登录二维码"
+            />
+            <div
+              v-if="qrRenderError"
+              class="absolute inset-0 flex items-center justify-center bg-white px-6 text-center text-sm text-destructive"
+            >
+              {{ qrRenderError }}
+            </div>
+          </div>
           <LoaderCircle v-else-if="loading" class="h-9 w-9 animate-spin text-muted-foreground" />
-          <QrCode v-else class="h-12 w-12 text-muted-foreground/50" />
+          <QrCodeIcon v-else class="h-12 w-12 text-muted-foreground/50" />
         </div>
 
         <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground">

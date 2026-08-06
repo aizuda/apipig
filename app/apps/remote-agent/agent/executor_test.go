@@ -92,6 +92,35 @@ func TestCodexCommandOverridesReadOnlySandbox(t *testing.T) {
 	}, args)
 }
 
+func TestCodexCommandOverridesReadOnlyGlobalAndConfigArguments(t *testing.T) {
+	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
+		"--profile", "automation", "--sandbox", "read-only", "-c", `sandbox_mode="read-only"`,
+		"exec", "--config=sandbox_mode='read-only'", "--json", "-",
+	}})
+
+	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"--profile", "automation", "exec", "--json", "--full-auto", "--sandbox", "workspace-write", "-",
+	}, args)
+	assert.Equal(t, "workspace-write", codexSandboxMode(args))
+}
+
+func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
+	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
+		"--dangerously-bypass-approvals-and-sandbox", "exec", "--sandbox", "read-only", "-",
+	}})
+
+	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"--dangerously-bypass-approvals-and-sandbox", "exec", "--json", "-",
+	}, args)
+	assert.Equal(t, "danger-full-access", codexSandboxMode(args))
+}
+
 func TestCodexJSONStreamEmitsProgressAndKeepsFinalAnswer(t *testing.T) {
 	var streamed bytes.Buffer
 	writer := newCodexJSONStreamWriter(func(content []byte) {

@@ -143,13 +143,20 @@ func (e *Executor) cliCommand(cliType string) (string, []string, error) {
 
 func codexStreamingArgs(args []string) []string {
 	result := append([]string(nil), args...)
-	if len(result) == 0 || !strings.EqualFold(result[0], "exec") {
+	execIndex := -1
+	for index, arg := range result {
+		if strings.EqualFold(arg, "exec") || strings.EqualFold(arg, "e") {
+			execIndex = index
+			break
+		}
+	}
+	if execIndex < 0 {
 		return result
 	}
 	normalized := make([]string, 0, len(result)+4)
-	normalized = append(normalized, result[0])
 	hasBypass := false
-	for index := 1; index < len(result); index++ {
+	normalizedExecIndex := -1
+	for index := 0; index < len(result); index++ {
 		arg := result[index]
 		switch {
 		case arg == "--json":
@@ -162,7 +169,14 @@ func codexStreamingArgs(args []string) []string {
 				index++
 			}
 		case strings.HasPrefix(arg, "--sandbox=") || strings.HasPrefix(arg, "-s="):
+		case (arg == "--config" || arg == "-c") && index+1 < len(result) && isSandboxModeOverride(result[index+1]):
+			index++
+		case strings.HasPrefix(arg, "--config=") && isSandboxModeOverride(strings.TrimPrefix(arg, "--config=")):
+		case strings.HasPrefix(arg, "-c=") && isSandboxModeOverride(strings.TrimPrefix(arg, "-c=")):
 		default:
+			if index == execIndex {
+				normalizedExecIndex = len(normalized)
+			}
 			normalized = append(normalized, arg)
 		}
 	}
@@ -170,7 +184,34 @@ func codexStreamingArgs(args []string) []string {
 	if !hasBypass {
 		required = append(required, "--full-auto", "--sandbox", "workspace-write")
 	}
-	return append(append(normalized[:1:1], required...), normalized[1:]...)
+	insertAt := normalizedExecIndex + 1
+	withRequired := make([]string, 0, len(normalized)+len(required))
+	withRequired = append(withRequired, normalized[:insertAt]...)
+	withRequired = append(withRequired, required...)
+	return append(withRequired, normalized[insertAt:]...)
+}
+
+func isSandboxModeOverride(value string) bool {
+	key, _, found := strings.Cut(strings.TrimSpace(value), "=")
+	return found && strings.EqualFold(strings.TrimSpace(key), "sandbox_mode")
+}
+
+func codexSandboxMode(args []string) string {
+	for index, arg := range args {
+		if arg == "--dangerously-bypass-approvals-and-sandbox" {
+			return "danger-full-access"
+		}
+		if (arg == "--sandbox" || arg == "-s") && index+1 < len(args) {
+			return args[index+1]
+		}
+		if value, found := strings.CutPrefix(arg, "--sandbox="); found {
+			return value
+		}
+		if value, found := strings.CutPrefix(arg, "-s="); found {
+			return value
+		}
+	}
+	return "default"
 }
 
 func isCodexJSONCommand(cliType string, args []string) bool {

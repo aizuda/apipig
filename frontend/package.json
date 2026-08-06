@@ -28,6 +28,7 @@
     "node-forge": "^1.4.0",
     "pinia": "catalog:",
     "pinia-plugin-persistedstate": "^4.7.1",
+    "qrcode": "^1.5.4",
     "vue": "3.5.40",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:"
@@ -37,6 +38,7 @@
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "@types/node-forge": "^1.3.14",
+    "@types/qrcode": "1.5.6",
     "@vitejs/plugin-vue": "catalog:",
     "@voidzero-dev/vite-plus-core": "0.1.13",
     "@voidzero-dev/vite-plus-test": "0.1.13",

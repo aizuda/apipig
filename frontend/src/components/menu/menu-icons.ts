@@ -76,6 +76,7 @@ import {
   MapPin,
   Megaphone,
   Menu,
+  MessageCircle,
   MessageSquare,
   MessagesSquare,
   Microchip,
@@ -316,6 +317,12 @@ export const menuIconOptions: MenuIconOption[] = [
 
   { value: 'lucide:bell', label: '通知', component: Bell, category: 'communication' },
   { value: 'lucide:mail', label: '邮件', component: Mail, category: 'communication' },
+  {
+    value: 'lucide:message-circle',
+    label: '微信消息',
+    component: MessageCircle,
+    category: 'communication',
+  },
   {
     value: 'lucide:message-square',
     label: '消息',

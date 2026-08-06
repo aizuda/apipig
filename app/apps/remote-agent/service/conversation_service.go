@@ -56,7 +56,7 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 	conversationID := db.GetId()
 	workingDirectory := strings.TrimSpace(request.WorkingDirectory)
 	if workingDirectory == "" {
-		workingDirectory = fmt.Sprintf(".apipig/conversations/%s", conversationID.String())
+		workingDirectory = "."
 	}
 	if len([]rune(workingDirectory)) > 500 {
 		return remoteModel.Conversation{}, errors.New("workingDirectory cannot exceed 500 characters")

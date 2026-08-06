@@ -19,7 +19,7 @@ import (
 	"apipig/toolkit/snowflake"
 )
 
-const Version = "0.3.0"
+const Version = "0.3.1"
 
 type Runner struct {
 	config            Config
@@ -171,7 +171,18 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 		r.mu.Unlock()
 		r.busy.Store(false)
 	}()
-	r.logger.Printf("starting conversation turn %s", command.AssistantMessageID.String())
+	sandboxMode := "n/a"
+	if strings.EqualFold(command.CLIType, remoteModel.CLITypeCodex) {
+		_, args, err := r.executor.cliCommand(command.CLIType)
+		if err == nil {
+			sandboxMode = codexSandboxMode(args)
+		}
+	}
+	r.logger.Printf(
+		"starting conversation turn %s cli=%s workspace-root=%q working-directory=%q sandbox=%s agent-version=%s",
+		command.AssistantMessageID.String(), command.CLIType, r.config.WorkspaceRoot,
+		command.WorkingDirectory, sandboxMode, Version,
+	)
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)
 	result := r.executor.ExecuteTurn(executionCtx, command.CLIType, command.WorkingDirectory, command.Prompt, uploader.Append)
 	if err := uploader.Close(lifecycleCtx); err != nil {

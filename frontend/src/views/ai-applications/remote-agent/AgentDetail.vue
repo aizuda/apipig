@@ -74,7 +74,7 @@ const deletingConversation = ref(false)
 const newConversationOpen = ref(false)
 const newConversationTitle = ref('')
 const newConversationCLI = ref<CLIType>('CODEX')
-const newConversationWorkingDirectory = ref('')
+const newConversationWorkingDirectory = ref('.')
 const creatingConversation = ref(false)
 const refreshingAgentStatus = ref(false)
 const viewport = ref<HTMLElement | null>(null)
@@ -189,6 +189,7 @@ async function createConversation() {
     )
     newConversationOpen.value = false
     newConversationTitle.value = ''
+    newConversationWorkingDirectory.value = '.'
     await loadConversations(conversation.id)
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '创建会话失败')
@@ -739,10 +740,10 @@ onBeforeUnmount(() => {
             <Input
               id="new-conversation-directory"
               v-model="newConversationWorkingDirectory"
-              placeholder="project-name"
+              placeholder=". 或 project-name"
             />
             <p class="text-xs text-muted-foreground">
-              相对于 Agent 工作区根目录，留空时创建独立的 .apipig 会话目录
+              相对于 Agent 工作区根目录；“.” 表示工作区根目录
             </p>
           </div>
         </div>

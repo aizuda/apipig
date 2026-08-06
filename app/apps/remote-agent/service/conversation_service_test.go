@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +39,7 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	assert.Equal(t, remoteModel.MessageStatusPending, turn.AssistantMessage.Status)
 	otherConversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, Title: "Other", CLIType: remoteModel.CLITypeCodex})
 	require.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf(".apipig/conversations/%s", otherConversation.ID.String()), otherConversation.WorkingDirectory)
+	assert.Equal(t, ".", otherConversation.WorkingDirectory)
 	renamedConversation, err := service.Rename(&remoteReq.ConversationRenameRequest{ID: otherConversation.ID, Title: "  Renamed conversation  "})
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed conversation", renamedConversation.Title)
@@ -114,17 +113,17 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	managedTurn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: otherConversation.ID, Content: "start managed workspace"})
+	rootTurn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: otherConversation.ID, Content: "start workspace root"})
 	require.NoError(t, err)
-	managedCommand, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	rootCommand, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
 	require.NoError(t, err)
-	require.NotNil(t, managedCommand)
-	assert.Equal(t, managedTurn.AssistantMessage.ID, managedCommand.AssistantMessageID)
-	assert.Equal(t, remoteModel.CLITypeCodex, managedCommand.CLIType)
-	assert.Equal(t, fmt.Sprintf(".apipig/conversations/%s", otherConversation.ID.String()), managedCommand.WorkingDirectory)
+	require.NotNil(t, rootCommand)
+	assert.Equal(t, rootTurn.AssistantMessage.ID, rootCommand.AssistantMessageID)
+	assert.Equal(t, remoteModel.CLITypeCodex, rootCommand.CLIType)
+	assert.Equal(t, ".", rootCommand.WorkingDirectory)
 	_, err = service.Complete(&remoteReq.MessageResultParams{
 		AgentToken: "runtime-token",
-		Request:    remoteReq.MessageResultRequest{MessageID: managedCommand.AssistantMessageID, Success: true, Content: "managed workspace ready"},
+		Request:    remoteReq.MessageResultRequest{MessageID: rootCommand.AssistantMessageID, Success: true, Content: "workspace root ready"},
 	})
 	require.NoError(t, err)
 

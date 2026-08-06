@@ -40,7 +40,7 @@ Controller 只保存注册 Token 和运行 Token 的 SHA-256 摘要。
 workspace-root: D:/gowork
 ```
 
-新建会话时项目目录分别填写 `apipig` 或 `other-project`。项目目录必须是相对于 `workspace-root` 的路径；Agent 会拒绝绝对路径、越界路径、指向根目录外的符号链接、缺失目录和当前运行用户不可写的目录。项目目录留空时，控制端会把 `.apipig/conversations/<conversation-id>` 写入会话配置，Agent 在首次执行时自动创建这个自管目录。
+新建会话时项目目录分别填写 `apipig` 或 `other-project`。项目目录必须是相对于 `workspace-root` 的路径；Agent 会拒绝绝对路径、越界路径、指向根目录外的符号链接、缺失目录和当前运行用户不可写的目录。项目目录留空或填写 `.` 时直接使用 `workspace-root`。
 
 默认 Codex 调用等价于：
 
@@ -54,7 +54,7 @@ codex exec --json --full-auto --sandbox workspace-write --skip-git-repo-check -
 claude -p --permission-mode acceptEdits
 ```
 
-提示词通过 stdin 传入，不会出现在进程参数中。Agent Client 会为 Codex `exec` 固定启用 `--sandbox workspace-write` 和 `--full-auto`，即使本地参数包含 `read-only` 也会规范为仅绑定项目目录可写；不会开放项目目录之外的写权限。Claude 的 `acceptEdits` 自动接受文件编辑，但仍保留其他权限检查。如确实需要无人值守执行所有 Claude 工具，可在本地配置中显式改用 `bypassPermissions`，该模式风险更高，不作为默认值。
+提示词通过 stdin 传入，不会出现在进程参数中。Agent Client 会为 Codex `exec` 固定启用 `--sandbox workspace-write` 和 `--full-auto`；无论 `--sandbox read-only` 位于 `exec` 前后，或通过 `-c sandbox_mode=read-only` 配置，都会规范为仅绑定项目目录可写，不会开放项目目录之外的写权限。每次执行的 CLI、工作目录、沙箱模式和 Agent 版本会写入 Agent 日志。Claude 的 `acceptEdits` 自动接受文件编辑，但仍保留其他权限检查。如确实需要无人值守执行所有 Claude 工具，可在本地配置中显式改用 `bypassPermissions`，该模式风险更高，不作为默认值。
 
 Agent 必须以拥有项目读写权限的普通系统用户运行。在 Linux/macOS 上应让该用户拥有项目目录和 `.git` 的读写权限；在 Windows 上需确保启动 Agent 的用户（包括服务账户）对项目目录具有“修改”权限。不要通过 root/管理员权限绕过目录授权。
 
