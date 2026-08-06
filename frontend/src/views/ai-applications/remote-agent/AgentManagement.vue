@@ -41,6 +41,10 @@ import {
 } from '@/api/ai-applications/remote-agent'
 import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
+import {
+  subscribeRemoteAgentEvents,
+  type RemoteAgentStreamEvent,
+} from '@/composables/useRemoteAgentEvents'
 import AgentCredentialDialog from './components/AgentCredentialDialog.vue'
 import AgentEditorDialog from './components/AgentEditorDialog.vue'
 import {
@@ -71,7 +75,7 @@ const resettingToken = ref(false)
 const deleteTarget = ref<RemoteAgent | null>(null)
 const deletingAgent = ref(false)
 const refreshingAgents = ref(false)
-let statusRefreshTimer: number | undefined
+let unsubscribeAgentEvents: (() => void) | undefined
 
 async function loadAgents(silent = false) {
   if (silent && (loading.value || refreshingAgents.value)) return
@@ -188,26 +192,56 @@ function memoryLabel(agent: RemoteAgent) {
   if (!agent.memoryTotal) return formatBytes(agent.memoryUsed)
   return `${formatBytes(agent.memoryUsed)} / ${formatBytes(agent.memoryTotal)} (${formatPercent((agent.memoryUsed / agent.memoryTotal) * 100)})`
 }
-function startStatusRefresh() {
-  window.clearInterval(statusRefreshTimer)
-  void loadAgents(true)
-  statusRefreshTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') void loadAgents(true)
-  }, 3000)
+function matchesCurrentFilters(agent: RemoteAgent) {
+  if (status.value && agent.status !== status.value) return false
+  const query = keyword.value.trim().toLocaleLowerCase()
+  if (!query) return true
+  return [agent.name, agent.agentKey, agent.hostname, agent.ipAddress].some((value) =>
+    value?.toLocaleLowerCase().includes(query),
+  )
 }
 
-function stopStatusRefresh() {
-  window.clearInterval(statusRefreshTimer)
-  statusRefreshTimer = undefined
+function handleAgentEvent(event: RemoteAgentStreamEvent) {
+  if (event.type === 'ready') {
+    void loadAgents(true)
+    return
+  }
+  const { action, agent, previousStatus } = event.data
+  const index = agents.value.findIndex((item) => item.id === agent.id)
+  if (action === 'delete') {
+    if (index >= 0) void loadAgents(true)
+    return
+  }
+  if (index >= 0) {
+    if (matchesCurrentFilters(agent)) agents.value[index] = agent
+    else void loadAgents(true)
+    return
+  }
+  if (
+    (!previousStatus && page.value === 1) ||
+    (status.value && previousStatus !== agent.status && agent.status === status.value)
+  ) {
+    void loadAgents(true)
+  }
+}
+
+function startAgentEvents() {
+  if (unsubscribeAgentEvents) return
+  unsubscribeAgentEvents = subscribeRemoteAgentEvents(handleAgentEvent)
+}
+
+function stopAgentEvents() {
+  unsubscribeAgentEvents?.()
+  unsubscribeAgentEvents = undefined
 }
 
 onMounted(() => {
   void loadAgents()
-  startStatusRefresh()
+  startAgentEvents()
 })
-onActivated(startStatusRefresh)
-onDeactivated(stopStatusRefresh)
-onBeforeUnmount(stopStatusRefresh)
+onActivated(startAgentEvents)
+onDeactivated(stopAgentEvents)
+onBeforeUnmount(stopAgentEvents)
 </script>
 
 <template>

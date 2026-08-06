@@ -154,6 +154,10 @@ export function postStream(url: string, body: unknown, signal?: AbortSignal): Pr
   )
 }
 
+export function getStream(url: string, signal?: AbortSignal): Promise<Response> {
+  return executeStreamRequest(url, { method: 'GET', signal }, true)
+}
+
 export function get<T>(url: string): Promise<T> {
   return request<T>(url, { method: 'GET' })
 }

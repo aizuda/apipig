@@ -58,6 +58,10 @@ import {
   type WechatContact,
 } from '@/api/ai-applications/wechat-bot'
 import { useTabsStore } from '@/stores/tabs'
+import {
+  subscribeRemoteAgentEvents,
+  type RemoteAgentStreamEvent,
+} from '@/composables/useRemoteAgentEvents'
 import MarkdownContent from './components/MarkdownContent.vue'
 import { agentStatusLabel, agentStatusVariant, formatTime } from './presentation'
 
@@ -184,7 +188,8 @@ const canRenameConversation = computed(() => {
   )
 })
 let streamController: AbortController | null = null
-let statusRefreshTimer: number | undefined
+let unsubscribeAgentEvents: (() => void) | undefined
+let takeoverSyncTimer: number | undefined
 let scrollFrame: number | undefined
 let viewportResizeObserver: ResizeObserver | undefined
 
@@ -598,31 +603,46 @@ function handleComposerKeydown(event: KeyboardEvent) {
   }
 }
 
-function startStatusRefresh() {
-  window.clearInterval(statusRefreshTimer)
-  void refreshAgentStatus()
-  statusRefreshTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') {
-      void refreshAgentStatus()
-      void syncTakeoverConversation()
-    }
+function handleAgentEvent(event: RemoteAgentStreamEvent) {
+  if (event.type === 'ready') {
+    void refreshAgentStatus()
+    return
+  }
+  const { action, agent } = event.data
+  if (agent.id !== agentId.value) return
+  if (action === 'delete') {
+    void router.push('/ai-applications/remote-agent/agents')
+    return
+  }
+  if (detail.value) detail.value.agent = agent
+}
+
+function startAgentEvents() {
+  if (!unsubscribeAgentEvents) {
+    unsubscribeAgentEvents = subscribeRemoteAgentEvents(handleAgentEvent)
+  }
+  window.clearInterval(takeoverSyncTimer)
+  takeoverSyncTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void syncTakeoverConversation()
   }, 3000)
 }
 
-function stopStatusRefresh() {
-  window.clearInterval(statusRefreshTimer)
-  statusRefreshTimer = undefined
+function stopAgentEvents() {
+  unsubscribeAgentEvents?.()
+  unsubscribeAgentEvents = undefined
+  window.clearInterval(takeoverSyncTimer)
+  takeoverSyncTimer = undefined
 }
 
 onMounted(() => {
   void loadAgent()
-  startStatusRefresh()
+  startAgentEvents()
 })
-onActivated(startStatusRefresh)
-onDeactivated(stopStatusRefresh)
+onActivated(startAgentEvents)
+onDeactivated(stopAgentEvents)
 onBeforeUnmount(() => {
   streamController?.abort()
-  stopStatusRefresh()
+  stopAgentEvents()
   viewportResizeObserver?.disconnect()
   window.cancelAnimationFrame(scrollFrame || 0)
 })

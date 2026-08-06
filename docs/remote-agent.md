@@ -85,6 +85,7 @@ Agent 接口：
 - `POST /v1/ai-applications/remote-agent/agent/page`
 - `GET /v1/ai-applications/remote-agent/agent/get?id=<agent-id>`
 - `GET /v1/ai-applications/remote-agent/agent/status?id=<agent-id>`
+- `GET /v1/ai-applications/remote-agent/agent/events` (SSE)
 - `POST /v1/ai-applications/remote-agent/agent/rotate-token?id=<agent-id>`
 - `POST /v1/ai-applications/remote-agent/agent/status`
 - `POST /v1/ai-applications/remote-agent/agent/delete`

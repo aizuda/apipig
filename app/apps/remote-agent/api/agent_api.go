@@ -5,7 +5,9 @@ import (
 	"apipig/app/apps/remote-agent/service"
 	coreAPI "apipig/core/api"
 	"apipig/core/api/response"
+	"bufio"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -53,6 +55,38 @@ func (a *AgentApi) Get(c *fiber.Ctx) error {
 func (a *AgentApi) Status(c *fiber.Ctx) error {
 	id, err := a.IdParser(c)
 	return response.Execute(c, a.service.Status, id, err)
+}
+
+func (a *AgentApi) Events(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderContentType, "text/event-stream; charset=utf-8")
+	c.Set(fiber.HeaderCacheControl, "no-cache")
+	c.Set(fiber.HeaderConnection, "keep-alive")
+	c.Set("X-Accel-Buffering", "no")
+	c.Context().SetBodyStreamWriter(func(writer *bufio.Writer) {
+		events, unsubscribe := a.service.AgentEvents()
+		defer unsubscribe()
+		if err := writeSSE(writer, "ready", map[string]int64{"serverTime": time.Now().UnixMilli()}); err != nil {
+			return
+		}
+		keepalive := time.NewTicker(15 * time.Second)
+		defer keepalive.Stop()
+		for {
+			select {
+			case event := <-events:
+				if err := writeSSE(writer, "agent", event); err != nil {
+					return
+				}
+			case <-keepalive.C:
+				if _, err := writer.WriteString(": keepalive\n\n"); err != nil {
+					return
+				}
+				if err := writer.Flush(); err != nil {
+					return
+				}
+			}
+		}
+	})
+	return nil
 }
 
 func (a *AgentApi) Create(c *fiber.Ctx) error {

@@ -283,6 +283,7 @@ func (s *ConversationService) send(conversationID snowflake.ID, content, source 
 	if err := s.repository.CreateTurn(conversation, userMessage, assistantMessage, command, now, source); err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
+	s.agentService.publishAgentByID(conversation.AgentID, remoteModel.AgentStatusOnline)
 	return remoteResp.SendMessageResult{UserMessage: userMessage, AssistantMessage: assistantMessage}, nil
 }
 
@@ -399,6 +400,9 @@ func (s *ConversationService) Complete(params *remoteReq.MessageResultParams) (b
 	completed, err := s.repository.Complete(agent.ID, params.Request, s.now().UnixMilli())
 	if err != nil {
 		return false, err
+	}
+	if completed {
+		s.agentService.publishAgentByID(agent.ID, remoteModel.AgentStatusBusy)
 	}
 	if completed && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
 		content := params.Request.Content

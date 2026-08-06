@@ -21,6 +21,7 @@ import (
 	"apipig/global"
 	"apipig/toolkit/snowflake"
 
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 	"gorm.io/gorm"
 )
@@ -43,11 +44,35 @@ var (
 type AgentService struct {
 	repository agentRepository
 	now        func() time.Time
+	events     *agentEventBroker
 }
 
 // NewAgentService 创建使用 GORM 仓储和系统时间的 Agent 服务。
 func NewAgentService() *AgentService {
-	return &AgentService{repository: gormAgentRepository{}, now: time.Now}
+	return &AgentService{repository: gormAgentRepository{}, now: time.Now, events: newAgentEventBroker()}
+}
+
+func (s *AgentService) AgentEvents() (<-chan remoteResp.AgentEvent, func()) {
+	return s.events.subscribe()
+}
+
+func (s *AgentService) publishAgent(agent remoteModel.Agent, previousStatus string) {
+	s.publishAgentEvent("upsert", agent, previousStatus)
+}
+
+func (s *AgentService) publishAgentEvent(action string, agent remoteModel.Agent, previousStatus string) {
+	s.events.publish(remoteResp.AgentEvent{Action: action, Agent: agent, PreviousStatus: previousStatus})
+}
+
+func (s *AgentService) publishAgentByID(id snowflake.ID, previousStatus string) {
+	agent, err := s.repository.Get(id)
+	if err != nil {
+		if global.LOG != nil {
+			global.LOG.Warn("failed to load remote agent for status event", zap.String("agentId", id.String()), zap.Error(err))
+		}
+		return
+	}
+	s.publishAgent(agent, previousStatus)
 }
 
 // Create 创建离线 Agent 配置，并生成控制端仅在本次响应中返回的接入注册令牌明文。
@@ -76,6 +101,7 @@ func (s *AgentService) Create(params *remoteReq.AgentCreateParams) (remoteResp.A
 	if err := s.repository.Create(&agent); err != nil {
 		return remoteResp.AgentCredential{}, err
 	}
+	s.publishAgent(agent, "")
 	return credentialResult(agent, token, params.ControllerURL)
 }
 
@@ -100,7 +126,11 @@ func (s *AgentService) Update(request *remoteReq.AgentSaveRequest) (remoteModel.
 	if err := s.repository.UpdateConfiguration(&agent); err != nil {
 		return remoteModel.Agent{}, err
 	}
-	return s.repository.Get(agent.ID)
+	updated, err := s.repository.Get(agent.ID)
+	if err == nil {
+		s.publishAgent(updated, existing.Status)
+	}
+	return updated, err
 }
 
 // RotateToken 重置注册令牌，并使旧注册令牌和当前运行令牌同时失效。
@@ -132,20 +162,24 @@ func (s *AgentService) SetStatus(request *remoteReq.AgentStatusRequest) (bool, e
 	if request == nil || request.ID == 0 {
 		return false, errors.New("Agent ID 不能为空")
 	}
+	existing, err := s.repository.Get(request.ID)
+	if err != nil {
+		return false, err
+	}
 	status := remoteModel.AgentStatusDisabled
 	if request.Enabled {
 		status = remoteModel.AgentStatusOffline
 	} else {
-		agent, err := s.repository.Get(request.ID)
-		if err != nil {
-			return false, err
-		}
-		if agent.CurrentMessageID != 0 {
+		if existing.CurrentMessageID != 0 {
 			return false, errors.New("Agent 正在响应时不能禁用")
 		}
 	}
 	if err := s.repository.SetStatus(request.ID, status, s.now().UnixMilli()); err != nil {
 		return false, err
+	}
+	updated, err := s.repository.Get(request.ID)
+	if err == nil {
+		s.publishAgent(updated, existing.Status)
 	}
 	return true, nil
 }
@@ -165,6 +199,7 @@ func (s *AgentService) Delete(request *remoteReq.AgentDeleteRequest) (bool, erro
 	if err := s.repository.Delete(agent.ID); err != nil {
 		return false, err
 	}
+	s.publishAgentEvent("delete", agent, agent.Status)
 	return true, nil
 }
 
@@ -215,6 +250,7 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 		}
 		agent.CurrentMessageID = request.CurrentMessageID
 	}
+	previousStatus := agent.Status
 	rawToken, err := generateAgentToken()
 	if err != nil {
 		return remoteResp.RegisterResult{}, err
@@ -237,6 +273,7 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 	if err := s.repository.UpdateRegistration(&agent); err != nil {
 		return remoteResp.RegisterResult{}, err
 	}
+	s.publishAgent(agent, previousStatus)
 	return remoteResp.RegisterResult{
 		AgentID: agent.ID, AgentToken: rawToken, Status: agent.Status,
 		HeartbeatIntervalSeconds: s.heartbeatIntervalSeconds(),
@@ -257,6 +294,7 @@ func (s *AgentService) Heartbeat(params *remoteReq.HeartbeatParams) (remoteResp.
 	}
 	now := s.now().UnixMilli()
 	status := remoteModel.AgentStatusOnline
+	previousStatus := agent.Status
 	if params.Request.Busy || agent.CurrentMessageID > 0 {
 		status = remoteModel.AgentStatusBusy
 	}
@@ -273,6 +311,7 @@ func (s *AgentService) Heartbeat(params *remoteReq.HeartbeatParams) (remoteResp.
 	if err := s.repository.RecordHeartbeat(agent, heartbeat); err != nil {
 		return remoteResp.HeartbeatResult{}, err
 	}
+	s.publishAgent(agent, previousStatus)
 	return remoteResp.HeartbeatResult{AgentID: agent.ID, Status: status, ServerTime: now}, nil
 }
 
@@ -349,9 +388,13 @@ func (s *AgentService) Disconnect(rawToken string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	previousStatus := agent.Status
 	if err := s.repository.Disconnect(agent.ID, s.now().UnixMilli()); err != nil {
 		return false, err
 	}
+	agent.Status = remoteModel.AgentStatusOffline
+	agent.TokenHash = ""
+	s.publishAgent(agent, previousStatus)
 	return true, nil
 }
 
@@ -362,7 +405,14 @@ func (s *AgentService) MarkOffline() error {
 		timeout = 30
 	}
 	now := s.now()
-	return s.repository.MarkOffline(now.Add(-time.Duration(timeout)*time.Second).UnixMilli(), now.UnixMilli())
+	changes, err := s.repository.MarkOffline(now.Add(-time.Duration(timeout)*time.Second).UnixMilli(), now.UnixMilli())
+	if err != nil {
+		return err
+	}
+	for _, change := range changes {
+		s.publishAgent(change.Agent, change.PreviousStatus)
+	}
+	return nil
 }
 
 // heartbeatIntervalSeconds 根据服务端离线阈值计算客户端心跳间隔，并限制在 10 到 30 秒。

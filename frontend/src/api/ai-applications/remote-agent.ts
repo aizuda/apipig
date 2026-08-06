@@ -1,4 +1,4 @@
-import { get, post, postStream } from '../request'
+import { get, getStream, post, postStream } from '../request'
 import type { PageResult } from '../ai-gateway'
 
 export type AgentStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'DISABLED'
@@ -110,6 +110,12 @@ export interface AgentDetailResult {
   conversations: RemoteConversation[]
 }
 
+export interface RemoteAgentEvent {
+  action: 'upsert' | 'delete'
+  agent: RemoteAgent
+  previousStatus?: AgentStatus
+}
+
 export interface ConversationDetailResult {
   conversation: RemoteConversation
   messages: RemoteMessage[]
@@ -142,6 +148,8 @@ export const remoteAgentApi = {
     ),
   getAgentStatus: (id: string) =>
     get<RemoteAgent>(`/ai-applications/remote-agent/agent/status?${new URLSearchParams({ id })}`),
+  streamAgentEvents: (signal?: AbortSignal) =>
+    getStream('/ai-applications/remote-agent/agent/events', signal),
   createAgent: (params: RemoteAgentSaveParams) =>
     post<RemoteAgentCredential>('/ai-applications/remote-agent/agent/create', params),
   updateAgent: (params: RemoteAgentSaveParams) =>

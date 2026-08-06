@@ -23,6 +23,7 @@ func (r *RemoteAgentRouter) InitAdminRouter(router fiber.Router) {
 	agent.Post("page", api.RemoteAgentApi.AgentApi.Page)
 	agent.Get("get", api.RemoteAgentApi.AgentApi.Get)
 	agent.Get("status", api.RemoteAgentApi.AgentApi.Status)
+	agent.Get("events", api.RemoteAgentApi.AgentApi.Events)
 	agent.Post("create", api.RemoteAgentApi.AgentApi.Create)
 	agent.Post("update", api.RemoteAgentApi.AgentApi.Update)
 	agent.Post("rotate-token", api.RemoteAgentApi.AgentApi.RotateToken)

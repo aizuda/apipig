@@ -30,6 +30,12 @@ type AgentDetail struct {
 	Conversations []remoteModel.Conversation `json:"conversations"`
 }
 
+type AgentEvent struct {
+	Action         string            `json:"action"`
+	Agent          remoteModel.Agent `json:"agent"`
+	PreviousStatus string            `json:"previousStatus,omitempty"`
+}
+
 type ConversationDetail struct {
 	Conversation remoteModel.Conversation `json:"conversation"`
 	Messages     []remoteModel.Message    `json:"messages"`
