@@ -62,6 +62,18 @@ func (a *ConversationApi) Send(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Send, &request, err)
 }
 
+func (a *ConversationApi) StartTakeover(c *fiber.Ctx) error {
+	var request remoteReq.ConversationTakeoverRequest
+	err := a.BodyParser(c, &request, "Remote Agent 微信接管")
+	return response.Execute(c, a.service.StartTakeover, &request, err)
+}
+
+func (a *ConversationApi) StopTakeover(c *fiber.Ctx) error {
+	var request remoteReq.ConversationTakeoverRequest
+	err := a.BodyParser(c, &request, "Remote Agent 停止微信接管")
+	return response.Execute(c, a.service.StopTakeover, &request, err)
+}
+
 func (a *ConversationApi) NextCommand(c *fiber.Ctx) error {
 	wait, _ := strconv.Atoi(c.Query("waitSeconds", "0"))
 	params := &remoteReq.NextCommandParams{AgentToken: bearerToken(c.Get(fiber.HeaderAuthorization)), WaitSeconds: wait}

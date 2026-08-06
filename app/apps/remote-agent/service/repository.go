@@ -139,7 +139,7 @@ func (r gormAgentRepository) RecoverInterruptedTurn(agentID, messageID snowflake
 			return command.Error
 		}
 		if command.RowsAffected == 0 {
-			return errors.New("interrupted conversation command cannot be recovered")
+			return errors.New("中断的会话命令无法恢复")
 		}
 		return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
 			Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
@@ -176,7 +176,7 @@ func (r gormAgentRepository) Delete(id snowflake.ID) error {
 			return deleted.Error
 		}
 		if deleted.RowsAffected == 0 {
-			return errors.New("cannot delete an agent while it is responding")
+			return errors.New("Agent 正在响应时不能删除")
 		}
 
 		// 消息分片只关联消息 ID，需要在删除消息前通过子查询先行清理。

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"unicode/utf8"
@@ -18,22 +19,46 @@ func TestConfigNormalizeDefaults(t *testing.T) {
 	require.NoError(t, config.normalize())
 	assert.Equal(t, "https://controller.example.com", config.ControllerURL)
 	assert.Equal(t, "codex", config.CodexCommand)
-	assert.Equal(t, []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}, config.CodexArgs)
+	assert.Equal(t, []string{
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true",
+		"--skip-git-repo-check", "-",
+	}, config.CodexArgs)
 	assert.Equal(t, "claude", config.ClaudeCommand)
 	assert.Equal(t, []string{"-p", "--permission-mode", "acceptEdits"}, config.ClaudeArgs)
 	assert.Equal(t, 25, config.PollWaitSeconds)
 	assert.Greater(t, config.RequestTimeoutSeconds, config.PollWaitSeconds)
 }
 
-func TestConfigRejectsMissingWorkspaceRoot(t *testing.T) {
+func TestConfigCreatesMissingWorkspaceRoot(t *testing.T) {
+	workspaceRoot := filepath.Join(t.TempDir(), "remote-agent-workspaces", "nested")
 	config := Config{
 		ControllerURL: "https://controller.example.com", RegistrationToken: "secret",
-		AgentKey: "node", Name: "node", WorkspaceRoot: filepath.Join(t.TempDir(), "missing"),
+		AgentKey: "node", Name: "node", WorkspaceRoot: workspaceRoot,
 	}
 
 	err := config.normalize()
 
-	require.ErrorContains(t, err, "workspace-root must reference an existing directory")
+	require.NoError(t, err)
+	expected, err := filepath.Abs(workspaceRoot)
+	require.NoError(t, err)
+	assert.Equal(t, expected, config.WorkspaceRoot)
+	info, err := os.Stat(expected)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestConfigRejectsWorkspaceRootFile(t *testing.T) {
+	workspaceRoot := filepath.Join(t.TempDir(), "workspace-file")
+	require.NoError(t, os.WriteFile(workspaceRoot, []byte("not a directory"), 0600))
+	config := Config{
+		ControllerURL: "https://controller.example.com", RegistrationToken: "secret",
+		AgentKey: "node", Name: "node", WorkspaceRoot: workspaceRoot,
+	}
+
+	err := config.normalize()
+
+	require.EqualError(t, err, "workspace-root must reference a directory")
 }
 
 func TestConfigRegistrationIncludesHostname(t *testing.T) {

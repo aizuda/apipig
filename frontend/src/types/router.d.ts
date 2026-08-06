@@ -42,6 +42,8 @@ declare module 'vue-router' {
     /** AI 网关当前展示的管理模块 */
     /** iframe 地址 */
     iframeSrc?: string
+    /** Whether the layout content area provides vertical scrolling. */
+    contentScrollable?: boolean
     /** 忽略权限（开发模式） */
     ignoreAuth?: boolean
   }

@@ -27,9 +27,13 @@ import (
 
 var (
 	// errAgentDisabled 用于并发更新时统一表示 Agent 已被管理员禁用。
-	errAgentDisabled = errors.New("agent is disabled")
+	errAgentDisabled = errors.New("Agent 已禁用")
 	// defaultCodexArgs 通过标准输入向 Codex CLI 传递会话提示词。
-	defaultCodexArgs  = []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}
+	defaultCodexArgs = []string{
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true",
+		"--skip-git-repo-check", "-",
+	}
 	defaultClaudeArgs = []string{"-p", "--permission-mode", "acceptEdits"}
 	// agentKeyPattern 限制 Agent Key 仅包含适合作为稳定标识的安全字符。
 	agentKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -49,14 +53,14 @@ func NewAgentService() *AgentService {
 // Create 创建离线 Agent 配置，并生成控制端仅在本次响应中返回的接入注册令牌明文。
 func (s *AgentService) Create(params *remoteReq.AgentCreateParams) (remoteResp.AgentCredential, error) {
 	if params == nil {
-		return remoteResp.AgentCredential{}, errors.New("agent configuration is required")
+		return remoteResp.AgentCredential{}, errors.New("Agent 配置不能为空")
 	}
 	agent, err := normalizeAgent(params.Request)
 	if err != nil {
 		return remoteResp.AgentCredential{}, err
 	}
 	if _, err := s.repository.FindByKey(agent.AgentKey); err == nil {
-		return remoteResp.AgentCredential{}, errors.New("agentKey already exists")
+		return remoteResp.AgentCredential{}, errors.New("Agent Key 已存在")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return remoteResp.AgentCredential{}, err
 	}
@@ -78,7 +82,7 @@ func (s *AgentService) Create(params *remoteReq.AgentCreateParams) (remoteResp.A
 // Update 更新 Agent 的可配置项，已注册节点不允许变更唯一 Agent Key。
 func (s *AgentService) Update(request *remoteReq.AgentSaveRequest) (remoteModel.Agent, error) {
 	if request == nil || request.ID == 0 {
-		return remoteModel.Agent{}, errors.New("agent ID is required")
+		return remoteModel.Agent{}, errors.New("Agent ID 不能为空")
 	}
 	existing, err := s.repository.Get(request.ID)
 	if err != nil {
@@ -89,7 +93,7 @@ func (s *AgentService) Update(request *remoteReq.AgentSaveRequest) (remoteModel.
 		return remoteModel.Agent{}, err
 	}
 	if existing.Hostname != "" && agent.AgentKey != existing.AgentKey {
-		return remoteModel.Agent{}, errors.New("agentKey cannot be changed after registration")
+		return remoteModel.Agent{}, errors.New("注册后不能修改 Agent Key")
 	}
 	agent.MODEL = existing.MODEL
 	agent.UpdatedAt = s.now().UnixMilli()
@@ -102,14 +106,14 @@ func (s *AgentService) Update(request *remoteReq.AgentSaveRequest) (remoteModel.
 // RotateToken 重置注册令牌，并使旧注册令牌和当前运行令牌同时失效。
 func (s *AgentService) RotateToken(params *remoteReq.AgentRotateTokenParams) (remoteResp.AgentCredential, error) {
 	if params == nil || params.ID == 0 {
-		return remoteResp.AgentCredential{}, errors.New("agent ID is required")
+		return remoteResp.AgentCredential{}, errors.New("Agent ID 不能为空")
 	}
 	agent, err := s.repository.Get(params.ID)
 	if err != nil {
 		return remoteResp.AgentCredential{}, err
 	}
 	if agent.Status != remoteModel.AgentStatusOffline && agent.Status != remoteModel.AgentStatusDisabled {
-		return remoteResp.AgentCredential{}, errors.New("registration token can only be reset while the agent is offline or disabled")
+		return remoteResp.AgentCredential{}, errors.New("只有离线或已禁用的 Agent 才能重置注册令牌")
 	}
 	token, err := generateRegistrationToken()
 	if err != nil {
@@ -126,7 +130,7 @@ func (s *AgentService) RotateToken(params *remoteReq.AgentRotateTokenParams) (re
 // SetStatus 启用或禁用 Agent；正在响应的 Agent 不允许被禁用。
 func (s *AgentService) SetStatus(request *remoteReq.AgentStatusRequest) (bool, error) {
 	if request == nil || request.ID == 0 {
-		return false, errors.New("agent ID is required")
+		return false, errors.New("Agent ID 不能为空")
 	}
 	status := remoteModel.AgentStatusDisabled
 	if request.Enabled {
@@ -137,7 +141,7 @@ func (s *AgentService) SetStatus(request *remoteReq.AgentStatusRequest) (bool, e
 			return false, err
 		}
 		if agent.CurrentMessageID != 0 {
-			return false, errors.New("cannot disable an agent while it is responding")
+			return false, errors.New("Agent 正在响应时不能禁用")
 		}
 	}
 	if err := s.repository.SetStatus(request.ID, status, s.now().UnixMilli()); err != nil {
@@ -149,14 +153,14 @@ func (s *AgentService) SetStatus(request *remoteReq.AgentStatusRequest) (bool, e
 // Delete 删除 Agent 及其心跳、会话、消息和命令等全部关联数据。
 func (s *AgentService) Delete(request *remoteReq.AgentDeleteRequest) (bool, error) {
 	if request == nil || request.ID == 0 {
-		return false, errors.New("agent ID is required")
+		return false, errors.New("Agent ID 不能为空")
 	}
 	agent, err := s.repository.Get(request.ID)
 	if err != nil {
 		return false, err
 	}
 	if agent.CurrentMessageID != 0 {
-		return false, errors.New("cannot delete an agent while it is responding")
+		return false, errors.New("Agent 正在响应时不能删除")
 	}
 	if err := s.repository.Delete(agent.ID); err != nil {
 		return false, err
@@ -167,7 +171,7 @@ func (s *AgentService) Delete(request *remoteReq.AgentDeleteRequest) (bool, erro
 // Register 校验接入注册令牌，登记客户端信息并签发新的运行令牌。
 func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.RegisterResult, error) {
 	if params == nil {
-		return remoteResp.RegisterResult{}, errors.New("registration parameters are required")
+		return remoteResp.RegisterResult{}, errors.New("注册参数不能为空")
 	}
 	request := params.Request
 	request.AgentKey = strings.TrimSpace(request.AgentKey)
@@ -176,7 +180,7 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 		return remoteResp.RegisterResult{}, err
 	}
 	if strings.TrimSpace(params.BootstrapToken) == "" {
-		return remoteResp.RegisterResult{}, errors.New("registration token is required")
+		return remoteResp.RegisterResult{}, errors.New("注册令牌不能为空")
 	}
 	agent, err := s.repository.FindByRegistrationTokenHash(hashAgentToken(params.BootstrapToken))
 	if err != nil {
@@ -185,29 +189,29 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 		}
 		if configured, keyErr := s.repository.FindByKey(request.AgentKey); keyErr == nil {
 			if configured.Status == remoteModel.AgentStatusDisabled {
-				return remoteResp.RegisterResult{}, fmt.Errorf("remote agent %q is disabled", request.AgentKey)
+				return remoteResp.RegisterResult{}, fmt.Errorf("远程 Agent %q 已禁用", request.AgentKey)
 			}
-			return remoteResp.RegisterResult{}, fmt.Errorf("registration token does not match agent %q; reset the token and replace its configuration file", request.AgentKey)
+			return remoteResp.RegisterResult{}, fmt.Errorf("注册令牌与 Agent %q 不匹配，请重置令牌并替换配置文件", request.AgentKey)
 		}
-		return remoteResp.RegisterResult{}, fmt.Errorf("remote agent %q has not been added in the controller", request.AgentKey)
+		return remoteResp.RegisterResult{}, fmt.Errorf("控制端尚未添加远程 Agent %q", request.AgentKey)
 	}
 	if agent.Status == remoteModel.AgentStatusDisabled {
-		return remoteResp.RegisterResult{}, fmt.Errorf("remote agent %q is disabled", agent.AgentKey)
+		return remoteResp.RegisterResult{}, fmt.Errorf("远程 Agent %q 已禁用", agent.AgentKey)
 	}
 	if agent.AgentKey != request.AgentKey {
-		return remoteResp.RegisterResult{}, fmt.Errorf("registration token belongs to agent %q", agent.AgentKey)
+		return remoteResp.RegisterResult{}, fmt.Errorf("注册令牌属于 Agent %q", agent.AgentKey)
 	}
 	now := s.now().UnixMilli()
 	// 客户端重启后未报告正在执行的消息时，将服务端遗留的执行状态恢复为可重试。
 	if request.CurrentMessageID == 0 && agent.CurrentMessageID != 0 {
 		if err := s.repository.RecoverInterruptedTurn(agent.ID, agent.CurrentMessageID, now); err != nil {
-			return remoteResp.RegisterResult{}, fmt.Errorf("recover interrupted conversation turn: %w", err)
+			return remoteResp.RegisterResult{}, fmt.Errorf("恢复中断的会话轮次失败：%w", err)
 		}
 		agent.CurrentMessageID = 0
 	} else if request.CurrentMessageID != 0 {
 		// 客户端仍在执行时，必须与服务端记录一致，防止错误关联其他会话消息。
 		if agent.CurrentMessageID != 0 && agent.CurrentMessageID != request.CurrentMessageID {
-			return remoteResp.RegisterResult{}, errors.New("agent reports a different current message")
+			return remoteResp.RegisterResult{}, errors.New("Agent 报告的当前消息不一致")
 		}
 		agent.CurrentMessageID = request.CurrentMessageID
 	}
@@ -242,10 +246,10 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 // Heartbeat 更新 Agent 的资源快照和在线状态，并追加一条心跳历史记录。
 func (s *AgentService) Heartbeat(params *remoteReq.HeartbeatParams) (remoteResp.HeartbeatResult, error) {
 	if params == nil || strings.TrimSpace(params.AgentToken) == "" {
-		return remoteResp.HeartbeatResult{}, errors.New("agent token is required")
+		return remoteResp.HeartbeatResult{}, errors.New("Agent 令牌不能为空")
 	}
 	if params.Request.CPUUsage < 0 || params.Request.CPUUsage > 100 || params.Request.MemoryUsed < 0 {
-		return remoteResp.HeartbeatResult{}, errors.New("invalid resource usage")
+		return remoteResp.HeartbeatResult{}, errors.New("资源使用数据无效")
 	}
 	agent, err := s.Authenticate(params.AgentToken)
 	if err != nil {
@@ -275,12 +279,12 @@ func (s *AgentService) Heartbeat(params *remoteReq.HeartbeatParams) (remoteResp.
 // Authenticate 使用运行令牌摘要查找 Agent，并拒绝已禁用节点。
 func (s *AgentService) Authenticate(rawToken string) (remoteModel.Agent, error) {
 	if strings.TrimSpace(rawToken) == "" {
-		return remoteModel.Agent{}, errors.New("agent token is required")
+		return remoteModel.Agent{}, errors.New("Agent 令牌不能为空")
 	}
 	agent, err := s.repository.FindByTokenHash(hashAgentToken(rawToken))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return remoteModel.Agent{}, errors.New("invalid agent token")
+			return remoteModel.Agent{}, errors.New("Agent 令牌无效")
 		}
 		return remoteModel.Agent{}, err
 	}
@@ -299,7 +303,7 @@ func (s *AgentService) Page(params *remoteReq.AgentPageParams) (coreResp.PageRes
 		params.Keyword = strings.TrimSpace(params.Keyword)
 		params.Status = strings.ToUpper(strings.TrimSpace(params.Status))
 		if params.Status != "" && !validAgentStatus(params.Status) {
-			return coreResp.PageResult{}, errors.New("invalid agent status")
+			return coreResp.PageResult{}, errors.New("Agent 状态无效")
 		}
 	}
 	return s.repository.Page(params)
@@ -308,7 +312,7 @@ func (s *AgentService) Page(params *remoteReq.AgentPageParams) (coreResp.PageRes
 // Get 返回 Agent 当前快照、最近心跳和最近会话。
 func (s *AgentService) Get(id snowflake.ID) (remoteResp.AgentDetail, error) {
 	if id == 0 {
-		return remoteResp.AgentDetail{}, errors.New("agent ID is required")
+		return remoteResp.AgentDetail{}, errors.New("Agent ID 不能为空")
 	}
 	if err := s.MarkOffline(); err != nil {
 		return remoteResp.AgentDetail{}, err
@@ -331,7 +335,7 @@ func (s *AgentService) Get(id snowflake.ID) (remoteResp.AgentDetail, error) {
 // Status returns the latest liveness snapshot without loading heartbeat or conversation history.
 func (s *AgentService) Status(id snowflake.ID) (remoteModel.Agent, error) {
 	if id == 0 {
-		return remoteModel.Agent{}, errors.New("agent ID is required")
+		return remoteModel.Agent{}, errors.New("Agent ID 不能为空")
 	}
 	if err := s.MarkOffline(); err != nil {
 		return remoteModel.Agent{}, err
@@ -390,7 +394,7 @@ func normalizeAgent(request remoteReq.AgentSaveRequest) (remoteModel.Agent, erro
 		return remoteModel.Agent{}, err
 	}
 	if agent.Name == "" || len(agent.Name) > 100 {
-		return remoteModel.Agent{}, errors.New("name is required and cannot exceed 100 characters")
+		return remoteModel.Agent{}, errors.New("名称不能为空且不能超过 100 个字符")
 	}
 	if agent.WorkspaceRoot == "" {
 		agent.WorkspaceRoot = "."
@@ -434,7 +438,7 @@ func credentialResult(agent remoteModel.Agent, token, controllerURL string) (rem
 	controllerURL = strings.TrimRight(strings.TrimSpace(controllerURL), "/")
 	parsed, err := url.ParseRequestURI(controllerURL)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return remoteResp.AgentCredential{}, errors.New("controller URL must be an HTTP or HTTPS URL")
+		return remoteResp.AgentCredential{}, errors.New("控制端 URL 必须是 HTTP 或 HTTPS 地址")
 	}
 	config := struct {
 		ControllerURL         string   `yaml:"controller-url"`
@@ -463,10 +467,10 @@ func validateRegistration(request remoteReq.RegisterRequest) error {
 		return err
 	}
 	if request.Hostname == "" || len(request.Hostname) > 255 {
-		return errors.New("hostname is required and cannot exceed 255 characters")
+		return errors.New("主机名不能为空且不能超过 255 个字符")
 	}
 	if request.MemoryTotal < 0 {
-		return errors.New("memoryTotal cannot be negative")
+		return errors.New("总内存不能为负数")
 	}
 	return nil
 }
@@ -474,10 +478,10 @@ func validateRegistration(request remoteReq.RegisterRequest) error {
 // validateAgentKey 保证 Agent Key 可安全用于配置标识和日志上下文。
 func validateAgentKey(value string) error {
 	if value == "" || len(value) > 100 {
-		return errors.New("agentKey is required and cannot exceed 100 characters")
+		return errors.New("Agent Key 不能为空且不能超过 100 个字符")
 	}
 	if !agentKeyPattern.MatchString(value) {
-		return errors.New("agentKey can only contain letters, numbers, hyphens, and underscores")
+		return errors.New("Agent Key 只能包含字母、数字、连字符和下划线")
 	}
 	return nil
 }

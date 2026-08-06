@@ -42,6 +42,15 @@ type BotService struct {
 	sessions map[string]*bindSession
 }
 
+func (s *BotService) SetInboundHandler(handler func(snowflake.ID, string, string) error) {
+	s.runtime.SetInboundHandler(handler)
+}
+
+func (s *BotService) SendTakeover(ctx context.Context, botID snowflake.ID, userID, content string) error {
+	_, err := s.runtime.Send(ctx, botID, userID, content)
+	return err
+}
+
 func newBotService(vault aiService.CredentialVault) *BotService {
 	service := &BotService{vault: vault, sessions: make(map[string]*bindSession)}
 	service.runtime = newRuntime(vault)

@@ -36,5 +36,7 @@ func (r *RemoteAgentRouter) InitAdminRouter(router fiber.Router) {
 	conversation.Post("rename", api.RemoteAgentApi.ConversationApi.Rename)
 	conversation.Post("delete", api.RemoteAgentApi.ConversationApi.Delete)
 	conversation.Post("message/send", api.RemoteAgentApi.ConversationApi.Send)
+	conversation.Post("takeover/start", api.RemoteAgentApi.ConversationApi.StartTakeover)
+	conversation.Post("takeover/stop", api.RemoteAgentApi.ConversationApi.StopTakeover)
 	conversation.Post("message/stream", api.RemoteAgentApi.ConversationApi.Stream)
 }

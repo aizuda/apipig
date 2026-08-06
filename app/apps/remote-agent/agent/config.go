@@ -88,8 +88,14 @@ func (c *Config) normalize() error {
 		return err
 	}
 	workspaceInfo, err := os.Stat(c.WorkspaceRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(c.WorkspaceRoot, 0750); err != nil {
+			return errors.New("create workspace-root: " + err.Error())
+		}
+		workspaceInfo, err = os.Stat(c.WorkspaceRoot)
+	}
 	if err != nil {
-		return errors.New("workspace-root must reference an existing directory: " + err.Error())
+		return errors.New("inspect workspace-root: " + err.Error())
 	}
 	if !workspaceInfo.IsDir() {
 		return errors.New("workspace-root must reference a directory")
@@ -98,7 +104,11 @@ func (c *Config) normalize() error {
 		c.CodexCommand = "codex"
 	}
 	if len(c.CodexArgs) == 0 {
-		c.CodexArgs = []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}
+		c.CodexArgs = []string{
+			"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+			"-c", "sandbox_workspace_write.network_access=true",
+			"--skip-git-repo-check", "-",
+		}
 	}
 	if c.ClaudeCommand == "" {
 		c.ClaudeCommand = "claude"

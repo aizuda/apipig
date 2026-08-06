@@ -6,9 +6,11 @@ import (
 )
 
 const (
-	ConversationStatusActive = "ACTIVE"
-	CLITypeCodex             = "CODEX"
-	CLITypeClaude            = "CLAUDE"
+	ConversationStatusActive      = "ACTIVE"
+	ConversationControlModeWeb    = "WEB"
+	ConversationControlModeWechat = "WECHAT"
+	CLITypeCodex                  = "CODEX"
+	CLITypeClaude                 = "CLAUDE"
 )
 
 // Conversation is a persistent, agent-scoped Web console session.
@@ -22,6 +24,10 @@ type Conversation struct {
 	Pinned           bool         `gorm:"not null;default:false;index" json:"pinned"`
 	PinnedAt         int64        `gorm:"type:bigint;not null;default:0;index" json:"pinnedAt"`
 	LastMessageAt    int64        `gorm:"type:bigint;not null;index" json:"lastMessageAt"`
+	ControlMode      string       `gorm:"size:20;not null;default:WEB;index" json:"controlMode"`
+	WechatBotID      snowflake.ID `gorm:"type:bigint;not null;default:0;index" json:"wechatBotId,omitempty" swaggertype:"string"`
+	WechatUserID     string       `gorm:"size:200;not null;default:''" json:"wechatUserId,omitempty"`
+	WechatTakeoverAt int64        `gorm:"type:bigint;not null;default:0" json:"wechatTakeoverAt,omitempty"`
 }
 
 func (Conversation) TableName() string { return "ap_remote_agent_conversation" }

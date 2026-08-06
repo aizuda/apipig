@@ -47,7 +47,13 @@ const routes: RouteRecordRaw[] = [
         path: '/ai-applications/remote-agent/agents/:id',
         name: 'RemoteAgentAgentDetail',
         component: () => import('@/views/ai-applications/remote-agent/AgentDetail.vue'),
-        meta: { title: 'Agent 详情', icon: MonitorCog, order: 4, hideInMenu: true },
+        meta: {
+          title: 'Agent 详情',
+          icon: MonitorCog,
+          order: 4,
+          hideInMenu: true,
+          contentScrollable: false,
+        },
       },
       {
         path: '/ai-applications/code-review/projects',

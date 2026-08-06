@@ -76,7 +76,7 @@ func (r conversationRepository) Delete(id snowflake.ID) error {
 				return err
 			}
 			if activeMessageCount > 0 {
-				return errors.New("cannot delete a conversation while the agent is responding")
+				return errors.New("Agent 正在响应时不能删除会话")
 			}
 		}
 
@@ -87,7 +87,7 @@ func (r conversationRepository) Delete(id snowflake.ID) error {
 		}
 		for _, command := range commands {
 			if command.Status == remoteModel.CommandStatusDispatched || command.Status == remoteModel.CommandStatusAcknowledged {
-				return errors.New("cannot delete a conversation while the agent is responding")
+				return errors.New("Agent 正在响应时不能删除会话")
 			}
 		}
 
@@ -109,7 +109,7 @@ func (r conversationRepository) CreateTurn(
 	conversation remoteModel.Conversation,
 	userMessage, assistantMessage remoteModel.Message,
 	command remoteModel.Command,
-	now int64,
+	now int64, source string,
 ) error {
 	return r.db().Transaction(func(tx *gorm.DB) error {
 		var lockedConversation remoteModel.Conversation
@@ -117,9 +117,18 @@ func (r conversationRepository) CreateTurn(
 			return err
 		}
 		if lockedConversation.AgentID != conversation.AgentID {
-			return errors.New("conversation does not belong to the agent")
+			return errors.New("会话不属于当前 Agent")
 		}
 		conversation = lockedConversation
+		if conversation.ControlMode == "" {
+			conversation.ControlMode = remoteModel.ConversationControlModeWeb
+		}
+		if source == "WEB" && conversation.ControlMode == remoteModel.ConversationControlModeWechat {
+			return errors.New("该会话已由微信 Bot 接管，Web 端已暂停控制")
+		}
+		if source == "WECHAT" && conversation.ControlMode != remoteModel.ConversationControlModeWechat {
+			return errors.New("该会话未开启微信接管")
+		}
 		reservation := tx.Model(&remoteModel.Agent{}).
 			Where("id = ? AND status = ? AND current_message_id = 0", conversation.AgentID, remoteModel.AgentStatusOnline).
 			Updates(map[string]any{"status": remoteModel.AgentStatusBusy, "current_message_id": assistantMessage.ID, "updated_at": now})
@@ -127,7 +136,7 @@ func (r conversationRepository) CreateTurn(
 			return reservation.Error
 		}
 		if reservation.RowsAffected == 0 {
-			return errors.New("agent is not online or is processing another message")
+			return errors.New("Agent 不在线或正在处理其他消息")
 		}
 		if err := tx.Create(&userMessage).Error; err != nil {
 			return err
@@ -148,6 +157,54 @@ func (r conversationRepository) CreateTurn(
 		}
 		return tx.Model(&remoteModel.Conversation{}).Where("id = ?", conversation.ID).Updates(updates).Error
 	})
+}
+
+func (r conversationRepository) SetTakeover(id, botID snowflake.ID, userID string, now int64) error {
+	return r.db().Transaction(func(tx *gorm.DB) error {
+		var conversation remoteModel.Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&conversation, id).Error; err != nil {
+			return err
+		}
+		var agent remoteModel.Agent
+		if err := tx.First(&agent, conversation.AgentID).Error; err != nil {
+			return err
+		}
+		if agent.CurrentMessageID != 0 {
+			return errors.New("Agent 正在响应时不能切换接管模式")
+		}
+		var existing remoteModel.Conversation
+		if err := tx.Where("control_mode = ? AND wechat_bot_id = ? AND wechat_user_id = ? AND id <> ?", remoteModel.ConversationControlModeWechat, botID, userID, id).First(&existing).Error; err == nil {
+			return errors.New("该微信联系人已被其他会话接管")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		return tx.Model(&conversation).Updates(map[string]any{"control_mode": remoteModel.ConversationControlModeWechat, "wechat_bot_id": botID, "wechat_user_id": userID, "wechat_takeover_at": now, "updated_at": now}).Error
+	})
+}
+
+func (r conversationRepository) StopTakeover(id snowflake.ID, now int64) error {
+	return r.db().Transaction(func(tx *gorm.DB) error {
+		var conversation remoteModel.Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&conversation, id).Error; err != nil {
+			return err
+		}
+		var agent remoteModel.Agent
+		if err := tx.First(&agent, conversation.AgentID).Error; err != nil {
+			return err
+		}
+		if agent.CurrentMessageID != 0 {
+			return errors.New("Agent 正在响应时不能结束微信接管")
+		}
+		return tx.Model(&conversation).Updates(map[string]any{"control_mode": remoteModel.ConversationControlModeWeb, "wechat_bot_id": 0, "wechat_user_id": "", "wechat_takeover_at": 0, "updated_at": now}).Error
+	})
+}
+
+func (r conversationRepository) ConversationByMessage(messageID snowflake.ID) (remoteModel.Conversation, error) {
+	var message remoteModel.Message
+	if err := r.db().First(&message, messageID).Error; err != nil {
+		return remoteModel.Conversation{}, err
+	}
+	return r.Get(message.ConversationID)
 }
 
 func (r conversationRepository) Claim(agentID snowflake.ID, leaseCutoff, now int64) (*remoteModel.Command, error) {
@@ -198,7 +255,7 @@ func (r conversationRepository) Acknowledge(agentID, commandID snowflake.ID, now
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("conversation command cannot be acknowledged")
+		return errors.New("会话命令当前无法确认")
 	}
 	return nil
 }
@@ -217,7 +274,7 @@ func (r conversationRepository) AppendChunks(agentID snowflake.ID, messageID sno
 			return err
 		}
 		if message.Status != remoteModel.MessageStatusStreaming && message.Status != remoteModel.MessageStatusPending {
-			return errors.New("assistant message is no longer streaming")
+			return errors.New("助手消息已结束流式处理")
 		}
 		if len(chunks) > 0 {
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&chunks).Error; err != nil {
@@ -232,7 +289,7 @@ func (r conversationRepository) AppendChunks(agentID snowflake.ID, messageID sno
 		for _, chunk := range stored {
 			content.WriteString(chunk.Content)
 			if content.Len() > maxAssistantMessageBytes {
-				return errors.New("assistant message cannot exceed 1 MB")
+				return errors.New("助手消息不能超过 1 MB")
 			}
 		}
 		return tx.Model(&remoteModel.Message{}).Where("id = ?", messageID).
@@ -240,11 +297,15 @@ func (r conversationRepository) AppendChunks(agentID snowflake.ID, messageID sno
 	})
 }
 
-func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.MessageResultRequest, now int64) error {
-	return r.db().Transaction(func(tx *gorm.DB) error {
+func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.MessageResultRequest, now int64) (bool, error) {
+	completed := false
+	err := r.db().Transaction(func(tx *gorm.DB) error {
 		var message remoteModel.Message
-		if err := tx.Where("id = ? AND agent_id = ? AND role = ?", result.MessageID, agentID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND agent_id = ? AND role = ?", result.MessageID, agentID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
 			return err
+		}
+		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+			return nil
 		}
 		status := remoteModel.MessageStatusCompleted
 		commandStatus := remoteModel.CommandStatusCompleted
@@ -268,9 +329,14 @@ func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.
 			Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return tx.Model(&remoteModel.Conversation{}).Where("id = ?", message.ConversationID).
-			Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error
+		if err := tx.Model(&remoteModel.Conversation{}).Where("id = ?", message.ConversationID).
+			Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		completed = true
+		return nil
 	})
+	return completed, err
 }
 
 func (r conversationRepository) StreamEvent(messageID snowflake.ID, afterSequence int64) (remoteResp.MessageStreamEvent, error) {

@@ -31,12 +31,19 @@ type botConnection struct {
 
 // Runtime owns the in-process long-poll connection for every enabled Bot.
 type Runtime struct {
-	vault  aiService.CredentialVault
-	mu     sync.RWMutex
-	root   context.Context
-	cancel context.CancelFunc
-	conns  map[snowflake.ID]*botConnection
-	wg     sync.WaitGroup
+	vault          aiService.CredentialVault
+	mu             sync.RWMutex
+	root           context.Context
+	cancel         context.CancelFunc
+	conns          map[snowflake.ID]*botConnection
+	wg             sync.WaitGroup
+	inboundHandler func(snowflake.ID, string, string) error
+}
+
+func (r *Runtime) SetInboundHandler(handler func(snowflake.ID, string, string) error) {
+	r.mu.Lock()
+	r.inboundHandler = handler
+	r.mu.Unlock()
 }
 
 func newRuntime(vault aiService.CredentialVault) *Runtime {
@@ -112,8 +119,18 @@ func (r *Runtime) monitor(ctx context.Context, bot *wechatModel.Bot, conn *botCo
 	}).Error
 
 	err := conn.client.Monitor(ctx, func(message ilink.WeixinMessage) {
-		if saveErr := r.storeInbound(bot.ID, message); saveErr != nil {
+		created, saveErr := r.storeInboundResult(bot.ID, message)
+		if saveErr != nil {
 			logWechatError("store inbound WeChat message", saveErr)
+		} else if created && messageContentType(message) == "text" && strings.TrimSpace(message.FromUserID) != "" {
+			r.mu.RLock()
+			handler := r.inboundHandler
+			r.mu.RUnlock()
+			if handler != nil {
+				if err := handler(bot.ID, message.FromUserID, strings.TrimSpace(ilink.ExtractText(&message))); err != nil {
+					logWechatError("处理微信接管消息", err)
+				}
+			}
 		}
 	}, &ilink.MonitorOptions{
 		InitialBuf: bot.SyncBuf,
@@ -228,6 +245,11 @@ func (r *Runtime) Send(ctx context.Context, botID snowflake.ID, userID, content 
 }
 
 func (r *Runtime) storeInbound(botID snowflake.ID, message ilink.WeixinMessage) error {
+	_, err := r.storeInboundResult(botID, message)
+	return err
+}
+
+func (r *Runtime) storeInboundResult(botID snowflake.ID, message ilink.WeixinMessage) (bool, error) {
 	now := message.CreateTimeMs
 	if now <= 0 {
 		now = time.Now().UnixMilli()
@@ -249,12 +271,12 @@ func (r *Runtime) storeInbound(botID snowflake.ID, message ilink.WeixinMessage) 
 	}
 	created := global.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&record)
 	if created.Error != nil {
-		return created.Error
+		return false, created.Error
 	}
 	if message.ContextToken != "" && message.FromUserID != "" {
 		encryptedToken, err := r.vault.Encrypt(message.ContextToken)
 		if err != nil {
-			return err
+			return false, err
 		}
 		contact := wechatModel.Contact{
 			MODEL: api.MODEL{ID: db.GetId(), CreatedAt: time.Now().UnixMilli()}, BotRecordID: botID,
@@ -272,7 +294,7 @@ func (r *Runtime) storeInbound(botID snowflake.ID, message ilink.WeixinMessage) 
 			Columns:   []clause.Column{{Name: "bot_record_id"}, {Name: "user_id"}},
 			DoUpdates: clause.Assignments(contactUpdates),
 		}).Create(&contact).Error; err != nil {
-			return err
+			return false, err
 		}
 	}
 	updates := map[string]any{"status": wechatModel.BotStatusOnline, "last_error": ""}
@@ -280,7 +302,7 @@ func (r *Runtime) storeInbound(botID snowflake.ID, message ilink.WeixinMessage) 
 		updates["message_count"] = clause.Expr{SQL: "message_count + 1"}
 		updates["last_message_at"] = now
 	}
-	return global.DB.Model(&wechatModel.Bot{}).Where("id = ?", botID).Updates(updates).Error
+	return created.RowsAffected > 0, global.DB.Model(&wechatModel.Bot{}).Where("id = ?", botID).Updates(updates).Error
 }
 
 func messageContentType(message ilink.WeixinMessage) string {

@@ -298,6 +298,8 @@ const showHeader = computed(
   () => themeStore.layoutMode !== 'fullscreen' && themeStore.layoutMode !== 'centered',
 )
 
+const contentScrollable = computed(() => route.meta.contentScrollable !== false)
+
 const hasSidebar = computed(
   () => themeStore.layoutMode === 'sidebar' || themeStore.layoutMode === 'mixed',
 )
@@ -527,7 +529,11 @@ onUnmounted(() => {
           </template>
         </LayoutDoubleSidebar>
 
-        <LayoutContent class="flex-1 min-w-0" :fixed-header="themeStore.tabsFixed">
+        <LayoutContent
+          class="flex-1 min-w-0"
+          :fixed-header="themeStore.tabsFixed"
+          :scrollable="contentScrollable"
+        >
           <template #header>
             <LayoutTabs
               v-if="themeStore.showTabs && tabsStore.tabs.length > 0"
@@ -651,7 +657,11 @@ onUnmounted(() => {
             </template>
           </LayoutSidebarApp>
 
-          <LayoutContent class="flex-1 min-w-0" :fixed-header="themeStore.tabsFixed">
+          <LayoutContent
+            class="flex-1 min-w-0"
+            :fixed-header="themeStore.tabsFixed"
+            :scrollable="contentScrollable"
+          >
             <template #header>
               <LayoutTabs
                 v-if="themeStore.showTabs && tabsStore.tabs.length > 0"
@@ -723,7 +733,10 @@ onUnmounted(() => {
         </template>
       </LayoutSidebarApp>
 
-      <LayoutContent :fixed-header="themeStore.tabsFixed">
+      <LayoutContent
+        :fixed-header="themeStore.tabsFixed"
+        :scrollable="contentScrollable"
+      >
         <template #header>
           <LayoutHeader v-if="showHeader">
             <template #breadcrumb>
@@ -803,7 +816,10 @@ onUnmounted(() => {
         </template>
       </LayoutDoubleSidebar>
 
-      <LayoutContent :fixed-header="themeStore.tabsFixed">
+      <LayoutContent
+        :fixed-header="themeStore.tabsFixed"
+        :scrollable="contentScrollable"
+      >
         <template #header>
           <LayoutHeader v-if="showHeader">
             <template #breadcrumb>
@@ -853,7 +869,10 @@ onUnmounted(() => {
 
     <!-- top-nav 模式 -->
     <template v-else>
-      <LayoutContent :fixed-header="themeStore.tabsFixed">
+      <LayoutContent
+        :fixed-header="themeStore.tabsFixed"
+        :scrollable="contentScrollable"
+      >
         <template #header>
           <LayoutHeader v-if="showHeader">
             <template #logo>

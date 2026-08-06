@@ -25,6 +25,8 @@
     "@tabtab/ui": "workspace:*",
     "@tabtab/utils": "workspace:*",
     "@vueuse/core": "catalog:",
+    "dompurify": "^3.4.13",
+    "marked": "^18.0.9",
     "node-forge": "^1.4.0",
     "pinia": "catalog:",
     "pinia-plugin-persistedstate": "^4.7.1",

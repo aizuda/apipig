@@ -3,6 +3,7 @@ import type { PageResult } from '../ai-gateway'
 
 export type AgentStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'DISABLED'
 export type ConversationStatus = 'ACTIVE'
+export type ConversationControlMode = 'WEB' | 'WECHAT'
 export type CLIType = 'CODEX' | 'CLAUDE'
 export type MessageRole = 'USER' | 'ASSISTANT'
 export type MessageStatus = 'PENDING' | 'STREAMING' | 'COMPLETED' | 'FAILED'
@@ -77,6 +78,10 @@ export interface RemoteConversation {
   lastMessageAt: number
   createdAt: number
   updatedAt: number
+  controlMode: ConversationControlMode
+  wechatBotId?: string
+  wechatUserId?: string
+  wechatTakeoverAt?: number
 }
 
 export interface RemoteMessage {
@@ -173,6 +178,14 @@ export const remoteAgentApi = {
       conversationId,
       content,
     }),
+  startTakeover: (id: string, botId: string, userId: string) =>
+    post<RemoteConversation>('/ai-applications/remote-agent/conversation/takeover/start', {
+      id,
+      botId,
+      userId,
+    }),
+  stopTakeover: (id: string) =>
+    post<RemoteConversation>('/ai-applications/remote-agent/conversation/takeover/stop', { id }),
   streamMessage: (messageId: string, afterSequence: number, signal?: AbortSignal) =>
     postStream(
       '/ai-applications/remote-agent/conversation/message/stream',

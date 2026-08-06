@@ -3,6 +3,19 @@ import { computed, reactive, watch } from 'vue'
 import { Button, Dialog, DialogFixedContent, Input, Label, Textarea } from '@tabtab/ui'
 import type { RemoteAgent, RemoteAgentSaveParams } from '@/api/ai-applications/remote-agent'
 
+const defaultCodexArgs = [
+  '--ask-for-approval',
+  'never',
+  'exec',
+  '--json',
+  '--sandbox',
+  'workspace-write',
+  '-c',
+  'sandbox_workspace_write.network_access=true',
+  '--skip-git-repo-check',
+  '-',
+]
+
 const props = defineProps<{ open: boolean; loading: boolean; agent: RemoteAgent | null }>()
 const emit = defineEmits<{ close: []; submit: [form: RemoteAgentSaveParams] }>()
 type AgentForm = Omit<RemoteAgentSaveParams, 'codexArgs' | 'claudeArgs'> & {
@@ -15,7 +28,7 @@ const form = reactive<AgentForm>({
   name: '',
   workspaceRoot: '.',
   codexCommand: 'codex',
-  codexArgsText: 'exec\n--json\n--full-auto\n--sandbox\nworkspace-write\n--skip-git-repo-check\n-',
+  codexArgsText: defaultCodexArgs.join('\n'),
   claudeCommand: 'claude',
   claudeArgsText: '-p\n--permission-mode\nacceptEdits',
   pollWaitSeconds: 25,
@@ -35,17 +48,7 @@ watch(
       name: agent?.name || '',
       workspaceRoot: agent?.workspaceRoot || '.',
       codexCommand: agent?.codexCommand || 'codex',
-      codexArgsText: (
-        agent?.codexArgs || [
-          'exec',
-          '--json',
-          '--full-auto',
-          '--sandbox',
-          'workspace-write',
-          '--skip-git-repo-check',
-          '-',
-        ]
-      ).join('\n'),
+      codexArgsText: (agent?.codexArgs || defaultCodexArgs).join('\n'),
       claudeCommand: agent?.claudeCommand || 'claude',
       claudeArgsText: (agent?.claudeArgs || ['-p', '--permission-mode', 'acceptEdits']).join('\n'),
       pollWaitSeconds: agent?.pollWaitSeconds || 25,

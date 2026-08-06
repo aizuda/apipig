@@ -161,6 +161,11 @@ func codexStreamingArgs(args []string) []string {
 		switch {
 		case arg == "--json":
 		case arg == "--full-auto":
+		case arg == "--ask-for-approval" || arg == "-a":
+			if index+1 < len(result) {
+				index++
+			}
+		case strings.HasPrefix(arg, "--ask-for-approval=") || strings.HasPrefix(arg, "-a="):
 		case arg == "--dangerously-bypass-approvals-and-sandbox":
 			hasBypass = true
 			normalized = append(normalized, arg)
@@ -169,10 +174,10 @@ func codexStreamingArgs(args []string) []string {
 				index++
 			}
 		case strings.HasPrefix(arg, "--sandbox=") || strings.HasPrefix(arg, "-s="):
-		case (arg == "--config" || arg == "-c") && index+1 < len(result) && isSandboxModeOverride(result[index+1]):
+		case (arg == "--config" || arg == "-c") && index+1 < len(result) && isManagedSandboxOverride(result[index+1]):
 			index++
-		case strings.HasPrefix(arg, "--config=") && isSandboxModeOverride(strings.TrimPrefix(arg, "--config=")):
-		case strings.HasPrefix(arg, "-c=") && isSandboxModeOverride(strings.TrimPrefix(arg, "-c=")):
+		case strings.HasPrefix(arg, "--config=") && isManagedSandboxOverride(strings.TrimPrefix(arg, "--config=")):
+		case strings.HasPrefix(arg, "-c=") && isManagedSandboxOverride(strings.TrimPrefix(arg, "-c=")):
 		default:
 			if index == execIndex {
 				normalizedExecIndex = len(normalized)
@@ -182,18 +187,31 @@ func codexStreamingArgs(args []string) []string {
 	}
 	required := []string{"--json"}
 	if !hasBypass {
-		required = append(required, "--full-auto", "--sandbox", "workspace-write")
+		required = append(required,
+			"--sandbox", "workspace-write",
+			"-c", "sandbox_workspace_write.network_access=true",
+		)
 	}
 	insertAt := normalizedExecIndex + 1
-	withRequired := make([]string, 0, len(normalized)+len(required))
+	globalRequired := make([]string, 0, 2)
+	if !hasBypass {
+		globalRequired = append(globalRequired, "--ask-for-approval", "never")
+	}
+	withRequired := make([]string, 0, len(normalized)+len(required)+len(globalRequired))
+	withRequired = append(withRequired, globalRequired...)
 	withRequired = append(withRequired, normalized[:insertAt]...)
 	withRequired = append(withRequired, required...)
 	return append(withRequired, normalized[insertAt:]...)
 }
 
-func isSandboxModeOverride(value string) bool {
+func isManagedSandboxOverride(value string) bool {
 	key, _, found := strings.Cut(strings.TrimSpace(value), "=")
-	return found && strings.EqualFold(strings.TrimSpace(key), "sandbox_mode")
+	if !found {
+		return false
+	}
+	key = strings.TrimSpace(key)
+	return strings.EqualFold(key, "sandbox_mode") ||
+		strings.EqualFold(key, "sandbox_workspace_write.network_access")
 }
 
 func codexSandboxMode(args []string) string {
@@ -209,6 +227,26 @@ func codexSandboxMode(args []string) string {
 		}
 		if value, found := strings.CutPrefix(arg, "-s="); found {
 			return value
+		}
+	}
+	return "default"
+}
+
+func codexNetworkAccess(args []string) string {
+	for index := 0; index < len(args); index++ {
+		configValue := ""
+		switch {
+		case (args[index] == "--config" || args[index] == "-c") && index+1 < len(args):
+			configValue = args[index+1]
+			index++
+		case strings.HasPrefix(args[index], "--config="):
+			configValue = strings.TrimPrefix(args[index], "--config=")
+		case strings.HasPrefix(args[index], "-c="):
+			configValue = strings.TrimPrefix(args[index], "-c=")
+		}
+		key, value, found := strings.Cut(strings.TrimSpace(configValue), "=")
+		if found && strings.EqualFold(strings.TrimSpace(key), "sandbox_workspace_write.network_access") {
+			return strings.TrimSpace(value)
 		}
 	}
 	return "default"

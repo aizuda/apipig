@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,12 +10,14 @@ import (
 	remoteModel "apipig/app/apps/remote-agent/model"
 	remoteReq "apipig/app/apps/remote-agent/model/request"
 	remoteResp "apipig/app/apps/remote-agent/model/response"
+	wechatModel "apipig/app/apps/wechat-bot/model"
 	coreAPI "apipig/core/api"
 	coreResp "apipig/core/api/response"
 	"apipig/core/db"
 	"apipig/global"
 	"apipig/toolkit/snowflake"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -26,18 +29,72 @@ const (
 )
 
 type ConversationService struct {
-	agentService *AgentService
-	repository   conversationRepository
-	now          func() time.Time
+	agentService   *AgentService
+	repository     conversationRepository
+	now            func() time.Time
+	takeoverSender func(context.Context, snowflake.ID, string, string) error
 }
 
 func NewConversationService(agentService *AgentService) *ConversationService {
 	return &ConversationService{agentService: agentService, repository: conversationRepository{}, now: time.Now}
 }
 
+func (s *ConversationService) SetTakeoverSender(sender func(context.Context, snowflake.ID, string, string) error) {
+	s.takeoverSender = sender
+}
+
+func (s *ConversationService) StartTakeover(request *remoteReq.ConversationTakeoverRequest) (remoteModel.Conversation, error) {
+	if request == nil || request.ID == 0 || request.BotID == 0 || strings.TrimSpace(request.UserID) == "" {
+		return remoteModel.Conversation{}, errors.New("会话、Bot 和联系人不能为空")
+	}
+	var bot wechatModel.Bot
+	if err := global.DB.First(&bot, request.BotID).Error; err != nil {
+		return remoteModel.Conversation{}, errors.New("微信 Bot 不存在")
+	}
+	if !bot.Enabled || bot.Status != wechatModel.BotStatusOnline {
+		return remoteModel.Conversation{}, errors.New("微信 Bot 当前不在线")
+	}
+	var contact wechatModel.Contact
+	if err := global.DB.Where("bot_record_id = ? AND user_id = ?", request.BotID, strings.TrimSpace(request.UserID)).First(&contact).Error; err != nil {
+		return remoteModel.Conversation{}, errors.New("未找到联系人，请先让该用户向 Bot 发送消息")
+	}
+	if s.now().Sub(time.UnixMilli(contact.LastActiveAt)) >= 24*time.Hour {
+		return remoteModel.Conversation{}, errors.New("联系人会话已超过 24 小时，请先让该用户向 Bot 发送消息")
+	}
+	if err := s.repository.SetTakeover(request.ID, request.BotID, strings.TrimSpace(request.UserID), s.now().UnixMilli()); err != nil {
+		return remoteModel.Conversation{}, err
+	}
+	return s.repository.Get(request.ID)
+}
+
+func (s *ConversationService) StopTakeover(request *remoteReq.ConversationTakeoverRequest) (remoteModel.Conversation, error) {
+	if request == nil || request.ID == 0 {
+		return remoteModel.Conversation{}, errors.New("会话 ID 不能为空")
+	}
+	if err := s.repository.StopTakeover(request.ID, s.now().UnixMilli()); err != nil {
+		return remoteModel.Conversation{}, err
+	}
+	return s.repository.Get(request.ID)
+}
+
+func (s *ConversationService) HandleWechatInbound(botID snowflake.ID, userID, content string) error {
+	if botID == 0 || strings.TrimSpace(userID) == "" || strings.TrimSpace(content) == "" {
+		return nil
+	}
+	var conversation remoteModel.Conversation
+	if err := global.DB.Where("control_mode = ? AND wechat_bot_id = ? AND wechat_user_id = ?", remoteModel.ConversationControlModeWechat, botID, userID).First(&conversation).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	_, err := s.send(conversation.ID, content, "WECHAT")
+	return err
+}
+
 func (s *ConversationService) Create(request *remoteReq.ConversationCreateRequest) (remoteModel.Conversation, error) {
 	if request == nil || request.AgentID == 0 {
-		return remoteModel.Conversation{}, errors.New("agent ID is required")
+		return remoteModel.Conversation{}, errors.New("Agent ID 不能为空")
 	}
 	if _, err := s.agentService.repository.Get(request.AgentID); err != nil {
 		return remoteModel.Conversation{}, err
@@ -47,11 +104,11 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 		title = "新会话"
 	}
 	if len([]rune(title)) > 200 {
-		return remoteModel.Conversation{}, errors.New("title cannot exceed 200 characters")
+		return remoteModel.Conversation{}, errors.New("标题不能超过 200 个字符")
 	}
 	cliType := strings.ToUpper(strings.TrimSpace(request.CLIType))
 	if cliType != remoteModel.CLITypeCodex && cliType != remoteModel.CLITypeClaude {
-		return remoteModel.Conversation{}, errors.New("cliType must be CODEX or CLAUDE")
+		return remoteModel.Conversation{}, errors.New("CLI 类型必须是 CODEX 或 CLAUDE")
 	}
 	conversationID := db.GetId()
 	workingDirectory := strings.TrimSpace(request.WorkingDirectory)
@@ -59,40 +116,40 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 		workingDirectory = "."
 	}
 	if len([]rune(workingDirectory)) > 500 {
-		return remoteModel.Conversation{}, errors.New("workingDirectory cannot exceed 500 characters")
+		return remoteModel.Conversation{}, errors.New("工作目录不能超过 500 个字符")
 	}
 	if strings.ContainsRune(workingDirectory, '\x00') {
-		return remoteModel.Conversation{}, errors.New("workingDirectory contains invalid characters")
+		return remoteModel.Conversation{}, errors.New("工作目录包含无效字符")
 	}
 	normalizedDirectory := strings.ReplaceAll(workingDirectory, "\\", "/")
 	if strings.HasPrefix(normalizedDirectory, "/") ||
 		(len(normalizedDirectory) >= 2 && normalizedDirectory[1] == ':') {
-		return remoteModel.Conversation{}, errors.New("workingDirectory must be relative to workspace-root")
+		return remoteModel.Conversation{}, errors.New("工作目录必须是相对于 workspace-root 的路径")
 	}
 	for _, segment := range strings.Split(normalizedDirectory, "/") {
 		if segment == ".." {
-			return remoteModel.Conversation{}, errors.New("workingDirectory cannot traverse outside workspace-root")
+			return remoteModel.Conversation{}, errors.New("工作目录不能越出 workspace-root")
 		}
 	}
 	now := s.now().UnixMilli()
 	conversation := remoteModel.Conversation{
 		MODEL:   coreAPI.MODEL{ID: conversationID, CreatedBy: "admin", CreatedAt: now, UpdatedAt: now},
 		AgentID: request.AgentID, Title: title, CLIType: cliType, WorkingDirectory: workingDirectory,
-		Status: remoteModel.ConversationStatusActive, LastMessageAt: now,
+		Status: remoteModel.ConversationStatusActive, LastMessageAt: now, ControlMode: remoteModel.ConversationControlModeWeb,
 	}
 	return conversation, s.repository.Create(&conversation)
 }
 
 func (s *ConversationService) Page(params *remoteReq.ConversationPageParams) (coreResp.PageResult, error) {
 	if params == nil || params.AgentID == 0 {
-		return coreResp.PageResult{}, errors.New("agent ID is required")
+		return coreResp.PageResult{}, errors.New("Agent ID 不能为空")
 	}
 	return s.repository.Page(params)
 }
 
 func (s *ConversationService) Get(id snowflake.ID) (remoteResp.ConversationDetail, error) {
 	if id == 0 {
-		return remoteResp.ConversationDetail{}, errors.New("conversation ID is required")
+		return remoteResp.ConversationDetail{}, errors.New("会话 ID 不能为空")
 	}
 	conversation, err := s.repository.Get(id)
 	if err != nil {
@@ -107,7 +164,7 @@ func (s *ConversationService) Get(id snowflake.ID) (remoteResp.ConversationDetai
 
 func (s *ConversationService) Pin(request *remoteReq.ConversationPinRequest) (remoteModel.Conversation, error) {
 	if request == nil || request.ID == 0 {
-		return remoteModel.Conversation{}, errors.New("conversation ID is required")
+		return remoteModel.Conversation{}, errors.New("会话 ID 不能为空")
 	}
 	conversation, err := s.repository.Get(request.ID)
 	if err != nil {
@@ -132,14 +189,14 @@ func (s *ConversationService) Pin(request *remoteReq.ConversationPinRequest) (re
 
 func (s *ConversationService) Rename(request *remoteReq.ConversationRenameRequest) (remoteModel.Conversation, error) {
 	if request == nil || request.ID == 0 {
-		return remoteModel.Conversation{}, errors.New("conversation ID is required")
+		return remoteModel.Conversation{}, errors.New("会话 ID 不能为空")
 	}
 	title := strings.TrimSpace(request.Title)
 	if title == "" {
-		return remoteModel.Conversation{}, errors.New("conversation title is required")
+		return remoteModel.Conversation{}, errors.New("会话标题不能为空")
 	}
 	if len([]rune(title)) > 200 {
-		return remoteModel.Conversation{}, errors.New("title cannot exceed 200 characters")
+		return remoteModel.Conversation{}, errors.New("标题不能超过 200 个字符")
 	}
 	conversation, err := s.repository.Get(request.ID)
 	if err != nil {
@@ -159,31 +216,44 @@ func (s *ConversationService) Rename(request *remoteReq.ConversationRenameReques
 
 func (s *ConversationService) Delete(request *remoteReq.ConversationDeleteRequest) (bool, error) {
 	if request == nil || request.ID == 0 {
-		return false, errors.New("conversation ID is required")
+		return false, errors.New("会话 ID 不能为空")
 	}
 	return true, s.repository.Delete(request.ID)
 }
 
 func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remoteResp.SendMessageResult, error) {
 	if request == nil || request.ConversationID == 0 {
-		return remoteResp.SendMessageResult{}, errors.New("conversation ID is required")
+		return remoteResp.SendMessageResult{}, errors.New("会话 ID 不能为空")
 	}
 	content := strings.TrimSpace(request.Content)
 	if content == "" {
-		return remoteResp.SendMessageResult{}, errors.New("message content is required")
+		return remoteResp.SendMessageResult{}, errors.New("消息内容不能为空")
 	}
 	if len([]byte(content)) > 128*1024 {
-		return remoteResp.SendMessageResult{}, errors.New("message content cannot exceed 128 KB")
+		return remoteResp.SendMessageResult{}, errors.New("消息内容不能超过 128 KB")
 	}
+	return s.send(request.ConversationID, content, "WEB")
+}
+
+func (s *ConversationService) send(conversationID snowflake.ID, content, source string) (remoteResp.SendMessageResult, error) {
 	if err := s.agentService.MarkOffline(); err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
-	conversation, err := s.repository.Get(request.ConversationID)
+	conversation, err := s.repository.Get(conversationID)
 	if err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
 	if err := validateConversationExecution(conversation); err != nil {
 		return remoteResp.SendMessageResult{}, err
+	}
+	if conversation.ControlMode == "" {
+		conversation.ControlMode = remoteModel.ConversationControlModeWeb
+	}
+	if source == "WEB" && conversation.ControlMode == remoteModel.ConversationControlModeWechat {
+		return remoteResp.SendMessageResult{}, errors.New("该会话已由微信 Bot 接管，Web 端已暂停控制")
+	}
+	if source == "WECHAT" && conversation.ControlMode != remoteModel.ConversationControlModeWechat {
+		return remoteResp.SendMessageResult{}, errors.New("该会话未开启微信接管")
 	}
 	messages, err := s.repository.Messages(conversation.ID)
 	if err != nil {
@@ -195,7 +265,7 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 		sequence = messages[len(messages)-1].Sequence + 1
 	}
 	userMessage := remoteModel.Message{
-		MODEL:          coreAPI.MODEL{ID: db.GetId(), CreatedBy: "admin", CreatedAt: now, UpdatedAt: now},
+		MODEL:          coreAPI.MODEL{ID: db.GetId(), CreatedBy: map[bool]string{true: "wechat-bot", false: "admin"}[source == "WECHAT"], CreatedAt: now, UpdatedAt: now},
 		ConversationID: conversation.ID, AgentID: conversation.AgentID, Sequence: sequence,
 		Role: remoteModel.MessageRoleUser, Status: remoteModel.MessageStatusCompleted, Content: content,
 	}
@@ -210,7 +280,7 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 		AssistantMessageID: assistantMessage.ID, Type: remoteModel.CommandTypeConversationTurn,
 		Payload: buildConversationPrompt(messages, content), Status: remoteModel.CommandStatusPending,
 	}
-	if err := s.repository.CreateTurn(conversation, userMessage, assistantMessage, command, now); err != nil {
+	if err := s.repository.CreateTurn(conversation, userMessage, assistantMessage, command, now, source); err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
 	return remoteResp.SendMessageResult{UserMessage: userMessage, AssistantMessage: assistantMessage}, nil
@@ -218,7 +288,7 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 
 func (s *ConversationService) NextCommand(params *remoteReq.NextCommandParams) (*remoteResp.CommandDispatch, error) {
 	if params == nil {
-		return nil, errors.New("command parameters are required")
+		return nil, errors.New("命令参数不能为空")
 	}
 	agent, err := s.agentService.Authenticate(params.AgentToken)
 	if err != nil {
@@ -271,7 +341,7 @@ func (s *ConversationService) NextCommand(params *remoteReq.NextCommandParams) (
 
 func (s *ConversationService) Acknowledge(params *remoteReq.AcknowledgeCommandParams) (bool, error) {
 	if params == nil || params.CommandID == 0 {
-		return false, errors.New("command ID is required")
+		return false, errors.New("命令 ID 不能为空")
 	}
 	agent, err := s.agentService.Authenticate(params.AgentToken)
 	if err != nil {
@@ -282,23 +352,23 @@ func (s *ConversationService) Acknowledge(params *remoteReq.AcknowledgeCommandPa
 
 func (s *ConversationService) AppendChunks(params *remoteReq.MessageChunkUploadParams) (bool, error) {
 	if params == nil || params.Request.MessageID == 0 {
-		return false, errors.New("message ID is required")
+		return false, errors.New("消息 ID 不能为空")
 	}
 	agent, err := s.agentService.Authenticate(params.AgentToken)
 	if err != nil {
 		return false, err
 	}
 	if len(params.Request.Chunks) == 0 || len(params.Request.Chunks) > 200 {
-		return false, errors.New("chunks must contain between 1 and 200 entries")
+		return false, errors.New("消息分片数量必须在 1 到 200 之间")
 	}
 	now := s.now().UnixMilli()
 	chunks := make([]remoteModel.MessageChunk, 0, len(params.Request.Chunks))
 	for _, entry := range params.Request.Chunks {
 		if entry.Sequence <= 0 || entry.Content == "" {
-			return false, errors.New("invalid message chunk")
+			return false, errors.New("消息分片无效")
 		}
 		if len([]byte(entry.Content)) > maxMessageChunkBytes {
-			return false, errors.New("message chunk cannot exceed 32 KB")
+			return false, errors.New("单个消息分片不能超过 32 KB")
 		}
 		chunks = append(chunks, remoteModel.MessageChunk{
 			MODEL:     coreAPI.MODEL{ID: db.GetId(), CreatedBy: "remote-agent", CreatedAt: now},
@@ -310,24 +380,43 @@ func (s *ConversationService) AppendChunks(params *remoteReq.MessageChunkUploadP
 
 func (s *ConversationService) Complete(params *remoteReq.MessageResultParams) (bool, error) {
 	if params == nil || params.Request.MessageID == 0 {
-		return false, errors.New("message ID is required")
+		return false, errors.New("消息 ID 不能为空")
 	}
 	agent, err := s.agentService.Authenticate(params.AgentToken)
 	if err != nil {
 		return false, err
 	}
 	if len([]byte(params.Request.Content)) > maxAssistantMessageBytes {
-		return false, errors.New("assistant message cannot exceed 1 MB")
+		return false, errors.New("助手消息不能超过 1 MB")
 	}
 	if len([]byte(params.Request.ErrorMessage)) > maxMessageErrorBytes {
-		return false, errors.New("message error cannot exceed 64 KB")
+		return false, errors.New("消息错误信息不能超过 64 KB")
 	}
-	return true, s.repository.Complete(agent.ID, params.Request, s.now().UnixMilli())
+	conversation, err := s.repository.ConversationByMessage(params.Request.MessageID)
+	if err != nil {
+		return false, err
+	}
+	completed, err := s.repository.Complete(agent.ID, params.Request, s.now().UnixMilli())
+	if err != nil {
+		return false, err
+	}
+	if completed && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
+		content := params.Request.Content
+		if !params.Request.Success {
+			content = "Agent 执行失败：" + params.Request.ErrorMessage
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		if err := s.takeoverSender(ctx, conversation.WechatBotID, conversation.WechatUserID, content); err != nil && global.LOG != nil {
+			global.LOG.Error("微信接管回复发送失败", zap.Error(err))
+		}
+		cancel()
+	}
+	return true, nil
 }
 
 func (s *ConversationService) Stream(params *remoteReq.MessageStreamParams) (remoteResp.MessageStreamEvent, error) {
 	if params == nil || params.MessageID == 0 {
-		return remoteResp.MessageStreamEvent{}, errors.New("message ID is required")
+		return remoteResp.MessageStreamEvent{}, errors.New("消息 ID 不能为空")
 	}
 	if params.AfterSequence < 0 {
 		params.AfterSequence = 0
@@ -339,10 +428,10 @@ func validateConversationExecution(conversation remoteModel.Conversation) error 
 	switch strings.ToUpper(strings.TrimSpace(conversation.CLIType)) {
 	case remoteModel.CLITypeCodex, remoteModel.CLITypeClaude:
 	default:
-		return errors.New("conversation cliType must be CODEX or CLAUDE")
+		return errors.New("会话 CLI 类型必须是 CODEX 或 CLAUDE")
 	}
 	if strings.TrimSpace(conversation.WorkingDirectory) == "" {
-		return errors.New("conversation workingDirectory is required")
+		return errors.New("会话工作目录不能为空")
 	}
 	return nil
 }

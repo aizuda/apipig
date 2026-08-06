@@ -75,7 +75,11 @@ func TestCodexCommandEnablesStructuredStreaming(t *testing.T) {
 	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-"}, args)
+	assert.Equal(t, []string{
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true",
+		"--skip-git-repo-check", "-",
+	}, args)
 	assert.Equal(t, []string{"exec", "--skip-git-repo-check", "-"}, executor.config.CodexArgs)
 }
 
@@ -88,23 +92,27 @@ func TestCodexCommandOverridesReadOnlySandbox(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"exec", "--json", "--full-auto", "--sandbox", "workspace-write", "--skip-git-repo-check", "-",
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true", "--skip-git-repo-check", "-",
 	}, args)
 }
 
 func TestCodexCommandOverridesReadOnlyGlobalAndConfigArguments(t *testing.T) {
 	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
-		"--profile", "automation", "--sandbox", "read-only", "-c", `sandbox_mode="read-only"`,
-		"exec", "--config=sandbox_mode='read-only'", "--json", "-",
+		"--profile", "automation", "-a", "untrusted", "--sandbox", "read-only", "-c", `sandbox_mode="read-only"`,
+		"exec", "--config=sandbox_mode='read-only'",
+		"--config=sandbox_workspace_write.network_access=false", "--json", "-",
 	}})
 
 	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
-		"--profile", "automation", "exec", "--json", "--full-auto", "--sandbox", "workspace-write", "-",
+		"--ask-for-approval", "never", "--profile", "automation", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true", "-",
 	}, args)
 	assert.Equal(t, "workspace-write", codexSandboxMode(args))
+	assert.Equal(t, "true", codexNetworkAccess(args))
 }
 
 func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
@@ -119,6 +127,7 @@ func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
 		"--dangerously-bypass-approvals-and-sandbox", "exec", "--json", "-",
 	}, args)
 	assert.Equal(t, "danger-full-access", codexSandboxMode(args))
+	assert.Equal(t, "default", codexNetworkAccess(args))
 }
 
 func TestCodexJSONStreamEmitsProgressAndKeepsFinalAnswer(t *testing.T) {

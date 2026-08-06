@@ -17,6 +17,7 @@ import {
   Pencil,
   Pin,
   Send,
+  Smartphone,
   Trash2,
   User,
 } from '@lucide/vue'
@@ -51,7 +52,13 @@ import {
   type RemoteConversation,
   type RemoteMessage,
 } from '@/api/ai-applications/remote-agent'
+import {
+  wechatBotApi,
+  type WechatBot,
+  type WechatContact,
+} from '@/api/ai-applications/wechat-bot'
 import { useTabsStore } from '@/stores/tabs'
+import MarkdownContent from './components/MarkdownContent.vue'
 import { agentStatusLabel, agentStatusVariant, formatTime } from './presentation'
 
 defineOptions({ name: 'RemoteAgentAgentDetail' })
@@ -77,12 +84,96 @@ const newConversationCLI = ref<CLIType>('CODEX')
 const newConversationWorkingDirectory = ref('.')
 const creatingConversation = ref(false)
 const refreshingAgentStatus = ref(false)
+const takeoverOpen = ref(false)
+const takeoverBots = ref<WechatBot[]>([])
+const takeoverContacts = ref<WechatContact[]>([])
+const takeoverBotId = ref('')
+const takeoverUserId = ref('')
+const takeoverLoading = ref(false)
+const takeoverSyncing = ref(false)
 const viewport = ref<HTMLElement | null>(null)
 const agentId = computed(() => String(route.params.id || ''))
 const agent = computed(() => detail.value?.agent)
 const canSend = computed(
-  () => agent.value?.status === 'ONLINE' && Boolean(selectedConversation.value) && !sending.value,
+  () =>
+    agent.value?.status === 'ONLINE' &&
+    Boolean(selectedConversation.value) &&
+    selectedConversation.value?.controlMode !== 'WECHAT' &&
+    !sending.value,
 )
+
+async function openTakeover() {
+  if (!selectedConversation.value) return
+  takeoverOpen.value = true
+  takeoverLoading.value = true
+  takeoverBotId.value = ''
+  takeoverUserId.value = ''
+  takeoverContacts.value = []
+  try {
+    const result = await wechatBotApi.page({ page: 1, pageSize: 100, status: 'ONLINE' })
+    takeoverBots.value = (result.records || []).filter((bot) => bot.enabled && bot.status === 'ONLINE')
+    if (takeoverBots.value.length === 1) {
+      takeoverBotId.value = takeoverBots.value[0]!.id
+      await loadTakeoverContacts()
+    }
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '加载微信 Bot 失败')
+  } finally {
+    takeoverLoading.value = false
+  }
+}
+
+async function loadTakeoverContacts() {
+  takeoverUserId.value = ''
+  takeoverContacts.value = []
+  if (!takeoverBotId.value) return
+  takeoverLoading.value = true
+  try {
+    takeoverContacts.value = (await wechatBotApi.contacts(takeoverBotId.value)).filter(
+      (contact) => contact.canSend,
+    )
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '加载微信联系人失败')
+  } finally {
+    takeoverLoading.value = false
+  }
+}
+
+async function startTakeover() {
+  if (!selectedConversation.value || !takeoverBotId.value || !takeoverUserId.value) return
+  takeoverLoading.value = true
+  try {
+    const updated = await remoteAgentApi.startTakeover(
+      selectedConversation.value.id,
+      takeoverBotId.value,
+      takeoverUserId.value,
+    )
+    selectedConversation.value = updated
+    conversations.value = conversations.value.map((item) => (item.id === updated.id ? updated : item))
+    prompt.value = ''
+    takeoverOpen.value = false
+    toast.success('微信 Bot 已接管当前会话')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '开启微信接管失败')
+  } finally {
+    takeoverLoading.value = false
+  }
+}
+
+async function stopTakeover() {
+  if (!selectedConversation.value || takeoverLoading.value) return
+  takeoverLoading.value = true
+  try {
+    const updated = await remoteAgentApi.stopTakeover(selectedConversation.value.id)
+    selectedConversation.value = updated
+    conversations.value = conversations.value.map((item) => (item.id === updated.id ? updated : item))
+    toast.success('已恢复 Web 端控制')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '结束微信接管失败')
+  } finally {
+    takeoverLoading.value = false
+  }
+}
 const canRenameConversation = computed(() => {
   const title = renameConversationTitle.value.trim()
   return (
@@ -155,6 +246,37 @@ async function refreshAgentStatus() {
     // A transient status refresh failure must not interrupt the active conversation.
   } finally {
     refreshingAgentStatus.value = false
+  }
+}
+
+async function syncTakeoverConversation() {
+  const current = selectedConversation.value
+  if (current?.controlMode !== 'WECHAT' || takeoverSyncing.value || streamController) return
+  takeoverSyncing.value = true
+  try {
+    const result = await remoteAgentApi.getConversation(current.id)
+    if (selectedConversation.value?.id !== current.id) return
+    selectedConversation.value = result.conversation
+    conversations.value = conversations.value.map((item) =>
+      item.id === result.conversation.id ? result.conversation : item,
+    )
+    const previousLastId = messages.value.at(-1)?.id
+    const nextLastId = result.messages.at(-1)?.id
+    if (previousLastId !== nextLastId) {
+      messages.value = result.messages || []
+      const active = [...messages.value]
+        .reverse()
+        .find(
+          (item) =>
+            item.role === 'ASSISTANT' &&
+            (item.status === 'PENDING' || item.status === 'STREAMING'),
+        )
+      if (active) void streamMessage(active)
+    }
+  } catch {
+    // The next poll will retry without interrupting the visible conversation.
+  } finally {
+    takeoverSyncing.value = false
   }
 }
 
@@ -480,7 +602,10 @@ function startStatusRefresh() {
   window.clearInterval(statusRefreshTimer)
   void refreshAgentStatus()
   statusRefreshTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') void refreshAgentStatus()
+    if (document.visibilityState === 'visible') {
+      void refreshAgentStatus()
+      void syncTakeoverConversation()
+    }
   }, 3000)
 }
 
@@ -504,7 +629,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden border bg-background">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden border bg-background">
     <header class="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b px-4 py-2">
       <div class="flex min-w-0 items-center gap-3">
         <Button
@@ -526,7 +651,9 @@ onBeforeUnmount(() => {
       }}</Badge>
     </header>
 
-    <div class="grid min-h-0 flex-1 md:grid-cols-[280px_minmax(0,1fr)]">
+    <div
+      class="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[280px_minmax(0,1fr)]"
+    >
       <aside class="flex min-h-0 flex-col border-b md:border-b-0 md:border-r">
         <div class="flex items-center justify-between border-b px-3 py-2">
           <span class="text-sm font-medium">会话</span>
@@ -556,7 +683,10 @@ onBeforeUnmount(() => {
               </div>
               <div class="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{{ formatTime(conversation.lastMessageAt) }}</span>
-                <Pin v-if="conversation.pinned" class="h-3.5 w-3.5" />
+                <span class="flex items-center gap-2">
+                  <Smartphone v-if="conversation.controlMode === 'WECHAT'" class="h-3.5 w-3.5" />
+                  <Pin v-if="conversation.pinned" class="h-3.5 w-3.5" />
+                </span>
               </div>
             </button>
             <DropdownMenu v-if="selectedConversation?.id === conversation.id">
@@ -604,8 +734,8 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <main class="flex min-h-[540px] min-w-0 flex-col">
-        <div class="flex h-12 items-center border-b px-4">
+      <main class="flex min-h-0 min-w-0 flex-col">
+        <div class="flex min-h-12 items-center justify-between gap-3 border-b px-4 py-2">
           <div class="min-w-0">
             <div class="truncate text-sm font-medium">
               {{ selectedConversation?.title || '选择或新建会话' }}
@@ -614,9 +744,26 @@ onBeforeUnmount(() => {
               {{ selectedConversation.cliType }} · {{ selectedConversation.workingDirectory }}
             </div>
           </div>
+          <div v-if="selectedConversation" class="flex shrink-0 items-center gap-2">
+            <Badge v-if="selectedConversation.controlMode === 'WECHAT'" variant="secondary">
+              <Smartphone class="mr-1 h-3.5 w-3.5" />微信接管中
+            </Badge>
+            <Button
+              size="sm"
+              :variant="selectedConversation.controlMode === 'WECHAT' ? 'outline' : 'default'"
+              :disabled="takeoverLoading || agent?.status === 'BUSY'"
+              @click="selectedConversation.controlMode === 'WECHAT' ? stopTakeover() : openTakeover()"
+            >
+              <Smartphone class="h-4 w-4" />
+              {{ selectedConversation.controlMode === 'WECHAT' ? '结束接管' : '微信接管' }}
+            </Button>
+          </div>
         </div>
 
-        <div ref="viewport" class="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-8">
+        <div
+          ref="viewport"
+          class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5 sm:px-8"
+        >
           <div v-if="messages.length" class="mx-auto max-w-4xl space-y-6">
             <article
               v-for="message in messages"
@@ -650,11 +797,13 @@ onBeforeUnmount(() => {
                     formatTime(message.createdAt)
                   }}</span>
                 </div>
-                <div class="whitespace-pre-wrap break-words text-sm leading-6">
-                  {{
-                    message.content ||
-                    (message.status === 'PENDING' ? '等待 Agent 响应...' : '正在响应...')
-                  }}
+                <MarkdownContent
+                  v-if="message.content"
+                  :content="message.content"
+                  :align="message.role === 'USER' ? 'right' : 'left'"
+                />
+                <div v-else class="text-sm leading-6 text-muted-foreground">
+                  {{ message.status === 'PENDING' ? '等待 Agent 响应...' : '正在响应...' }}
                 </div>
                 <p
                   v-if="message.errorMessage"
@@ -681,9 +830,11 @@ onBeforeUnmount(() => {
               v-model="prompt"
               rows="3"
               class="min-h-20 flex-1 resize-none"
-              :disabled="!selectedConversation"
+              :disabled="!selectedConversation || selectedConversation.controlMode === 'WECHAT'"
               :placeholder="
-                agent?.status === 'ONLINE'
+                selectedConversation?.controlMode === 'WECHAT'
+                  ? '微信 Bot 接管中，Web 端已暂停控制'
+                  : agent?.status === 'ONLINE'
                   ? '输入消息，Enter 发送，Shift + Enter 换行'
                   : 'Agent 在线后可发送消息'
               "
@@ -701,6 +852,51 @@ onBeforeUnmount(() => {
         </div>
       </main>
     </div>
+
+    <Dialog :open="takeoverOpen" @update:open="(open) => !takeoverLoading && (takeoverOpen = open)">
+      <DialogFixedContent title="微信 Bot 接管" class="sm:max-w-md">
+        <div class="space-y-4">
+          <div class="space-y-1.5">
+            <Label for="takeover-bot">微信 Bot</Label>
+            <select
+              id="takeover-bot"
+              v-model="takeoverBotId"
+              class="h-10 w-full border bg-background px-3 text-sm"
+              :disabled="takeoverLoading"
+              @change="loadTakeoverContacts"
+            >
+              <option value="">选择在线 Bot</option>
+              <option v-for="botItem in takeoverBots" :key="botItem.id" :value="botItem.id">
+                {{ botItem.name }}
+              </option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="takeover-contact">接管联系人</Label>
+            <select
+              id="takeover-contact"
+              v-model="takeoverUserId"
+              class="h-10 w-full border bg-background px-3 text-sm"
+              :disabled="takeoverLoading || !takeoverBotId"
+            >
+              <option value="">选择 24 小时内活跃的联系人</option>
+              <option v-for="contact in takeoverContacts" :key="contact.id" :value="contact.userId">
+                {{ contact.userId }} · {{ contact.lastMessage || '暂无消息' }}
+              </option>
+            </select>
+          </div>
+          <p class="text-xs leading-5 text-muted-foreground">
+            接管后，该联系人的文本消息将发送给当前 Agent，回复自动回发微信；Web 端仍可查看消息，但暂停发送。
+          </p>
+          <div class="flex justify-end gap-2">
+            <Button variant="outline" :disabled="takeoverLoading" @click="takeoverOpen = false">取消</Button>
+            <Button :disabled="takeoverLoading || !takeoverBotId || !takeoverUserId" @click="startTakeover">
+              <Smartphone class="h-4 w-4" />开始接管
+            </Button>
+          </div>
+        </div>
+      </DialogFixedContent>
+    </Dialog>
 
     <Dialog
       :open="newConversationOpen"

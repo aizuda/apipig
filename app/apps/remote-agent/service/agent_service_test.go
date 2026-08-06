@@ -30,6 +30,8 @@ func TestCreateAndRegisterUsesOneAgentRecord(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, credential.ConfigYAML, "controller-url: https://controller.example.com/admin")
+	assert.Contains(t, credential.ConfigYAML, "sandbox_workspace_write.network_access=true")
+	assert.NotContains(t, credential.ConfigYAML, "--full-auto")
 	registration, err := service.Register(&remoteReq.RegisterParams{
 		BootstrapToken: credential.RegistrationToken, IPAddress: "192.0.2.10",
 		Request: remoteReq.RegisterRequest{AgentKey: "node-key-1", Hostname: "workstation-1", OperatingSystem: "linux"},
@@ -53,7 +55,7 @@ func TestRegistrationRequiresPreconfiguredAgent(t *testing.T) {
 		BootstrapToken: "unknown",
 		Request:        remoteReq.RegisterRequest{AgentKey: "missing", Hostname: "host"},
 	})
-	require.EqualError(t, err, "remote agent \"missing\" has not been added in the controller")
+	require.EqualError(t, err, "控制端尚未添加远程 Agent \"missing\"")
 }
 
 func TestAgentKeyAllowsOnlyLettersNumbersHyphensAndUnderscores(t *testing.T) {
@@ -61,7 +63,7 @@ func TestAgentKeyAllowsOnlyLettersNumbersHyphensAndUnderscores(t *testing.T) {
 		assert.NoError(t, validateAgentKey(valid), valid)
 	}
 	for _, invalid := range []string{"agent key", "agent.key", "节点-01", "agent@01"} {
-		require.EqualError(t, validateAgentKey(invalid), "agentKey can only contain letters, numbers, hyphens, and underscores", invalid)
+		require.EqualError(t, validateAgentKey(invalid), "Agent Key 只能包含字母、数字、连字符和下划线", invalid)
 	}
 }
 
@@ -72,7 +74,7 @@ func TestRotateTokenRejectsOnlineAgent(t *testing.T) {
 	_, err := service.RotateToken(&remoteReq.AgentRotateTokenParams{
 		ID: agent.ID, ControllerURL: "https://controller.example.com",
 	})
-	require.EqualError(t, err, "registration token can only be reset while the agent is offline or disabled")
+	require.EqualError(t, err, "只有离线或已禁用的 Agent 才能重置注册令牌")
 }
 
 func TestDeleteAgentRemovesAssociatedData(t *testing.T) {
@@ -143,7 +145,7 @@ func TestDeleteAgentRejectsActiveResponse(t *testing.T) {
 
 	_, err := NewAgentService().Delete(&remoteReq.AgentDeleteRequest{ID: agent.ID})
 
-	require.EqualError(t, err, "cannot delete an agent while it is responding")
+	require.EqualError(t, err, "Agent 正在响应时不能删除")
 }
 
 func TestHeartbeatAndMarkOffline(t *testing.T) {

@@ -5,11 +5,14 @@ name: Workstation 01
 workspace-root: D:/gowork
 codex-command: codex
 codex-args:
+  - --ask-for-approval
+  - never
   - exec
   - --json
-  - --full-auto
   - --sandbox
   - workspace-write
+  - -c
+  - sandbox_workspace_write.network_access=true
   - --skip-git-repo-check
   - "-"
 claude-command: claude

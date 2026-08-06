@@ -1,16 +1,59 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	remoteModel "apipig/app/apps/remote-agent/model"
 	remoteReq "apipig/app/apps/remote-agent/model/request"
+	"apipig/toolkit/snowflake"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestWechatTakeoverBlocksWebAndRoutesMessages(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "takeover-node", "registration", remoteModel.AgentStatusOnline)
+	require.NoError(t, database.Model(&agent).Updates(map[string]any{
+		"token_hash": hashAgentToken("runtime-token"), "status": remoteModel.AgentStatusOnline,
+		"last_seen_at": time.Now().UnixMilli(),
+	}).Error)
+	service := NewConversationService(NewAgentService())
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
+	require.NoError(t, err)
+	botID := snowflake.ID(9001)
+	require.NoError(t, service.repository.SetTakeover(conversation.ID, botID, "wx-user", time.Now().UnixMilli()))
+
+	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "from web"})
+	require.EqualError(t, err, "该会话已由微信 Bot 接管，Web 端已暂停控制")
+	require.NoError(t, service.HandleWechatInbound(botID, "other-user", "ignored"))
+	require.NoError(t, service.HandleWechatInbound(botID, "wx-user", "from wechat"))
+
+	command, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	require.NoError(t, err)
+	require.NotNil(t, command)
+	assert.Contains(t, command.Prompt, "from wechat")
+	var sentBotID snowflake.ID
+	var sentUserID, sentContent string
+	service.SetTakeoverSender(func(_ context.Context, botID snowflake.ID, userID, content string) error {
+		sentBotID, sentUserID, sentContent = botID, userID, content
+		return nil
+	})
+	_, err = service.Complete(&remoteReq.MessageResultParams{AgentToken: "runtime-token", Request: remoteReq.MessageResultRequest{
+		MessageID: command.AssistantMessageID, Success: true, Content: "reply to wechat",
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, botID, sentBotID)
+	assert.Equal(t, "wx-user", sentUserID)
+	assert.Equal(t, "reply to wechat", sentContent)
+
+	stopped, err := service.StopTakeover(&remoteReq.ConversationTakeoverRequest{ID: conversation.ID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.ConversationControlModeWeb, stopped.ControlMode)
+}
 
 func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
@@ -28,11 +71,11 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	assert.Equal(t, remoteModel.CLITypeClaude, conversation.CLIType)
 	assert.Equal(t, "projects/api", conversation.WorkingDirectory)
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: "SHELL"})
-	require.EqualError(t, err, "cliType must be CODEX or CLAUDE")
+	require.EqualError(t, err, "CLI 类型必须是 CODEX 或 CLAUDE")
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: "../outside"})
-	require.EqualError(t, err, "workingDirectory cannot traverse outside workspace-root")
+	require.EqualError(t, err, "工作目录不能越出 workspace-root")
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: `D:\outside`})
-	require.EqualError(t, err, "workingDirectory must be relative to workspace-root")
+	require.EqualError(t, err, "工作目录必须是相对于 workspace-root 的路径")
 
 	turn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "inspect this workspace"})
 	require.NoError(t, err)
@@ -44,9 +87,9 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed conversation", renamedConversation.Title)
 	_, err = service.Rename(&remoteReq.ConversationRenameRequest{ID: otherConversation.ID, Title: "   "})
-	require.EqualError(t, err, "conversation title is required")
+	require.EqualError(t, err, "会话标题不能为空")
 	_, err = service.Rename(&remoteReq.ConversationRenameRequest{ID: otherConversation.ID, Title: strings.Repeat("x", 201)})
-	require.EqualError(t, err, "title cannot exceed 200 characters")
+	require.EqualError(t, err, "标题不能超过 200 个字符")
 	require.NoError(t, database.Model(&remoteModel.Conversation{}).Where("id = ?", conversation.ID).
 		Update("last_message_at", time.Now().Add(time.Hour).UnixMilli()).Error)
 	pinnedConversation, err := service.Pin(&remoteReq.ConversationPinRequest{ID: otherConversation.ID, Pinned: true})
@@ -71,9 +114,9 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	assert.Equal(t, conversation.ID, pageRecords[0].ID)
 
 	_, err = service.Delete(&remoteReq.ConversationDeleteRequest{ID: conversation.ID})
-	require.EqualError(t, err, "cannot delete a conversation while the agent is responding")
+	require.EqualError(t, err, "Agent 正在响应时不能删除会话")
 	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "second turn"})
-	require.EqualError(t, err, "agent is not online or is processing another message")
+	require.EqualError(t, err, "Agent 不在线或正在处理其他消息")
 
 	command, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
 	require.NoError(t, err)
@@ -91,7 +134,7 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 			{Sequence: 1, Content: strings.Repeat("x", maxMessageChunkBytes+1)},
 		}},
 	})
-	require.EqualError(t, err, "message chunk cannot exceed 32 KB")
+	require.EqualError(t, err, "单个消息分片不能超过 32 KB")
 	_, err = service.AppendChunks(&remoteReq.MessageChunkUploadParams{
 		AgentToken: "runtime-token",
 		Request: remoteReq.MessageChunkUploadRequest{MessageID: command.AssistantMessageID, Chunks: []remoteReq.MessageChunkEntry{
@@ -106,7 +149,7 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 			Content: strings.Repeat("x", maxAssistantMessageBytes+1),
 		},
 	})
-	require.EqualError(t, err, "assistant message cannot exceed 1 MB")
+	require.EqualError(t, err, "助手消息不能超过 1 MB")
 	_, err = service.Complete(&remoteReq.MessageResultParams{
 		AgentToken: "runtime-token",
 		Request:    remoteReq.MessageResultRequest{MessageID: command.AssistantMessageID, Success: true, Content: "workspace ready"},
@@ -174,7 +217,7 @@ func TestConversationRejectsIncompleteExecutionConfiguration(t *testing.T) {
 		Update("working_directory", "").Error)
 
 	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "run"})
-	require.EqualError(t, err, "conversation workingDirectory is required")
+	require.EqualError(t, err, "会话工作目录不能为空")
 
 	var messageCount int64
 	require.NoError(t, database.Model(&remoteModel.Message{}).Where("conversation_id = ?", conversation.ID).Count(&messageCount).Error)

@@ -5,6 +5,7 @@ import (
 	reviewRouter "apipig/app/apps/code-review/router"
 	reviewService "apipig/app/apps/code-review/service"
 	remoteAgentRouter "apipig/app/apps/remote-agent/router"
+	remoteAgentService "apipig/app/apps/remote-agent/service"
 	wechatBotRouter "apipig/app/apps/wechat-bot/router"
 	wechatBotService "apipig/app/apps/wechat-bot/service"
 	sysRouter "apipig/app/sys/router"
@@ -125,6 +126,8 @@ func Routers() *fiber.App {
 		wechatBotRouter.WechatBotRoutes.InitAdminRouter(wechatBotAdminGroup)
 	}
 	reviewService.StartReview()
+	wechatBotService.WechatBotService.BotService.SetInboundHandler(remoteAgentService.RemoteAgentService.ConversationService.HandleWechatInbound)
+	remoteAgentService.RemoteAgentService.ConversationService.SetTakeoverSender(wechatBotService.WechatBotService.BotService.SendTakeover)
 	wechatBotService.StartWechatBots()
 
 	global.LOG.Debug("router register success")

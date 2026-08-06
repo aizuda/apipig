@@ -120,6 +120,12 @@ type SendMessageRequest struct {
 	Content        string       `json:"content"`
 }
 
+type ConversationTakeoverRequest struct {
+	ID     snowflake.ID `json:"id" swaggertype:"string"`
+	BotID  snowflake.ID `json:"botId" swaggertype:"string"`
+	UserID string       `json:"userId"`
+}
+
 type MessageStreamParams struct {
 	MessageID     snowflake.ID `json:"messageId" swaggertype:"string"`
 	AfterSequence int64        `json:"afterSequence"`
