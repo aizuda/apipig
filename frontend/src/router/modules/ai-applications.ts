@@ -1,5 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { Bot, GitPullRequest, MonitorCog } from '@lucide/vue'
+import { Bot, GitPullRequest, MessageCircle, MonitorCog } from '@lucide/vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -19,6 +19,17 @@ const routes: RouteRecordRaw[] = [
         name: 'RemoteAgent',
         redirect: '/ai-applications/remote-agent/agents',
         meta: { titleKey: 'menu.remoteAgent', title: 'Remote Agent', icon: MonitorCog, order: 2 },
+      },
+      {
+        path: '/ai-applications/wechat-bot',
+        name: 'WechatBot',
+        component: () => import('@/views/ai-applications/wechat-bot/WechatBotManagement.vue'),
+        meta: {
+          titleKey: 'menu.wechatBot',
+          title: '微信 Bot',
+          icon: MessageCircle,
+          order: 3,
+        },
       },
       {
         path: '/ai-applications/remote-agent/agents',

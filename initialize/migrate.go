@@ -4,6 +4,7 @@ import (
 	aiModel "apipig/app/ai/model"
 	reviewModel "apipig/app/apps/code-review/model"
 	remoteAgentModel "apipig/app/apps/remote-agent/model"
+	wechatBotModel "apipig/app/apps/wechat-bot/model"
 	sysModel "apipig/app/sys/model"
 	"log"
 
@@ -29,6 +30,9 @@ func autoMigrate(db *gorm.DB) error {
 		&remoteAgentModel.Message{},
 		&remoteAgentModel.MessageChunk{},
 		&remoteAgentModel.Command{},
+		&wechatBotModel.Bot{},
+		&wechatBotModel.Contact{},
+		&wechatBotModel.Message{},
 		&sysModel.Resource{},
 		&sysModel.ResourceApi{},
 		&sysModel.Role{},

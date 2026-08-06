@@ -3,6 +3,7 @@ package core
 import (
 	aiService "apipig/app/ai/service"
 	reviewService "apipig/app/apps/code-review/service"
+	wechatBotService "apipig/app/apps/wechat-bot/service"
 	"apipig/global"
 	"apipig/initialize"
 	"context"
@@ -41,6 +42,9 @@ func RunServer() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := reviewService.ShutdownReview(shutdownCtx); err != nil {
 			fmt.Println("Code review service shutdown:", err)
+		}
+		if err := wechatBotService.ShutdownWechatBots(shutdownCtx); err != nil {
+			fmt.Println("WeChat Bot service shutdown:", err)
 		}
 		if err := aiService.ShutdownAI(shutdownCtx); err != nil {
 			fmt.Println("AI service shutdown:", err)

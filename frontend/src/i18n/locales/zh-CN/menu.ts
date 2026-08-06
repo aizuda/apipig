@@ -15,6 +15,7 @@ export default {
   codeReviewTasks: '评审任务',
   remoteAgent: 'Remote Agent',
   remoteAgentAgents: 'Agent 节点',
+  wechatBot: '微信 Bot',
   users: '用户管理',
   settings: '系统设置',
   account: '账户设置',

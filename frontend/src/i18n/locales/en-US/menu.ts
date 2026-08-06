@@ -15,6 +15,7 @@ export default {
   codeReviewTasks: 'Review Tasks',
   remoteAgent: 'Remote Agent',
   remoteAgentAgents: 'Agent Nodes',
+  wechatBot: 'WeChat Bot',
   users: 'Users',
   settings: 'Settings',
   account: 'Account',

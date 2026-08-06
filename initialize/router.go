@@ -5,6 +5,8 @@ import (
 	reviewRouter "apipig/app/apps/code-review/router"
 	reviewService "apipig/app/apps/code-review/service"
 	remoteAgentRouter "apipig/app/apps/remote-agent/router"
+	wechatBotRouter "apipig/app/apps/wechat-bot/router"
+	wechatBotService "apipig/app/apps/wechat-bot/service"
 	sysRouter "apipig/app/sys/router"
 	_ "apipig/docs"
 	"apipig/global"
@@ -117,7 +119,13 @@ func Routers() *fiber.App {
 	{
 		remoteAgentRouter.RemoteAgentRoutes.InitAdminRouter(remoteAgentAdminGroup)
 	}
+	wechatBotAdminGroup := app.Group(prefix + "/ai-applications/wechat-bot/")
+	wechatBotAdminGroup.Use(middleware.JWTAuth()).Use(middleware.RbacHandler())
+	{
+		wechatBotRouter.WechatBotRoutes.InitAdminRouter(wechatBotAdminGroup)
+	}
 	reviewService.StartReview()
+	wechatBotService.StartWechatBots()
 
 	global.LOG.Debug("router register success")
 
