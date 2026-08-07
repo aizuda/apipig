@@ -15,11 +15,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type agentStatusChange struct {
-	Agent          remoteModel.Agent
-	PreviousStatus string
-}
-
 type agentRepository interface {
 	FindByKey(string) (remoteModel.Agent, error)
 	FindByRegistrationTokenHash(string) (remoteModel.Agent, error)
@@ -33,7 +28,8 @@ type agentRepository interface {
 	Disconnect(snowflake.ID, int64) error
 	Delete(snowflake.ID) error
 	RecordHeartbeat(remoteModel.Agent, remoteModel.Heartbeat) error
-	MarkOffline(int64, int64) ([]agentStatusChange, error)
+	ActiveAgents() ([]remoteModel.Agent, error)
+	MarkAgentOffline(snowflake.ID, int64, int64) (remoteModel.Agent, string, bool, error)
 	Page(*remoteReq.AgentPageParams) (response.PageResult, error)
 	Get(snowflake.ID) (remoteModel.Agent, error)
 	RecentHeartbeats(snowflake.ID, int) ([]remoteModel.Heartbeat, error)
@@ -227,28 +223,37 @@ func (r gormAgentRepository) RecordHeartbeat(agent remoteModel.Agent, heartbeat 
 	})
 }
 
-func (r gormAgentRepository) MarkOffline(cutoff, updatedAt int64) ([]agentStatusChange, error) {
-	// DISABLED 状态不参与自动离线转换，只有在线和忙碌节点受心跳超时影响。
+func (r gormAgentRepository) ActiveAgents() ([]remoteModel.Agent, error) {
 	var agents []remoteModel.Agent
-	if err := r.db().Where("status IN ? AND last_seen_at < ?", []string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}, cutoff).Find(&agents).Error; err != nil {
-		return nil, err
+	err := r.db().Where("status IN ?", []string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}).Find(&agents).Error
+	return agents, err
+}
+
+func (r gormAgentRepository) MarkAgentOffline(id snowflake.ID, observedLastSeenAt, updatedAt int64) (remoteModel.Agent, string, bool, error) {
+	var agent remoteModel.Agent
+	err := r.db().Where("id = ? AND status IN ? AND last_seen_at <= ?", id,
+		[]string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}, observedLastSeenAt).First(&agent).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return remoteModel.Agent{}, "", false, nil
 	}
-	updated := make([]agentStatusChange, 0, len(agents))
-	for _, agent := range agents {
-		previousStatus := agent.Status
-		result := r.db().Model(&remoteModel.Agent{}).
-			Where("id = ? AND status IN ? AND last_seen_at < ?", agent.ID, []string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}, cutoff).
-			Updates(map[string]any{"status": remoteModel.AgentStatusOffline, "updated_at": updatedAt})
-		if result.Error != nil {
-			return nil, result.Error
-		}
-		if result.RowsAffected > 0 {
-			agent.Status = remoteModel.AgentStatusOffline
-			agent.UpdatedAt = updatedAt
-			updated = append(updated, agentStatusChange{Agent: agent, PreviousStatus: previousStatus})
-		}
+	if err != nil {
+		return remoteModel.Agent{}, "", false, err
 	}
-	return updated, nil
+	previousStatus := agent.Status
+	result := r.db().Model(&remoteModel.Agent{}).
+		Where("id = ? AND status IN ? AND last_seen_at <= ?", id,
+			[]string{remoteModel.AgentStatusOnline, remoteModel.AgentStatusBusy}, observedLastSeenAt).
+		Updates(map[string]any{"status": remoteModel.AgentStatusOffline, "token_hash": "", "updated_at": updatedAt})
+	if result.Error != nil {
+		return remoteModel.Agent{}, "", false, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return remoteModel.Agent{}, "", false, nil
+	}
+	agent.Status = remoteModel.AgentStatusOffline
+	agent.TokenHash = ""
+	agent.UpdatedAt = updatedAt
+	return agent, previousStatus, true, nil
 }
 
 func (r gormAgentRepository) Page(params *remoteReq.AgentPageParams) (response.PageResult, error) {

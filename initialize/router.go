@@ -32,6 +32,9 @@ func Routers() *fiber.App {
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
 	})
+	if err := remoteAgentService.RemoteAgentService.AgentService.StartLivenessTracking(); err != nil {
+		global.LOG.Panic("start remote agent liveness tracking failed", zap.Error(err))
+	}
 	if global.CONFIG.System.EnableSwagger {
 		global.LOG.Debug("register swagger handler")
 		app.Get("/swagger/*", swagger.HandlerDefault)

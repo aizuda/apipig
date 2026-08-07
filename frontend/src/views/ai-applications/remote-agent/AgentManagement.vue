@@ -203,7 +203,7 @@ function matchesCurrentFilters(agent: RemoteAgent) {
 
 function handleAgentEvent(event: RemoteAgentStreamEvent) {
   if (event.type === 'ready') {
-    void loadAgents(true)
+    if (event.reconnected) void loadAgents(true)
     return
   }
   const { action, agent, previousStatus } = event.data

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os/exec"
 	"os/user"
 	"runtime"
 	"strings"
@@ -19,7 +20,7 @@ import (
 	"apipig/toolkit/snowflake"
 )
 
-const Version = "0.3.2"
+const Version = "0.3.3"
 
 type Runner struct {
 	config            Config
@@ -52,6 +53,7 @@ func EnsureNonRoot() error {
 
 func (r *Runner) Run(ctx context.Context) error {
 	r.logger.Printf("starting with config=%q controller=%q agent-key=%q registration-token-fingerprint=%s", r.config.sourcePath, r.config.ControllerURL, r.config.AgentKey, tokenFingerprint(r.config.RegistrationToken))
+	r.logCodexExecutionPolicy()
 	registration, err := r.registerUntilReady(ctx)
 	if err != nil {
 		return err
@@ -84,6 +86,21 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.handleCommand(ctx, *command)
 		}
 	}
+}
+
+func (r *Runner) logCodexExecutionPolicy() {
+	command, args, err := r.executor.cliCommand(remoteModel.CLITypeCodex)
+	if err != nil {
+		r.logger.Printf("codex execution policy unavailable: %v", err)
+		return
+	}
+	resolved := command
+	if path, lookErr := exec.LookPath(command); lookErr == nil {
+		resolved = path
+	} else {
+		r.logger.Printf("codex executable lookup failed command=%q: %v", command, lookErr)
+	}
+	r.logger.Printf("codex execution policy agent-version=%s executable=%q args=%q sandbox=%s network-access=%s", Version, resolved, sanitizeCLIArgs(args), codexSandboxMode(args), codexNetworkAccess(args))
 }
 
 func (r *Runner) disconnect() {
@@ -173,16 +190,25 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 	}()
 	sandboxMode := "n/a"
 	networkAccess := "n/a"
+	executable := ""
+	var effectiveArgs []string
+	commandName, args, commandErr := r.executor.cliCommand(command.CLIType)
+	if commandErr == nil {
+		executable = commandName
+		effectiveArgs = args
+		if path, lookErr := exec.LookPath(commandName); lookErr == nil {
+			executable = path
+		}
+	}
 	if strings.EqualFold(command.CLIType, remoteModel.CLITypeCodex) {
-		_, args, err := r.executor.cliCommand(command.CLIType)
-		if err == nil {
-			sandboxMode = codexSandboxMode(args)
-			networkAccess = codexNetworkAccess(args)
+		if commandErr == nil {
+			sandboxMode = codexSandboxMode(effectiveArgs)
+			networkAccess = codexNetworkAccess(effectiveArgs)
 		}
 	}
 	r.logger.Printf(
-		"starting conversation turn %s cli=%s workspace-root=%q working-directory=%q sandbox=%s network-access=%s agent-version=%s",
-		command.AssistantMessageID.String(), command.CLIType, r.config.WorkspaceRoot,
+		"starting conversation turn %s cli=%s executable=%q args=%q workspace-root=%q working-directory=%q sandbox=%s network-access=%s agent-version=%s",
+		command.AssistantMessageID.String(), command.CLIType, executable, sanitizeCLIArgs(effectiveArgs), r.config.WorkspaceRoot,
 		command.WorkingDirectory, sandboxMode, networkAccess, Version,
 	)
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)

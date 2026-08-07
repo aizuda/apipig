@@ -151,7 +151,11 @@ func codexStreamingArgs(args []string) []string {
 		}
 	}
 	if execIndex < 0 {
-		return result
+		// Older generated configurations omitted the subcommand and could leave
+		// a read-only sandbox flag in place. Conversation turns always use
+		// `exec`, so add it before applying the managed sandbox policy.
+		result = append([]string{"exec"}, result...)
+		execIndex = 0
 	}
 	normalized := make([]string, 0, len(result)+4)
 	hasBypass := false
@@ -250,6 +254,29 @@ func codexNetworkAccess(args []string) string {
 		}
 	}
 	return "default"
+}
+
+func sanitizeCLIArgs(args []string) []string {
+	result := append([]string(nil), args...)
+	for index := 0; index < len(result); index++ {
+		arg := result[index]
+		if key, _, found := strings.Cut(arg, "="); found && isSensitiveArgKey(key) {
+			result[index] = key + "=<redacted>"
+			continue
+		}
+		if isSensitiveArgKey(arg) && index+1 < len(result) {
+			result[index+1] = "<redacted>"
+			index++
+		}
+	}
+	return result
+}
+
+func isSensitiveArgKey(value string) bool {
+	value = strings.ToLower(strings.TrimLeft(strings.TrimSpace(value), "-"))
+	return strings.Contains(value, "token") || strings.Contains(value, "key") ||
+		strings.Contains(value, "secret") || strings.Contains(value, "password") ||
+		strings.Contains(value, "credential")
 }
 
 func isCodexJSONCommand(cliType string, args []string) bool {

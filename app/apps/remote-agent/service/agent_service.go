@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	remoteModel "apipig/app/apps/remote-agent/model"
@@ -42,14 +43,106 @@ var (
 
 // AgentService 负责 Agent 配置、注册鉴权、心跳和在线状态管理。
 type AgentService struct {
-	repository agentRepository
-	now        func() time.Time
-	events     *agentEventBroker
+	repository      agentRepository
+	now             func() time.Time
+	livenessTimeout func() time.Duration
+	events          *agentEventBroker
+	livenessMu      sync.Mutex
+	livenessTimers  map[snowflake.ID]*agentLivenessTimer
+}
+
+type agentLivenessTimer struct {
+	timer      *time.Timer
+	lastSeenAt int64
 }
 
 // NewAgentService 创建使用 GORM 仓储和系统时间的 Agent 服务。
 func NewAgentService() *AgentService {
-	return &AgentService{repository: gormAgentRepository{}, now: time.Now, events: newAgentEventBroker()}
+	return &AgentService{
+		repository: gormAgentRepository{}, now: time.Now, livenessTimeout: configuredAgentLivenessTimeout,
+		events: newAgentEventBroker(), livenessTimers: make(map[snowflake.ID]*agentLivenessTimer),
+	}
+}
+
+func configuredAgentLivenessTimeout() time.Duration {
+	timeout := global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds
+	if timeout <= 0 {
+		timeout = 30
+	}
+	return time.Duration(timeout) * time.Second
+}
+
+// StartLivenessTracking restores one deadline per connected Agent after a controller restart.
+func (s *AgentService) StartLivenessTracking() error {
+	agents, err := s.repository.ActiveAgents()
+	if err != nil {
+		return err
+	}
+	for _, agent := range agents {
+		s.scheduleLivenessTimeout(agent.ID, agent.LastSeenAt)
+	}
+	return nil
+}
+
+func (s *AgentService) StopLivenessTracking() {
+	s.livenessMu.Lock()
+	defer s.livenessMu.Unlock()
+	for id, entry := range s.livenessTimers {
+		entry.timer.Stop()
+		delete(s.livenessTimers, id)
+	}
+}
+
+func (s *AgentService) scheduleLivenessTimeout(id snowflake.ID, lastSeenAt int64) {
+	if id == 0 {
+		return
+	}
+	delay := s.livenessTimeout() - s.now().Sub(time.UnixMilli(lastSeenAt))
+	if delay < 0 {
+		delay = 0
+	}
+	entry := &agentLivenessTimer{lastSeenAt: lastSeenAt}
+	s.livenessMu.Lock()
+	if previous := s.livenessTimers[id]; previous != nil && previous.lastSeenAt > lastSeenAt {
+		s.livenessMu.Unlock()
+		return
+	}
+	entry.timer = time.AfterFunc(delay, func() { s.expireAgent(id, lastSeenAt, entry) })
+	if previous := s.livenessTimers[id]; previous != nil {
+		previous.timer.Stop()
+	}
+	s.livenessTimers[id] = entry
+	s.livenessMu.Unlock()
+}
+
+func (s *AgentService) cancelLivenessTimeout(id snowflake.ID) {
+	s.livenessMu.Lock()
+	if entry := s.livenessTimers[id]; entry != nil {
+		entry.timer.Stop()
+		delete(s.livenessTimers, id)
+	}
+	s.livenessMu.Unlock()
+}
+
+func (s *AgentService) expireAgent(id snowflake.ID, lastSeenAt int64, entry *agentLivenessTimer) {
+	s.livenessMu.Lock()
+	if s.livenessTimers[id] != entry {
+		s.livenessMu.Unlock()
+		return
+	}
+	delete(s.livenessTimers, id)
+	s.livenessMu.Unlock()
+
+	agent, previousStatus, changed, err := s.repository.MarkAgentOffline(id, lastSeenAt, s.now().UnixMilli())
+	if err != nil {
+		if global.LOG != nil {
+			global.LOG.Error("mark remote agent offline after heartbeat timeout", zap.String("agentId", id.String()), zap.Error(err))
+		}
+		return
+	}
+	if changed {
+		s.publishAgent(agent, previousStatus)
+	}
 }
 
 func (s *AgentService) AgentEvents() (<-chan remoteResp.AgentEvent, func()) {
@@ -177,6 +270,9 @@ func (s *AgentService) SetStatus(request *remoteReq.AgentStatusRequest) (bool, e
 	if err := s.repository.SetStatus(request.ID, status, s.now().UnixMilli()); err != nil {
 		return false, err
 	}
+	if status == remoteModel.AgentStatusOffline || status == remoteModel.AgentStatusDisabled {
+		s.cancelLivenessTimeout(request.ID)
+	}
 	updated, err := s.repository.Get(request.ID)
 	if err == nil {
 		s.publishAgent(updated, existing.Status)
@@ -199,6 +295,7 @@ func (s *AgentService) Delete(request *remoteReq.AgentDeleteRequest) (bool, erro
 	if err := s.repository.Delete(agent.ID); err != nil {
 		return false, err
 	}
+	s.cancelLivenessTimeout(agent.ID)
 	s.publishAgentEvent("delete", agent, agent.Status)
 	return true, nil
 }
@@ -273,6 +370,7 @@ func (s *AgentService) Register(params *remoteReq.RegisterParams) (remoteResp.Re
 	if err := s.repository.UpdateRegistration(&agent); err != nil {
 		return remoteResp.RegisterResult{}, err
 	}
+	s.scheduleLivenessTimeout(agent.ID, agent.LastSeenAt)
 	s.publishAgent(agent, previousStatus)
 	return remoteResp.RegisterResult{
 		AgentID: agent.ID, AgentToken: rawToken, Status: agent.Status,
@@ -311,6 +409,7 @@ func (s *AgentService) Heartbeat(params *remoteReq.HeartbeatParams) (remoteResp.
 	if err := s.repository.RecordHeartbeat(agent, heartbeat); err != nil {
 		return remoteResp.HeartbeatResult{}, err
 	}
+	s.scheduleLivenessTimeout(agent.ID, agent.LastSeenAt)
 	s.publishAgent(agent, previousStatus)
 	return remoteResp.HeartbeatResult{AgentID: agent.ID, Status: status, ServerTime: now}, nil
 }
@@ -333,11 +432,8 @@ func (s *AgentService) Authenticate(rawToken string) (remoteModel.Agent, error) 
 	return agent, nil
 }
 
-// Page 查询 Agent 分页列表；查询前会先按心跳时间刷新离线状态。
+// Page 查询 Agent 分页列表。在线状态由 Agent 生命周期事件维护，无需查询时扫描。
 func (s *AgentService) Page(params *remoteReq.AgentPageParams) (coreResp.PageResult, error) {
-	if err := s.MarkOffline(); err != nil {
-		return coreResp.PageResult{}, err
-	}
 	if params != nil {
 		params.Keyword = strings.TrimSpace(params.Keyword)
 		params.Status = strings.ToUpper(strings.TrimSpace(params.Status))
@@ -352,9 +448,6 @@ func (s *AgentService) Page(params *remoteReq.AgentPageParams) (coreResp.PageRes
 func (s *AgentService) Get(id snowflake.ID) (remoteResp.AgentDetail, error) {
 	if id == 0 {
 		return remoteResp.AgentDetail{}, errors.New("Agent ID 不能为空")
-	}
-	if err := s.MarkOffline(); err != nil {
-		return remoteResp.AgentDetail{}, err
 	}
 	agent, err := s.repository.Get(id)
 	if err != nil {
@@ -376,9 +469,6 @@ func (s *AgentService) Status(id snowflake.ID) (remoteModel.Agent, error) {
 	if id == 0 {
 		return remoteModel.Agent{}, errors.New("Agent ID 不能为空")
 	}
-	if err := s.MarkOffline(); err != nil {
-		return remoteModel.Agent{}, err
-	}
 	return s.repository.Get(id)
 }
 
@@ -392,35 +482,16 @@ func (s *AgentService) Disconnect(rawToken string) (bool, error) {
 	if err := s.repository.Disconnect(agent.ID, s.now().UnixMilli()); err != nil {
 		return false, err
 	}
+	s.cancelLivenessTimeout(agent.ID)
 	agent.Status = remoteModel.AgentStatusOffline
 	agent.TokenHash = ""
 	s.publishAgent(agent, previousStatus)
 	return true, nil
 }
 
-// MarkOffline 将超过心跳阈值的在线或忙碌 Agent 标记为离线。
-func (s *AgentService) MarkOffline() error {
-	timeout := global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds
-	if timeout <= 0 {
-		timeout = 30
-	}
-	now := s.now()
-	changes, err := s.repository.MarkOffline(now.Add(-time.Duration(timeout)*time.Second).UnixMilli(), now.UnixMilli())
-	if err != nil {
-		return err
-	}
-	for _, change := range changes {
-		s.publishAgent(change.Agent, change.PreviousStatus)
-	}
-	return nil
-}
-
 // heartbeatIntervalSeconds 根据服务端离线阈值计算客户端心跳间隔，并限制在 10 到 30 秒。
 func (s *AgentService) heartbeatIntervalSeconds() int {
-	timeout := global.CONFIG.RemoteAgent.HeartbeatTimeoutSeconds
-	if timeout <= 0 {
-		timeout = 30
-	}
+	timeout := int(s.livenessTimeout() / time.Second)
 	interval := timeout / 3
 	if interval < 10 {
 		return 10

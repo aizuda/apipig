@@ -58,7 +58,6 @@ func Viper(path ...string) *viper.Viper {
 	v.SetDefault("ai.log-flush-interval-ms", 1000)
 	v.SetDefault("ai.encryption-key", "")
 	v.SetDefault("remote-agent.heartbeat-timeout-seconds", 30)
-	v.SetDefault("remote-agent.offline-check-cron", "* * * * *")
 	v.SetDefault("remote-agent.command-poll-timeout-seconds", 25)
 	v.SetDefault("remote-agent.dispatch-lease-seconds", 30)
 

@@ -11,7 +11,6 @@ Web Agent 控制台以会话组织交互。每个会话绑定一个已有项目�
 ```yaml
 remote-agent:
   heartbeat-timeout-seconds: 30
-  offline-check-cron: "* * * * *"
   command-poll-timeout-seconds: 25
   dispatch-lease-seconds: 30
 ```
@@ -62,7 +61,7 @@ Agent 必须以拥有项目读写权限的普通系统用户运行。在 Linux/m
 
 Agent 进程在执行轮次期间意外退出时，下次注册会自动清理未完成的部分输出并重新派发该轮次。
 
-Agent 正常退出时会主动上报离线并撤销本次运行令牌，控制台列表和详情页每 3 秒静默同步一次状态。进程崩溃、断电或网络中断无法主动上报时，由 30 秒心跳超时判定离线。
+Agent 注册、心跳状态变化和正常退出会立即通过 SSE 推送到控制台，列表和详情页不再定时查询 Agent 状态。SSE 断线重连后只执行一次状态校准。进程崩溃、断电或网络中断无法主动上报时，Controller 会刷新该 Agent 独立的心跳截止计时器，并在 30 秒超时后推送离线事件；不会周期性扫描 Agent 表。
 
 重置注册 Token 会立即注销旧的运行 Token。重置后需要替换工作站上的完整配置文件并重启 Agent。
 

@@ -110,6 +110,9 @@ func (c *Config) normalize() error {
 			"--skip-git-repo-check", "-",
 		}
 	}
+	// Normalize persisted/hand-edited arguments as well as defaults. This keeps
+	// the effective policy identical after an Agent restart.
+	c.CodexArgs = codexStreamingArgs(c.CodexArgs)
 	if c.ClaudeCommand == "" {
 		c.ClaudeCommand = "claude"
 	}

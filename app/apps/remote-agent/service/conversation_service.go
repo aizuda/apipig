@@ -236,9 +236,6 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 }
 
 func (s *ConversationService) send(conversationID snowflake.ID, content, source string) (remoteResp.SendMessageResult, error) {
-	if err := s.agentService.MarkOffline(); err != nil {
-		return remoteResp.SendMessageResult{}, err
-	}
 	conversation, err := s.repository.Get(conversationID)
 	if err != nil {
 		return remoteResp.SendMessageResult{}, err

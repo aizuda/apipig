@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { remoteAgentApi, type RemoteAgentEvent } from '@/api/ai-applications/remote-agent'
 
 export type RemoteAgentStreamEvent =
-  | { type: 'ready' }
+  | { type: 'ready'; reconnected: boolean }
   | { type: 'agent'; data: RemoteAgentEvent }
 
 type Listener = (event: RemoteAgentStreamEvent) => void
@@ -12,6 +12,7 @@ const connected = ref(false)
 let controller: AbortController | null = null
 let reconnectTimer: number | undefined
 let reconnectDelay = 1500
+let hasConnected = false
 
 function emit(event: RemoteAgentStreamEvent) {
   listeners.forEach((listener) => listener(event))
@@ -28,7 +29,8 @@ function parseEvent(frame: string) {
   if (type === 'ready') {
     connected.value = true
     reconnectDelay = 1500
-    emit({ type: 'ready' })
+    emit({ type: 'ready', reconnected: hasConnected })
+    hasConnected = true
     return
   }
   if (type !== 'agent') return
@@ -98,6 +100,7 @@ export function subscribeRemoteAgentEvents(listener: Listener) {
       controller = null
       connected.value = false
       reconnectDelay = 1500
+      hasConnected = false
     }
   }
 }

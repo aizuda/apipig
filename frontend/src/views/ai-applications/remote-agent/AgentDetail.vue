@@ -605,7 +605,7 @@ function handleComposerKeydown(event: KeyboardEvent) {
 
 function handleAgentEvent(event: RemoteAgentStreamEvent) {
   if (event.type === 'ready') {
-    void refreshAgentStatus()
+    if (event.reconnected) void refreshAgentStatus()
     return
   }
   const { action, agent } = event.data

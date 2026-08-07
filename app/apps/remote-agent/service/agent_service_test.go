@@ -148,12 +148,14 @@ func TestDeleteAgentRejectsActiveResponse(t *testing.T) {
 	require.EqualError(t, err, "Agent 正在响应时不能删除")
 }
 
-func TestHeartbeatAndMarkOffline(t *testing.T) {
+func TestHeartbeatSchedulesOfflineTransition(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
-	now := time.UnixMilli(1_800_000_000_000)
 	agent := seedTestAgent(t, database, "node", "secret", remoteModel.AgentStatusOffline)
 	service := NewAgentService()
-	service.now = func() time.Time { return now }
+	service.livenessTimeout = func() time.Duration { return 25 * time.Millisecond }
+	t.Cleanup(service.StopLivenessTracking)
+	events, unsubscribe := service.AgentEvents()
+	defer unsubscribe()
 	registration, err := service.Register(&remoteReq.RegisterParams{
 		BootstrapToken: "secret", Request: remoteReq.RegisterRequest{AgentKey: agent.AgentKey, Hostname: "host"},
 	})
@@ -163,11 +165,24 @@ func TestHeartbeatAndMarkOffline(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, remoteModel.AgentStatusBusy, heartbeat.Status)
-	now = now.Add(2 * time.Minute)
-	require.NoError(t, service.MarkOffline())
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case event := <-events:
+			if event.Agent.ID == agent.ID && event.Agent.Status == remoteModel.AgentStatusOffline {
+				goto offline
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for Agent offline event")
+		}
+	}
+
+offline:
 	var stored remoteModel.Agent
 	require.NoError(t, database.First(&stored, agent.ID).Error)
 	assert.Equal(t, remoteModel.AgentStatusOffline, stored.Status)
+	assert.Empty(t, stored.TokenHash)
 }
 
 func TestRegisterRecoversInterruptedConversationTurn(t *testing.T) {

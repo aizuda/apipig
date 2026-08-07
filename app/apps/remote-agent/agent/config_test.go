@@ -30,6 +30,23 @@ func TestConfigNormalizeDefaults(t *testing.T) {
 	assert.Greater(t, config.RequestTimeoutSeconds, config.PollWaitSeconds)
 }
 
+func TestConfigNormalizesPersistedReadOnlyCodexArgs(t *testing.T) {
+	config := Config{
+		ControllerURL:     "https://controller.example.com",
+		RegistrationToken: "secret",
+		AgentKey:          "node",
+		Name:              "node",
+		WorkspaceRoot:     t.TempDir(),
+		CodexArgs:         []string{"exec", "--sandbox", "read-only", "-c", "sandbox_mode=read-only", "-"},
+	}
+
+	require.NoError(t, config.normalize())
+	assert.Equal(t, []string{
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true", "-",
+	}, config.CodexArgs)
+}
+
 func TestConfigCreatesMissingWorkspaceRoot(t *testing.T) {
 	workspaceRoot := filepath.Join(t.TempDir(), "remote-agent-workspaces", "nested")
 	config := Config{

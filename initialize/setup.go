@@ -316,7 +316,6 @@ func (request setupRequest) buildConfig() (setupConfig, error) {
 		},
 		RemoteAgent: config.RemoteAgent{
 			HeartbeatTimeoutSeconds:   30,
-			OfflineCheckCron:          "* * * * *",
 			CommandPollTimeoutSeconds: 25,
 			DispatchLeaseSeconds:      30,
 		},

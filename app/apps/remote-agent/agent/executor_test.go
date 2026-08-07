@@ -2,8 +2,11 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	remoteModel "apipig/app/apps/remote-agent/model"
@@ -115,6 +118,20 @@ func TestCodexCommandOverridesReadOnlyGlobalAndConfigArguments(t *testing.T) {
 	assert.Equal(t, "true", codexNetworkAccess(args))
 }
 
+func TestCodexCommandAddsExecAndOverridesReadOnlyWithoutSubcommand(t *testing.T) {
+	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
+		"--sandbox", "read-only", "--skip-git-repo-check", "-",
+	}})
+
+	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=true", "--skip-git-repo-check", "-",
+	}, args)
+}
+
 func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
 	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
 		"--dangerously-bypass-approvals-and-sandbox", "exec", "--sandbox", "read-only", "-",
@@ -128,6 +145,63 @@ func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
 	}, args)
 	assert.Equal(t, "danger-full-access", codexSandboxMode(args))
 	assert.Equal(t, "default", codexNetworkAccess(args))
+}
+
+func TestSanitizeCLIArgsRedactsCredentialValues(t *testing.T) {
+	assert.Equal(t, []string{"--api-key=<redacted>", "-c", "token=<redacted>", "exec"}, sanitizeCLIArgs([]string{
+		"--api-key=secret-value", "-c", "token=another-secret", "exec",
+	}))
+}
+
+func TestExecutorRunsCodexWithWorkspaceWriteAndWritesInProject(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	require.NoError(t, os.Mkdir(project, 0750))
+	argsFile := filepath.Join(t.TempDir(), "args.txt")
+	writtenFile := filepath.Join(project, "fake-codex-write.txt")
+	t.Setenv("APIPIG_FAKE_CODEX_ARGS", argsFile)
+	t.Setenv("APIPIG_FAKE_CODEX_WRITE", writtenFile)
+	command := writeFakeCodex(t)
+	executor := NewExecutor(Config{
+		WorkspaceRoot: root,
+		CodexCommand:  command,
+		CodexArgs:     []string{"exec", "--skip-git-repo-check", "-"},
+	})
+
+	result := executor.ExecuteTurn(context.Background(), remoteModel.CLITypeCodex, "project", "write a file", nil)
+
+	require.True(t, result.Success, result.ErrorMessage)
+	assert.Equal(t, "fake completed", result.Content)
+	argsContent, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	effectiveArgs := string(argsContent)
+	assert.Contains(t, effectiveArgs, "--ask-for-approval never")
+	assert.Contains(t, effectiveArgs, "--sandbox workspace-write")
+	assert.Contains(t, effectiveArgs, "sandbox_workspace_write.network_access=true")
+	written, err := os.ReadFile(writtenFile)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", strings.TrimSpace(string(written)))
+}
+
+func writeFakeCodex(t *testing.T) string {
+	t.Helper()
+	directory := t.TempDir()
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(directory, "fake-codex.cmd")
+		content := "@echo off\r\n" +
+			"echo %* > \"%APIPIG_FAKE_CODEX_ARGS%\"\r\n" +
+			"echo ok> \"%APIPIG_FAKE_CODEX_WRITE%\"\r\n" +
+			"echo {\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"fake completed\"}}\r\n"
+		require.NoError(t, os.WriteFile(path, []byte(content), 0750))
+		return path
+	}
+	path := filepath.Join(directory, "fake-codex")
+	content := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" > \"$APIPIG_FAKE_CODEX_ARGS\"\n" +
+		"printf 'ok\\n' > \"$APIPIG_FAKE_CODEX_WRITE\"\n" +
+		"printf '%s\\n' '{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"fake completed\"}}'\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0750))
+	return path
 }
 
 func TestCodexJSONStreamEmitsProgressAndKeepsFinalAnswer(t *testing.T) {
