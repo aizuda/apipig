@@ -20,6 +20,12 @@ func (a *BotApi) Page(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Page, &params, err)
 }
 
+func (a *BotApi) List(c *fiber.Ctx) error {
+	var params wechatReq.BotListParams
+	err := a.BodyParser(c, &params, "微信 Bot 列表")
+	return response.Execute(c, a.service.List, &params, err)
+}
+
 func (a *BotApi) StartBind(c *fiber.Ctx) error {
 	var request wechatReq.BindStartRequest
 	err := a.BodyParser(c, &request, "微信 Bot 扫码绑定")

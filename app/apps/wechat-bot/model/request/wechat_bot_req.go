@@ -20,6 +20,12 @@ func (p *BotPageParams) GetPageInfo() coreReq.PageInfo {
 	return p.PageInfo
 }
 
+type BotListParams struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Enabled *bool  `json:"enabled"`
+}
+
 type BindStartRequest struct {
 	Name  string       `json:"name"`
 	BotID snowflake.ID `json:"botId" swaggertype:"string"`

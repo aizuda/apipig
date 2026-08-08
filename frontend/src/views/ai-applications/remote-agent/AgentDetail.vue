@@ -64,6 +64,7 @@ import {
   type RemoteAgentStreamEvent,
 } from '@/composables/useRemoteAgentEvents'
 import MarkdownContent from './components/MarkdownContent.vue'
+import WechatBotSelect from '../wechat-bot/components/WechatBotSelect.vue'
 import { agentStatusLabel, agentStatusVariant, formatTime } from './presentation'
 
 defineOptions({ name: 'RemoteAgentAgentDetail' })
@@ -103,7 +104,6 @@ const newConversationWorkingDirectory = ref('.')
 const creatingConversation = ref(false)
 const refreshingAgentStatus = ref(false)
 const takeoverOpen = ref(false)
-const takeoverBots = ref<WechatBot[]>([])
 const takeoverContacts = ref<WechatContact[]>([])
 const takeoverBotId = ref('')
 const takeoverUserId = ref('')
@@ -134,24 +134,14 @@ const canSend = computed(
 async function openTakeover() {
   if (!selectedConversation.value) return
   takeoverOpen.value = true
-  takeoverLoading.value = true
   takeoverBotId.value = ''
   takeoverUserId.value = ''
   takeoverContacts.value = []
-  try {
-    const result = await wechatBotApi.page({ page: 1, pageSize: 100, status: 'ONLINE' })
-    takeoverBots.value = (result.records || []).filter(
-      (bot) => bot.enabled && bot.status === 'ONLINE',
-    )
-    if (takeoverBots.value.length === 1) {
-      takeoverBotId.value = takeoverBots.value[0]!.id
-      await loadTakeoverContacts()
-    }
-  } catch (error) {
-    toast.error(error instanceof Error ? error.message : '加载微信 Bot 失败')
-  } finally {
-    takeoverLoading.value = false
-  }
+}
+
+function selectTakeoverBot(bot: WechatBot) {
+  takeoverBotId.value = bot.id
+  void loadTakeoverContacts()
 }
 
 async function loadTakeoverContacts() {
@@ -988,18 +978,12 @@ onBeforeUnmount(() => {
         <div class="space-y-4">
           <div class="space-y-1.5">
             <Label for="takeover-bot">微信 Bot</Label>
-            <select
+            <WechatBotSelect
               id="takeover-bot"
               v-model="takeoverBotId"
-              class="h-10 w-full border bg-background px-3 text-sm"
               :disabled="takeoverLoading"
-              @change="loadTakeoverContacts"
-            >
-              <option value="">选择在线 Bot</option>
-              <option v-for="botItem in takeoverBots" :key="botItem.id" :value="botItem.id">
-                {{ botItem.name }}
-              </option>
-            </select>
+              @select="selectTakeoverBot"
+            />
           </div>
           <div class="space-y-1.5">
             <Label for="takeover-contact">接管联系人</Label>

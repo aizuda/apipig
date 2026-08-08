@@ -59,6 +59,8 @@ export interface BindStatusResult {
 export const wechatBotApi = {
   page: (params: { page: number; pageSize: number; keyword?: string; status?: string }) =>
     post<PageResult<WechatBot>>('/ai-applications/wechat-bot/bot/page', params),
+  list: (params: { name?: string; status?: string; enabled?: boolean }) =>
+    post<WechatBot[]>('/ai-applications/wechat-bot/bot/list', params),
   startBind: (params: { name?: string; botId?: string }) =>
     post<BindStartResult>('/ai-applications/wechat-bot/bot/bind/start', params),
   pollBind: (sessionId: string) =>

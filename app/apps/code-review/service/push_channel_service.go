@@ -191,7 +191,7 @@ func validateChannelConfig(typ string, config map[string]string) error {
 		}
 	case reviewModel.PushChannelTypeWechatBot:
 		if config["botId"] == "" || config["userId"] == "" {
-			return errors.New("请选择微信 Bot 并填写接收人 ID")
+			return errors.New("请选择微信 Bot 和可用会话")
 		}
 	}
 	return nil

@@ -79,6 +79,24 @@ func (s *BotService) Page(params *wechatReq.BotPageParams) (coreResponse.PageRes
 	return db.Page(query.Order("created_at DESC"), params.GetPageInfo(), bots)
 }
 
+func (s *BotService) List(params *wechatReq.BotListParams) ([]wechatModel.Bot, error) {
+	query := global.DB.Model(&wechatModel.Bot{})
+	if params != nil {
+		if name := strings.TrimSpace(params.Name); name != "" {
+			query = query.Where("name LIKE ?", "%"+name+"%")
+		}
+		if status := strings.TrimSpace(params.Status); status != "" {
+			query = query.Where("status = ?", strings.ToUpper(status))
+		}
+		if params.Enabled != nil {
+			query = query.Where("enabled = ?", *params.Enabled)
+		}
+	}
+	bots := make([]wechatModel.Bot, 0)
+	err := query.Order("name ASC, created_at DESC").Limit(50).Find(&bots).Error
+	return bots, err
+}
+
 func (s *BotService) StartBind(params *wechatReq.BindStartParams) (wechatResp.BindStartResult, error) {
 	var result wechatResp.BindStartResult
 	if params == nil || params.Ctx == nil {

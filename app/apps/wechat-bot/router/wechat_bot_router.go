@@ -11,6 +11,7 @@ type WechatBotRouter struct{}
 func (r *WechatBotRouter) InitAdminRouter(router fiber.Router) {
 	bot := router.Group("bot/")
 	bot.Post("page", api.WechatBotApi.BotApi.Page)
+	bot.Post("list", api.WechatBotApi.BotApi.List)
 	bot.Post("bind/start", api.WechatBotApi.BotApi.StartBind)
 	bot.Get("bind/status/:sessionId", api.WechatBotApi.BotApi.PollBind)
 	bot.Post("rename", api.WechatBotApi.BotApi.Rename)
