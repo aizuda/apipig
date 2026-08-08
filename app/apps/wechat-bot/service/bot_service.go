@@ -36,14 +36,21 @@ type bindSession struct {
 }
 
 type BotService struct {
-	vault    aiService.CredentialVault
-	runtime  *Runtime
-	bindMu   sync.RWMutex
-	sessions map[string]*bindSession
+	vault           aiService.CredentialVault
+	runtime         *Runtime
+	bindMu          sync.RWMutex
+	sessions        map[string]*bindSession
+	outboundHandler func(snowflake.ID, string, string) error
 }
 
 func (s *BotService) SetInboundHandler(handler func(snowflake.ID, string, string) error) {
 	s.runtime.SetInboundHandler(handler)
+}
+
+// SetOutboundHandler mirrors messages sent manually from the Bot console into
+// an Agent conversation while that contact is under takeover.
+func (s *BotService) SetOutboundHandler(handler func(snowflake.ID, string, string) error) {
+	s.outboundHandler = handler
 }
 
 func (s *BotService) SendTakeover(ctx context.Context, botID snowflake.ID, userID, content string) error {
@@ -274,7 +281,19 @@ func (s *BotService) Send(params *wechatReq.SendMessageRequest) (wechatModel.Mes
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	return s.runtime.Send(ctx, params.BotID, strings.TrimSpace(params.UserID), content)
+	userID := strings.TrimSpace(params.UserID)
+	message, err := s.runtime.Send(ctx, params.BotID, userID, content)
+	if err != nil {
+		return empty, err
+	}
+	if s.outboundHandler != nil {
+		if mirrorErr := s.outboundHandler(params.BotID, userID, content); mirrorErr != nil {
+			// The WeChat message has already been accepted upstream. Do not return an
+			// error that could make the operator retry and send a duplicate message.
+			logWechatError("同步 Bot 管理端消息到 Agent 接管会话", mirrorErr)
+		}
+	}
+	return message, nil
 }
 
 func (s *BotService) saveConfirmedBot(session *bindSession, status *ilink.QRStatusResponse) (wechatModel.Bot, error) {

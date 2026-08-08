@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,7 +31,9 @@ type ChunkEmitter func(content []byte)
 func NewExecutor(config Config) *Executor { return &Executor{config: config} }
 
 func (e *Executor) CodexVersion(ctx context.Context) string {
-	command := exec.CommandContext(ctx, e.config.CodexCommand, "--version")
+	commandName, environment := resolveCLIExecutable(e.config.CodexCommand, remoteModel.CLITypeCodex)
+	command := exec.CommandContext(ctx, commandName, "--version")
+	command.Env = mergedEnvironment(environment)
 	output, err := command.Output()
 	if err != nil {
 		return ""
@@ -37,7 +41,7 @@ func (e *Executor) CodexVersion(ctx context.Context) string {
 	return strings.TrimSpace(string(output))
 }
 
-func (e *Executor) ExecuteTurn(ctx context.Context, cliType, workingDirectory, prompt string, emit ChunkEmitter) ExecutionResult {
+func (e *Executor) ExecuteTurn(ctx context.Context, cliType, permissionMode, workingDirectory, prompt string, emit ChunkEmitter) ExecutionResult {
 	workingDirectory, err := e.prepareWorkingDirectory(workingDirectory)
 	if err != nil {
 		return ExecutionResult{ErrorMessage: err.Error()}
@@ -46,14 +50,16 @@ func (e *Executor) ExecuteTurn(ctx context.Context, cliType, workingDirectory, p
 	if err != nil {
 		return ExecutionResult{ErrorMessage: err.Error()}
 	}
-	commandName, args, err := e.cliCommand(cliType)
+	commandName, args, err := e.cliCommand(cliType, permissionMode)
 	if err != nil {
 		return ExecutionResult{ErrorMessage: err.Error()}
 	}
 	stdout := newBoundedBuffer(maxCommandOutputBytes)
 	stderr := newBoundedBuffer(maxErrorOutputBytes)
+	commandName, environment := resolveCLIExecutable(commandName, cliType)
 	cli := exec.CommandContext(ctx, commandName, args...)
 	cli.Dir = workspace
+	cli.Env = mergedEnvironment(environment)
 	cli.Stdin = strings.NewReader(prompt)
 	var stdoutWriter io.Writer = &boundedEmitterWriter{buffer: stdout, emit: emit}
 	var codexStream *codexJSONStreamWriter
@@ -130,18 +136,33 @@ func (e *Executor) createAgentManagedWorkspace(workingDirectory string) error {
 	return nil
 }
 
-func (e *Executor) cliCommand(cliType string) (string, []string, error) {
+func (e *Executor) cliCommand(cliType string, permissionModes ...string) (string, []string, error) {
+	permissionMode := remoteModel.PermissionModeAutoEdit
+	if len(permissionModes) > 0 {
+		permissionMode = remoteModel.NormalizePermissionMode(permissionModes[0])
+	}
 	switch strings.ToUpper(strings.TrimSpace(cliType)) {
 	case remoteModel.CLITypeCodex:
-		return e.config.CodexCommand, codexStreamingArgs(e.config.CodexArgs), nil
+		return e.config.CodexCommand, codexStreamingArgs(e.config.CodexArgs, permissionMode), nil
 	case remoteModel.CLITypeClaude:
-		return e.config.ClaudeCommand, e.config.ClaudeArgs, nil
+		return e.config.ClaudeCommand, claudeStreamingArgs(e.config.ClaudeArgs, permissionMode), nil
 	default:
 		return "", nil, errors.New("unsupported CLI type: " + cliType)
 	}
 }
 
-func codexStreamingArgs(args []string) []string {
+func codexStreamingArgs(args []string, permissionModes ...string) []string {
+	permissionMode := remoteModel.PermissionModeAutoEdit
+	if len(permissionModes) > 0 {
+		permissionMode = remoteModel.NormalizePermissionMode(permissionModes[0])
+	} else {
+		for _, arg := range args {
+			if arg == "--dangerously-bypass-approvals-and-sandbox" {
+				permissionMode = remoteModel.PermissionModeFullAccess
+				break
+			}
+		}
+	}
 	result := append([]string(nil), args...)
 	execIndex := -1
 	for index, arg := range result {
@@ -171,8 +192,10 @@ func codexStreamingArgs(args []string) []string {
 			}
 		case strings.HasPrefix(arg, "--ask-for-approval=") || strings.HasPrefix(arg, "-a="):
 		case arg == "--dangerously-bypass-approvals-and-sandbox":
-			hasBypass = true
-			normalized = append(normalized, arg)
+			if permissionMode == remoteModel.PermissionModeFullAccess && !hasBypass {
+				hasBypass = true
+				normalized = append(normalized, arg)
+			}
 		case arg == "--sandbox" || arg == "-s":
 			if index+1 < len(result) {
 				index++
@@ -190,7 +213,7 @@ func codexStreamingArgs(args []string) []string {
 		}
 	}
 	required := []string{"--json"}
-	if !hasBypass {
+	if permissionMode == remoteModel.PermissionModeAutoEdit {
 		required = append(required,
 			"--sandbox", "workspace-write",
 			"-c", "sandbox_workspace_write.network_access=true",
@@ -198,14 +221,161 @@ func codexStreamingArgs(args []string) []string {
 	}
 	insertAt := normalizedExecIndex + 1
 	globalRequired := make([]string, 0, 2)
-	if !hasBypass {
+	if permissionMode == remoteModel.PermissionModeAutoEdit {
 		globalRequired = append(globalRequired, "--ask-for-approval", "never")
+	} else if !hasBypass {
+		globalRequired = append(globalRequired, "--dangerously-bypass-approvals-and-sandbox")
 	}
 	withRequired := make([]string, 0, len(normalized)+len(required)+len(globalRequired))
 	withRequired = append(withRequired, globalRequired...)
 	withRequired = append(withRequired, normalized[:insertAt]...)
 	withRequired = append(withRequired, required...)
 	return append(withRequired, normalized[insertAt:]...)
+}
+
+func resolveCLIExecutable(command, cliType string) (string, []string) {
+	resolved, err := exec.LookPath(command)
+	if err != nil {
+		resolved = command
+	}
+	if runtime.GOOS != "windows" {
+		return resolved, nil
+	}
+	overrides := make([]string, 0, 3)
+	if os.Getenv("HOME") == "" && os.Getenv("USERPROFILE") != "" {
+		overrides = append(overrides, "HOME="+os.Getenv("USERPROFILE"))
+	}
+	if strings.EqualFold(cliType, remoteModel.CLITypeClaude) {
+		if native := findNativeClaudeExecutable(resolved); native != "" {
+			return native, overrides
+		}
+		return resolved, overrides
+	}
+	if !strings.EqualFold(cliType, remoteModel.CLITypeCodex) {
+		return resolved, overrides
+	}
+	native, pathDirectory := findNativeCodexExecutable(resolved)
+	if native == "" {
+		return resolved, overrides
+	}
+	overrides = append(overrides, "CODEX_MANAGED_BY_NPM=1")
+	if pathDirectory != "" {
+		pathValue := pathDirectory
+		if existing := os.Getenv("PATH"); existing != "" {
+			pathValue += string(os.PathListSeparator) + existing
+		}
+		overrides = append(overrides, "PATH="+pathValue)
+	}
+	return native, overrides
+}
+
+func findNativeClaudeExecutable(resolved string) string {
+	packageRoots := make([]string, 0, 2)
+	for current := filepath.Dir(resolved); current != filepath.Dir(current); current = filepath.Dir(current) {
+		if strings.EqualFold(filepath.Base(current), "claude-code") && strings.EqualFold(filepath.Base(filepath.Dir(current)), "@anthropic-ai") {
+			packageRoots = append(packageRoots, current)
+			break
+		}
+		if strings.EqualFold(filepath.Base(current), ".nvmd") {
+			version, err := os.ReadFile(filepath.Join(current, "default"))
+			if err == nil && strings.TrimSpace(string(version)) != "" {
+				packageRoots = append(packageRoots, filepath.Join(current, "versions", strings.TrimSpace(string(version)), "node_modules", "@anthropic-ai", "claude-code"))
+			}
+			break
+		}
+	}
+	for _, root := range packageRoots {
+		candidate := filepath.Join(root, "bin", "claude.exe")
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func findNativeCodexExecutable(resolved string) (string, string) {
+	packageRoots := make([]string, 0, 2)
+	for current := filepath.Dir(resolved); current != filepath.Dir(current); current = filepath.Dir(current) {
+		if strings.EqualFold(filepath.Base(current), "codex") && strings.EqualFold(filepath.Base(filepath.Dir(current)), "@openai") {
+			packageRoots = append(packageRoots, current)
+			break
+		}
+		if strings.EqualFold(filepath.Base(current), ".nvmd") {
+			version, err := os.ReadFile(filepath.Join(current, "default"))
+			if err == nil && strings.TrimSpace(string(version)) != "" {
+				packageRoots = append(packageRoots, filepath.Join(current, "versions", strings.TrimSpace(string(version)), "node_modules", "@openai", "codex"))
+			}
+			break
+		}
+	}
+	patterns := []string{
+		filepath.Join("vendor", "*", "bin", "codex.exe"),
+		filepath.Join("vendor", "*", "codex", "codex.exe"),
+		filepath.Join("node_modules", "@openai", "codex-win32-*", "vendor", "*", "bin", "codex.exe"),
+		filepath.Join("node_modules", "@openai", "codex-win32-*", "vendor", "*", "codex", "codex.exe"),
+	}
+	for _, root := range packageRoots {
+		for _, pattern := range patterns {
+			matches, _ := filepath.Glob(filepath.Join(root, pattern))
+			sort.Strings(matches)
+			for _, match := range matches {
+				if info, err := os.Stat(match); err == nil && !info.IsDir() {
+					archRoot := filepath.Dir(filepath.Dir(match))
+					for _, name := range []string{"codex-path", "path"} {
+						pathDirectory := filepath.Join(archRoot, name)
+						if info, err := os.Stat(pathDirectory); err == nil && info.IsDir() {
+							return match, pathDirectory
+						}
+					}
+					return match, ""
+				}
+			}
+		}
+	}
+	return "", ""
+}
+
+func mergedEnvironment(overrides []string) []string {
+	if len(overrides) == 0 {
+		return nil
+	}
+	environment := os.Environ()
+	for _, override := range overrides {
+		key, _, found := strings.Cut(override, "=")
+		if !found {
+			continue
+		}
+		filtered := environment[:0]
+		for _, entry := range environment {
+			entryKey, _, _ := strings.Cut(entry, "=")
+			if !strings.EqualFold(entryKey, key) {
+				filtered = append(filtered, entry)
+			}
+		}
+		environment = append(filtered, override)
+	}
+	return environment
+}
+
+func claudeStreamingArgs(args []string, permissionMode string) []string {
+	result := make([]string, 0, len(args)+2)
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		switch {
+		case arg == "--dangerously-skip-permissions":
+		case arg == "--permission-mode":
+			if index+1 < len(args) {
+				index++
+			}
+		case strings.HasPrefix(arg, "--permission-mode="):
+		default:
+			result = append(result, arg)
+		}
+	}
+	if remoteModel.NormalizePermissionMode(permissionMode) == remoteModel.PermissionModeFullAccess {
+		return append(result, "--dangerously-skip-permissions")
+	}
+	return append(result, "--permission-mode", "acceptEdits")
 }
 
 func isManagedSandboxOverride(value string) bool {

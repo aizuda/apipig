@@ -20,7 +20,10 @@ import (
 	"gorm.io/gorm"
 )
 
-type ProjectService struct{ vault aiService.CredentialVault }
+type ProjectService struct {
+	vault aiService.CredentialVault
+	push  *pushChannelService
+}
 
 func (s *ProjectService) Save(params *reviewReq.ProjectSaveParams) (reviewResp.ProjectSaveResult, error) {
 	var result reviewResp.ProjectSaveResult
@@ -132,7 +135,13 @@ func (s *ProjectService) Save(params *reviewReq.ProjectSaveParams) (reviewResp.P
 func (s *ProjectService) Get(id snowflake.ID) (reviewModel.Project, error) {
 	var project reviewModel.Project
 	err := global.DB.First(&project, id).Error
-	return sanitizeProject(project), err
+	if err == nil {
+		project = sanitizeProject(project)
+		if s.push != nil {
+			project.PushChannels, err = s.push.List(id)
+		}
+	}
+	return project, err
 }
 
 func (s *ProjectService) Page(params *reviewReq.ProjectPageParams) (response.PageResult, error) {
@@ -155,6 +164,9 @@ func (s *ProjectService) Page(params *reviewReq.ProjectPageParams) (response.Pag
 		if rows, ok := result.Records.([]reviewModel.Project); ok {
 			for i := range rows {
 				rows[i] = sanitizeProject(rows[i])
+				if s.push != nil {
+					rows[i].PushChannels, _ = s.push.List(rows[i].ID)
+				}
 			}
 			result.Records = rows
 		}
@@ -170,6 +182,9 @@ func (s *ProjectService) Delete(ids []snowflake.ID) (bool, error) {
 		if err := tx.Where("project_id IN ? AND status IN ?", ids, []string{reviewModel.TaskStatusQueued, reviewModel.TaskStatusRunning}).First(&reviewModel.Task{}).Error; err == nil {
 			return errors.New("项目存在执行中任务，暂不能删除")
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Where("project_id IN ?", ids).Delete(&reviewModel.PushChannel{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("id IN ?", ids).Delete(&reviewModel.Project{}).Error

@@ -67,7 +67,7 @@ func TestExecutorSelectsConfiguredCLI(t *testing.T) {
 	command, args, err := executor.cliCommand(remoteModel.CLITypeClaude)
 	require.NoError(t, err)
 	assert.Equal(t, "claude-custom", command)
-	assert.Equal(t, []string{"-p"}, args)
+	assert.Equal(t, []string{"-p", "--permission-mode", "acceptEdits"}, args)
 	_, _, err = executor.cliCommand("shell")
 	require.EqualError(t, err, "unsupported CLI type: shell")
 }
@@ -137,7 +137,7 @@ func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
 		"--dangerously-bypass-approvals-and-sandbox", "exec", "--sandbox", "read-only", "-",
 	}})
 
-	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex)
+	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex, remoteModel.PermissionModeFullAccess)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
@@ -145,6 +145,34 @@ func TestCodexCommandPreservesExplicitSandboxBypass(t *testing.T) {
 	}, args)
 	assert.Equal(t, "danger-full-access", codexSandboxMode(args))
 	assert.Equal(t, "default", codexNetworkAccess(args))
+}
+
+func TestCodexCommandUsesFullAccessPermissionMode(t *testing.T) {
+	executor := NewExecutor(Config{CodexCommand: "codex", CodexArgs: []string{
+		"exec", "--sandbox", "read-only", "--skip-git-repo-check", "-",
+	}})
+
+	_, args, err := executor.cliCommand(remoteModel.CLITypeCodex, remoteModel.PermissionModeFullAccess)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"--dangerously-bypass-approvals-and-sandbox", "exec", "--json", "--skip-git-repo-check", "-",
+	}, args)
+	assert.Equal(t, "danger-full-access", codexSandboxMode(args))
+}
+
+func TestClaudeCommandMapsPermissionModes(t *testing.T) {
+	executor := NewExecutor(Config{ClaudeCommand: "claude", ClaudeArgs: []string{
+		"-p", "--permission-mode", "default",
+	}})
+
+	_, autoEdit, err := executor.cliCommand(remoteModel.CLITypeClaude, remoteModel.PermissionModeAutoEdit)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"-p", "--permission-mode", "acceptEdits"}, autoEdit)
+
+	_, fullAccess, err := executor.cliCommand(remoteModel.CLITypeClaude, remoteModel.PermissionModeFullAccess)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"-p", "--dangerously-skip-permissions"}, fullAccess)
 }
 
 func TestSanitizeCLIArgsRedactsCredentialValues(t *testing.T) {
@@ -168,7 +196,7 @@ func TestExecutorRunsCodexWithWorkspaceWriteAndWritesInProject(t *testing.T) {
 		CodexArgs:     []string{"exec", "--skip-git-repo-check", "-"},
 	})
 
-	result := executor.ExecuteTurn(context.Background(), remoteModel.CLITypeCodex, "project", "write a file", nil)
+	result := executor.ExecuteTurn(context.Background(), remoteModel.CLITypeCodex, remoteModel.PermissionModeAutoEdit, "project", "write a file", nil)
 
 	require.True(t, result.Success, result.ErrorMessage)
 	assert.Equal(t, "fake completed", result.Content)
@@ -181,6 +209,45 @@ func TestExecutorRunsCodexWithWorkspaceWriteAndWritesInProject(t *testing.T) {
 	written, err := os.ReadFile(writtenFile)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", strings.TrimSpace(string(written)))
+}
+
+func TestFindNativeCodexExecutableFromNVMDShim(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("NVMD executable resolution is Windows-specific")
+	}
+	nvmdRoot := filepath.Join(t.TempDir(), ".nvmd")
+	shim := filepath.Join(nvmdRoot, "bin", "codex.exe")
+	packageRoot := filepath.Join(nvmdRoot, "versions", "22.0.0", "node_modules", "@openai", "codex")
+	archRoot := filepath.Join(packageRoot, "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc")
+	native := filepath.Join(archRoot, "bin", "codex.exe")
+	pathDirectory := filepath.Join(archRoot, "codex-path")
+	require.NoError(t, os.MkdirAll(filepath.Dir(shim), 0750))
+	require.NoError(t, os.MkdirAll(filepath.Dir(native), 0750))
+	require.NoError(t, os.MkdirAll(pathDirectory, 0750))
+	require.NoError(t, os.WriteFile(shim, []byte("shim"), 0750))
+	require.NoError(t, os.WriteFile(native, []byte("native"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(nvmdRoot, "default"), []byte("22.0.0\n"), 0600))
+
+	resolved, resolvedPath := findNativeCodexExecutable(shim)
+
+	assert.Equal(t, native, resolved)
+	assert.Equal(t, pathDirectory, resolvedPath)
+}
+
+func TestFindNativeClaudeExecutableFromNVMDShim(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("NVMD executable resolution is Windows-specific")
+	}
+	nvmdRoot := filepath.Join(t.TempDir(), ".nvmd")
+	shim := filepath.Join(nvmdRoot, "bin", "claude.exe")
+	native := filepath.Join(nvmdRoot, "versions", "22.0.0", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe")
+	require.NoError(t, os.MkdirAll(filepath.Dir(shim), 0750))
+	require.NoError(t, os.MkdirAll(filepath.Dir(native), 0750))
+	require.NoError(t, os.WriteFile(shim, []byte("shim"), 0750))
+	require.NoError(t, os.WriteFile(native, []byte("native"), 0750))
+	require.NoError(t, os.WriteFile(filepath.Join(nvmdRoot, "default"), []byte("22.0.0\n"), 0600))
+
+	assert.Equal(t, native, findNativeClaudeExecutable(shim))
 }
 
 func writeFakeCodex(t *testing.T) string {

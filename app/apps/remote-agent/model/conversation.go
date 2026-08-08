@@ -3,6 +3,7 @@ package model
 import (
 	"apipig/core/api"
 	"apipig/toolkit/snowflake"
+	"strings"
 )
 
 const (
@@ -11,7 +12,20 @@ const (
 	ConversationControlModeWechat = "WECHAT"
 	CLITypeCodex                  = "CODEX"
 	CLITypeClaude                 = "CLAUDE"
+	PermissionModeAutoEdit        = "AUTO_EDIT"
+	PermissionModeFullAccess      = "FULL_ACCESS"
 )
+
+func NormalizePermissionMode(value string) string {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case PermissionModeAutoEdit:
+		return PermissionModeAutoEdit
+	case PermissionModeFullAccess:
+		return PermissionModeFullAccess
+	default:
+		return PermissionModeFullAccess
+	}
+}
 
 // Conversation is a persistent, agent-scoped Web console session.
 type Conversation struct {
@@ -19,6 +33,7 @@ type Conversation struct {
 	AgentID          snowflake.ID `gorm:"type:bigint;not null;index" json:"agentId" swaggertype:"string"`
 	Title            string       `gorm:"size:200;not null;index" json:"title"`
 	CLIType          string       `gorm:"size:20;not null" json:"cliType"`
+	PermissionMode   string       `gorm:"size:20;not null;default:FULL_ACCESS" json:"permissionMode"`
 	WorkingDirectory string       `gorm:"size:500;not null" json:"workingDirectory"`
 	Status           string       `gorm:"size:20;not null;index" json:"status"`
 	Pinned           bool         `gorm:"not null;default:false;index" json:"pinned"`

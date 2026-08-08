@@ -14,9 +14,13 @@ import {
   Bot,
   Ellipsis,
   MessageSquarePlus,
+  Pause,
   Pencil,
   Pin,
+  Play,
   Send,
+  ShieldCheck,
+  ShieldPlus,
   Smartphone,
   Trash2,
   User,
@@ -49,14 +53,11 @@ import {
   type AgentDetailResult,
   type CLIType,
   type MessageChunk,
+  type PermissionMode,
   type RemoteConversation,
   type RemoteMessage,
 } from '@/api/ai-applications/remote-agent'
-import {
-  wechatBotApi,
-  type WechatBot,
-  type WechatContact,
-} from '@/api/ai-applications/wechat-bot'
+import { wechatBotApi, type WechatBot, type WechatContact } from '@/api/ai-applications/wechat-bot'
 import { useTabsStore } from '@/stores/tabs'
 import {
   subscribeRemoteAgentEvents,
@@ -66,6 +67,18 @@ import MarkdownContent from './components/MarkdownContent.vue'
 import { agentStatusLabel, agentStatusVariant, formatTime } from './presentation'
 
 defineOptions({ name: 'RemoteAgentAgentDetail' })
+
+function permissionModeLabel(mode?: PermissionMode) {
+  return mode === 'AUTO_EDIT' ? '自动编辑' : '完全访问'
+}
+
+function messageAuthorLabel(message: RemoteMessage) {
+  if (message.createdBy === 'system') return '系统'
+  if (message.createdBy === 'wechat-bot') {
+    return message.role === 'USER' ? '微信联系人' : '微信 Bot'
+  }
+  return message.role === 'USER' ? '你' : agent.value?.name || 'Agent'
+}
 const route = useRoute()
 const router = useRouter()
 const tabsStore = useTabsStore()
@@ -85,6 +98,7 @@ const deletingConversation = ref(false)
 const newConversationOpen = ref(false)
 const newConversationTitle = ref('')
 const newConversationCLI = ref<CLIType>('CODEX')
+const newConversationPermissionMode = ref<PermissionMode>('FULL_ACCESS')
 const newConversationWorkingDirectory = ref('.')
 const creatingConversation = ref(false)
 const refreshingAgentStatus = ref(false)
@@ -95,14 +109,25 @@ const takeoverBotId = ref('')
 const takeoverUserId = ref('')
 const takeoverLoading = ref(false)
 const takeoverSyncing = ref(false)
+const taskControlLoading = ref(false)
 const viewport = ref<HTMLElement | null>(null)
 const agentId = computed(() => String(route.params.id || ''))
 const agent = computed(() => detail.value?.agent)
+const currentTask = computed(() =>
+  [...messages.value]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === 'ASSISTANT' &&
+        ['PENDING', 'STREAMING', 'PAUSING', 'PAUSED'].includes(message.status),
+    ),
+)
 const canSend = computed(
   () =>
     agent.value?.status === 'ONLINE' &&
     Boolean(selectedConversation.value) &&
     selectedConversation.value?.controlMode !== 'WECHAT' &&
+    !currentTask.value &&
     !sending.value,
 )
 
@@ -115,7 +140,9 @@ async function openTakeover() {
   takeoverContacts.value = []
   try {
     const result = await wechatBotApi.page({ page: 1, pageSize: 100, status: 'ONLINE' })
-    takeoverBots.value = (result.records || []).filter((bot) => bot.enabled && bot.status === 'ONLINE')
+    takeoverBots.value = (result.records || []).filter(
+      (bot) => bot.enabled && bot.status === 'ONLINE',
+    )
     if (takeoverBots.value.length === 1) {
       takeoverBotId.value = takeoverBots.value[0]!.id
       await loadTakeoverContacts()
@@ -153,7 +180,9 @@ async function startTakeover() {
       takeoverUserId.value,
     )
     selectedConversation.value = updated
-    conversations.value = conversations.value.map((item) => (item.id === updated.id ? updated : item))
+    conversations.value = conversations.value.map((item) =>
+      item.id === updated.id ? updated : item,
+    )
     prompt.value = ''
     takeoverOpen.value = false
     toast.success('微信 Bot 已接管当前会话')
@@ -170,7 +199,9 @@ async function stopTakeover() {
   try {
     const updated = await remoteAgentApi.stopTakeover(selectedConversation.value.id)
     selectedConversation.value = updated
-    conversations.value = conversations.value.map((item) => (item.id === updated.id ? updated : item))
+    conversations.value = conversations.value.map((item) =>
+      item.id === updated.id ? updated : item,
+    )
     toast.success('已恢复 Web 端控制')
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '结束微信接管失败')
@@ -273,8 +304,7 @@ async function syncTakeoverConversation() {
         .reverse()
         .find(
           (item) =>
-            item.role === 'ASSISTANT' &&
-            (item.status === 'PENDING' || item.status === 'STREAMING'),
+            item.role === 'ASSISTANT' && ['PENDING', 'STREAMING', 'PAUSING'].includes(item.status),
         )
       if (active) void streamMessage(active)
     }
@@ -311,11 +341,13 @@ async function createConversation() {
     const conversation = await remoteAgentApi.createConversation(
       agentId.value,
       newConversationCLI.value,
+      newConversationPermissionMode.value,
       workingDirectory,
       newConversationTitle.value.trim(),
     )
     newConversationOpen.value = false
     newConversationTitle.value = ''
+    newConversationPermissionMode.value = 'FULL_ACCESS'
     newConversationWorkingDirectory.value = '.'
     await loadConversations(conversation.id)
   } catch (error) {
@@ -337,7 +369,7 @@ async function selectConversation(conversation: RemoteConversation) {
       .reverse()
       .find(
         (item) =>
-          item.role === 'ASSISTANT' && (item.status === 'PENDING' || item.status === 'STREAMING'),
+          item.role === 'ASSISTANT' && ['PENDING', 'STREAMING', 'PAUSING'].includes(item.status),
       )
     if (active) {
       active.content = ''
@@ -363,6 +395,45 @@ async function sendMessage() {
   } catch (error) {
     sending.value = false
     toast.error(error instanceof Error ? error.message : '发送消息失败')
+  }
+}
+
+async function pauseCurrentTask() {
+  const task = currentTask.value
+  if (!task || task.status === 'PAUSED' || task.status === 'PAUSING' || taskControlLoading.value)
+    return
+  taskControlLoading.value = true
+  try {
+    const updated = await remoteAgentApi.pauseTask(task.id)
+    Object.assign(task, updated)
+    if (updated.status === 'PAUSED') {
+      streamController?.abort()
+      if (detail.value) detail.value.agent.status = 'ONLINE'
+      sending.value = false
+    }
+    toast.success(updated.status === 'PAUSED' ? '任务已暂停' : '正在暂停任务')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '暂停任务失败')
+  } finally {
+    taskControlLoading.value = false
+  }
+}
+
+async function resumeCurrentTask() {
+  const task = currentTask.value
+  if (!task || task.status !== 'PAUSED' || taskControlLoading.value) return
+  taskControlLoading.value = true
+  try {
+    const updated = await remoteAgentApi.resumeTask(task.id)
+    Object.assign(task, updated)
+    sending.value = true
+    if (detail.value) detail.value.agent.status = 'BUSY'
+    void streamMessage(task)
+    toast.success('任务已恢复')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '恢复任务失败')
+  } finally {
+    taskControlLoading.value = false
   }
 }
 
@@ -437,16 +508,17 @@ async function syncStreamingMessage(
 ) {
   const conversationId = selectedConversation.value?.id
   if (!conversationId) return false
-  if (message.status === 'COMPLETED' || message.status === 'FAILED') return true
+  if (['COMPLETED', 'FAILED', 'PAUSED'].includes(message.status)) return true
   try {
     const detailResult = await remoteAgentApi.getConversation(conversationId)
     const stored = detailResult.messages.find((item) => item.id === message.id)
     if (!stored) return false
-    const terminal = stored.status === 'COMPLETED' || stored.status === 'FAILED'
+    const terminal = ['COMPLETED', 'FAILED', 'PAUSED'].includes(stored.status)
     if (terminal) Object.assign(message, stored)
     else if (
       message.status !== 'COMPLETED' &&
       message.status !== 'FAILED' &&
+      message.status !== 'PAUSED' &&
       stored.content.length >= message.content.length
     ) {
       message.content = stored.content
@@ -699,7 +771,9 @@ onBeforeUnmount(() => {
             >
               <div class="truncate text-sm font-medium">{{ conversation.title }}</div>
               <div class="mt-1 truncate text-xs text-muted-foreground">
-                {{ conversation.cliType }} · {{ conversation.workingDirectory }}
+                {{ conversation.cliType }} ·
+                {{ permissionModeLabel(conversation.permissionMode) }} ·
+                {{ conversation.workingDirectory }}
               </div>
               <div class="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{{ formatTime(conversation.lastMessageAt) }}</span>
@@ -761,10 +835,32 @@ onBeforeUnmount(() => {
               {{ selectedConversation?.title || '选择或新建会话' }}
             </div>
             <div v-if="selectedConversation" class="truncate text-xs text-muted-foreground">
-              {{ selectedConversation.cliType }} · {{ selectedConversation.workingDirectory }}
+              {{ selectedConversation.cliType }} ·
+              {{ permissionModeLabel(selectedConversation.permissionMode) }} ·
+              {{ selectedConversation.workingDirectory }}
             </div>
           </div>
           <div v-if="selectedConversation" class="flex shrink-0 items-center gap-2">
+            <Button
+              v-if="currentTask && currentTask.status !== 'PAUSED'"
+              size="icon"
+              variant="outline"
+              :title="currentTask.status === 'PAUSING' ? '正在暂停任务' : '暂停当前任务'"
+              :disabled="taskControlLoading || currentTask.status === 'PAUSING'"
+              @click="pauseCurrentTask"
+            >
+              <Pause class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="currentTask?.status === 'PAUSED'"
+              size="icon"
+              variant="outline"
+              title="恢复当前任务"
+              :disabled="taskControlLoading || agent?.status !== 'ONLINE'"
+              @click="resumeCurrentTask"
+            >
+              <Play class="h-4 w-4" />
+            </Button>
             <Badge v-if="selectedConversation.controlMode === 'WECHAT'" variant="secondary">
               <Smartphone class="mr-1 h-3.5 w-3.5" />微信接管中
             </Badge>
@@ -772,7 +868,9 @@ onBeforeUnmount(() => {
               size="sm"
               :variant="selectedConversation.controlMode === 'WECHAT' ? 'outline' : 'default'"
               :disabled="takeoverLoading || agent?.status === 'BUSY'"
-              @click="selectedConversation.controlMode === 'WECHAT' ? stopTakeover() : openTakeover()"
+              @click="
+                selectedConversation.controlMode === 'WECHAT' ? stopTakeover() : openTakeover()
+              "
             >
               <Smartphone class="h-4 w-4" />
               {{ selectedConversation.controlMode === 'WECHAT' ? '结束接管' : '微信接管' }}
@@ -812,10 +910,12 @@ onBeforeUnmount(() => {
                   class="mb-1 flex items-center gap-2 text-xs font-medium"
                   :class="message.role === 'USER' ? 'justify-end' : ''"
                 >
-                  <span>{{ message.role === 'USER' ? '你' : agent?.name || 'Agent' }}</span
+                  <span>{{ messageAuthorLabel(message) }}</span
                   ><span class="font-normal text-muted-foreground">{{
                     formatTime(message.createdAt)
-                  }}</span>
+                  }}</span
+                  ><Badge v-if="message.status === 'PAUSING'" variant="secondary">暂停中</Badge
+                  ><Badge v-if="message.status === 'PAUSED'" variant="outline">已暂停</Badge>
                 </div>
                 <MarkdownContent
                   v-if="message.content"
@@ -823,7 +923,15 @@ onBeforeUnmount(() => {
                   :align="message.role === 'USER' ? 'right' : 'left'"
                 />
                 <div v-else class="text-sm leading-6 text-muted-foreground">
-                  {{ message.status === 'PENDING' ? '等待 Agent 响应...' : '正在响应...' }}
+                  {{
+                    message.status === 'PENDING'
+                      ? '等待 Agent 响应...'
+                      : message.status === 'PAUSING'
+                        ? '正在暂停任务...'
+                        : message.status === 'PAUSED'
+                          ? '任务已暂停，可恢复'
+                          : '正在响应...'
+                  }}
                 </div>
                 <p
                   v-if="message.errorMessage"
@@ -854,9 +962,11 @@ onBeforeUnmount(() => {
               :placeholder="
                 selectedConversation?.controlMode === 'WECHAT'
                   ? '微信 Bot 接管中，Web 端已暂停控制'
-                  : agent?.status === 'ONLINE'
-                  ? '输入消息，Enter 发送，Shift + Enter 换行'
-                  : 'Agent 在线后可发送消息'
+                  : currentTask?.status === 'PAUSED'
+                    ? '当前任务已暂停，请先恢复任务'
+                    : agent?.status === 'ONLINE'
+                      ? '输入消息，Enter 发送，Shift + Enter 换行'
+                      : 'Agent 在线后可发送消息'
               "
               @keydown="handleComposerKeydown"
             />
@@ -906,11 +1016,17 @@ onBeforeUnmount(() => {
             </select>
           </div>
           <p class="text-xs leading-5 text-muted-foreground">
-            接管后，该联系人的文本消息将发送给当前 Agent，回复自动回发微信；Web 端仍可查看消息，但暂停发送。
+            接管后，该联系人的文本消息将发送给当前 Agent，回复自动回发微信；Web
+            端仍可查看消息，但暂停发送。
           </p>
           <div class="flex justify-end gap-2">
-            <Button variant="outline" :disabled="takeoverLoading" @click="takeoverOpen = false">取消</Button>
-            <Button :disabled="takeoverLoading || !takeoverBotId || !takeoverUserId" @click="startTakeover">
+            <Button variant="outline" :disabled="takeoverLoading" @click="takeoverOpen = false"
+              >取消</Button
+            >
+            <Button
+              :disabled="takeoverLoading || !takeoverBotId || !takeoverUserId"
+              @click="startTakeover"
+            >
               <Smartphone class="h-4 w-4" />开始接管
             </Button>
           </div>
@@ -948,6 +1064,25 @@ onBeforeUnmount(() => {
                 @click="newConversationCLI = 'CLAUDE'"
               >
                 Claude CLI
+              </Button>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <Label>权限模式</Label>
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                :variant="newConversationPermissionMode === 'AUTO_EDIT' ? 'default' : 'outline'"
+                @click="newConversationPermissionMode = 'AUTO_EDIT'"
+              >
+                <ShieldCheck class="mr-2 h-4 w-4" />自动编辑
+              </Button>
+              <Button
+                type="button"
+                :variant="newConversationPermissionMode === 'FULL_ACCESS' ? 'default' : 'outline'"
+                @click="newConversationPermissionMode = 'FULL_ACCESS'"
+              >
+                <ShieldPlus class="mr-2 h-4 w-4" />完全访问
               </Button>
             </div>
           </div>

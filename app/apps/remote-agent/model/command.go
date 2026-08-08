@@ -8,12 +8,14 @@ import (
 const (
 	CommandTypeConversationTurn = "CONVERSATION_TURN"
 
-	CommandStatusPending      = "PENDING"
-	CommandStatusDispatched   = "DISPATCHED"
-	CommandStatusAcknowledged = "ACKNOWLEDGED"
-	CommandStatusCompleted    = "COMPLETED"
-	CommandStatusFailed       = "FAILED"
-	CommandStatusCancelled    = "CANCELLED"
+	CommandStatusPending        = "PENDING"
+	CommandStatusDispatched     = "DISPATCHED"
+	CommandStatusAcknowledged   = "ACKNOWLEDGED"
+	CommandStatusPauseRequested = "PAUSE_REQUESTED"
+	CommandStatusPaused         = "PAUSED"
+	CommandStatusCompleted      = "COMPLETED"
+	CommandStatusFailed         = "FAILED"
+	CommandStatusCancelled      = "CANCELLED"
 )
 
 // Command is an auditable Controller instruction; it is not an arbitrary shell command.

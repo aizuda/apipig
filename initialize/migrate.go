@@ -13,7 +13,17 @@ import (
 
 func autoMigrate(db *gorm.DB) error {
 	log.Println("Initiating migration...")
-	if err := db.AutoMigrate(
+	if err := db.AutoMigrate(migrationModels()...); err != nil {
+		return err
+	}
+	log.Println("Migration Completed...")
+	return nil
+}
+
+// migrationModels is the single source of truth for tables managed by GORM.
+// Keeping the list reusable lets compatibility tests cover every migrated model.
+func migrationModels() []any {
+	return []any{
 		&aiModel.Provider{},
 		&aiModel.Channel{},
 		&aiModel.ChannelAccount{},
@@ -24,6 +34,7 @@ func autoMigrate(db *gorm.DB) error {
 		&aiModel.CallLog{},
 		&reviewModel.Project{},
 		&reviewModel.Task{},
+		&reviewModel.PushChannel{},
 		&remoteAgentModel.Agent{},
 		&remoteAgentModel.Heartbeat{},
 		&remoteAgentModel.Conversation{},
@@ -40,9 +51,5 @@ func autoMigrate(db *gorm.DB) error {
 		&sysModel.User{},
 		&sysModel.UserRole{},
 		&sysModel.UserSession{},
-	); err != nil {
-		return err
 	}
-	log.Println("Migration Completed...")
-	return nil
 }

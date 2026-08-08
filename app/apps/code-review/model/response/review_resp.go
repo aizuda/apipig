@@ -8,6 +8,10 @@ type ProjectSaveResult struct {
 	WebhookURL    string              `json:"webhookUrl"`
 }
 
+type PushChannelsResult struct {
+	Channels []reviewModel.PushChannelView `json:"channels"`
+}
+
 type WebhookAccepted struct {
 	TaskID    string `json:"taskId,omitempty"`
 	Status    string `json:"status"`

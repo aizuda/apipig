@@ -11,6 +11,8 @@ const (
 
 	MessageStatusPending   = "PENDING"
 	MessageStatusStreaming = "STREAMING"
+	MessageStatusPausing   = "PAUSING"
+	MessageStatusPaused    = "PAUSED"
 	MessageStatusCompleted = "COMPLETED"
 	MessageStatusFailed    = "FAILED"
 )

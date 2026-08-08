@@ -105,19 +105,14 @@ func (c *Config) normalize() error {
 	}
 	if len(c.CodexArgs) == 0 {
 		c.CodexArgs = []string{
-			"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
-			"-c", "sandbox_workspace_write.network_access=true",
-			"--skip-git-repo-check", "-",
+			"exec", "--json", "--skip-git-repo-check", "-",
 		}
 	}
-	// Normalize persisted/hand-edited arguments as well as defaults. This keeps
-	// the effective policy identical after an Agent restart.
-	c.CodexArgs = codexStreamingArgs(c.CodexArgs)
 	if c.ClaudeCommand == "" {
 		c.ClaudeCommand = "claude"
 	}
 	if len(c.ClaudeArgs) == 0 {
-		c.ClaudeArgs = []string{"-p", "--permission-mode", "acceptEdits"}
+		c.ClaudeArgs = []string{"-p"}
 	}
 	if c.PollWaitSeconds <= 0 || c.PollWaitSeconds > 25 {
 		c.PollWaitSeconds = 25

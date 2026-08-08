@@ -8,6 +8,24 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+type PushChannelRequest struct {
+	ID      snowflake.ID      `json:"id" swaggertype:"string"`
+	Type    string            `json:"type"`
+	Name    string            `json:"name"`
+	Enabled bool              `json:"enabled"`
+	Config  map[string]string `json:"config"`
+}
+
+type PushChannelsSaveRequest struct {
+	ProjectID snowflake.ID         `json:"projectId" swaggertype:"string"`
+	Channels  []PushChannelRequest `json:"channels"`
+}
+
+type PushChannelTestRequest struct {
+	ProjectID snowflake.ID       `json:"projectId" swaggertype:"string"`
+	Channel   PushChannelRequest `json:"channel"`
+}
+
 type ProjectSaveParams struct {
 	Ctx                 *fiber.Ctx
 	Project             *reviewModel.Project

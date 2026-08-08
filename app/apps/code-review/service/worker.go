@@ -20,6 +20,7 @@ import (
 type reviewExecutor struct {
 	runner *taskRunner
 	vault  aiService.CredentialVault
+	push   *pushChannelService
 }
 
 func (e *reviewExecutor) execute(id snowflake.ID) {
@@ -73,12 +74,18 @@ func (e *reviewExecutor) execute(id snowflake.ID) {
 	}
 	review := parseAIReview(raw)
 	findings, _ := json.Marshal(review.Findings)
+	task.Status = reviewModel.TaskStatusSucceeded
+	task.RiskLevel = review.RiskLevel
+	task.Summary = review.Summary
+	task.Report = review.Report
 	if err = global.DB.Model(&task).Updates(map[string]any{
 		"status": reviewModel.TaskStatusSucceeded, "changed_files": diff.ChangedFiles, "additions": diff.Additions,
 		"deletions": diff.Deletions, "diff_truncated": diff.Truncated, "risk_level": review.RiskLevel,
 		"summary": review.Summary, "report": review.Report, "findings": string(findings), "finished_at": toolkit.GetNowUnixMilli(), "error_message": "",
 	}).Error; err != nil {
 		logReviewError("保存代码评审报告失败", err)
+	} else if e.push != nil {
+		go e.push.push(task, project)
 	}
 }
 

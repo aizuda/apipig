@@ -79,6 +79,13 @@ func (c *Client) Acknowledge(ctx context.Context, commandID fmt.Stringer) error 
 	}, nil)
 }
 
+func (c *Client) CommandStatus(ctx context.Context, commandID fmt.Stringer) (string, error) {
+	var result remoteResp.CommandControlStatus
+	path := "/command/status?commandId=" + url.QueryEscape(commandID.String())
+	err := c.doAgent(ctx, http.MethodGet, path, nil, &result)
+	return result.Status, err
+}
+
 func (c *Client) Complete(ctx context.Context, result MessageResult) error {
 	return c.doAgent(ctx, http.MethodPost, "/message/result", result, nil)
 }

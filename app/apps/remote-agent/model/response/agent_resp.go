@@ -53,9 +53,14 @@ type CommandDispatch struct {
 	AssistantMessageID snowflake.ID `json:"assistantMessageId" swaggertype:"string"`
 	Type               string       `json:"type"`
 	CLIType            string       `json:"cliType"`
+	PermissionMode     string       `json:"permissionMode"`
 	WorkingDirectory   string       `json:"workingDirectory"`
 	Prompt             string       `json:"prompt"`
 	NextChunkSequence  int64        `json:"nextChunkSequence"`
+}
+
+type CommandControlStatus struct {
+	Status string `json:"status"`
 }
 
 type MessageStreamEvent struct {

@@ -24,6 +24,7 @@ func TestWechatTakeoverBlocksWebAndRoutesMessages(t *testing.T) {
 	service := NewConversationService(NewAgentService())
 	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
 	require.NoError(t, err)
+	assert.Equal(t, remoteModel.PermissionModeFullAccess, conversation.PermissionMode)
 	botID := snowflake.ID(9001)
 	require.NoError(t, service.repository.SetTakeover(conversation.ID, botID, "wx-user", time.Now().UnixMilli()))
 
@@ -55,6 +56,88 @@ func TestWechatTakeoverBlocksWebAndRoutesMessages(t *testing.T) {
 	assert.Equal(t, remoteModel.ConversationControlModeWeb, stopped.ControlMode)
 }
 
+func TestWechatTakeoverMirrorsBotConsoleOutboundMessage(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "takeover-mirror-node", "registration", remoteModel.AgentStatusOnline)
+	service := NewConversationService(NewAgentService())
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
+	require.NoError(t, err)
+	botID := snowflake.ID(9002)
+	require.NoError(t, service.repository.SetTakeover(conversation.ID, botID, "wx-user", time.Now().UnixMilli()))
+
+	require.NoError(t, service.HandleWechatOutbound(botID, "wx-user", "sent from bot console"))
+	detail, err := service.Get(conversation.ID)
+	require.NoError(t, err)
+	require.Len(t, detail.Messages, 1)
+	assert.Equal(t, remoteModel.MessageRoleAssistant, detail.Messages[0].Role)
+	assert.Equal(t, remoteModel.MessageStatusCompleted, detail.Messages[0].Status)
+	assert.Equal(t, "wechat-bot", detail.Messages[0].CreatedBy)
+	assert.Equal(t, "sent from bot console", detail.Messages[0].Content)
+}
+
+func TestWechatTakeoverNotifiesBotWhenAgentDisconnects(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "takeover-offline-node", "registration", remoteModel.AgentStatusOnline)
+	require.NoError(t, database.Model(&agent).Updates(map[string]any{
+		"token_hash": hashAgentToken("runtime-token"), "status": remoteModel.AgentStatusOnline,
+		"last_seen_at": time.Now().UnixMilli(),
+	}).Error)
+	agentService := NewAgentService()
+	service := NewConversationService(agentService)
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
+	require.NoError(t, err)
+	botID := snowflake.ID(9003)
+	require.NoError(t, service.repository.SetTakeover(conversation.ID, botID, "wx-user", time.Now().UnixMilli()))
+
+	var sentBotID snowflake.ID
+	var sentUserID, sentContent string
+	service.SetTakeoverSender(func(_ context.Context, botID snowflake.ID, userID, content string) error {
+		sentBotID, sentUserID, sentContent = botID, userID, content
+		return nil
+	})
+	disconnected, err := agentService.Disconnect("runtime-token")
+	require.NoError(t, err)
+	assert.True(t, disconnected)
+	assert.Equal(t, botID, sentBotID)
+	assert.Equal(t, "wx-user", sentUserID)
+	assert.Contains(t, sentContent, "已离线")
+
+	detail, err := service.Get(conversation.ID)
+	require.NoError(t, err)
+	require.Len(t, detail.Messages, 1)
+	assert.Equal(t, "system", detail.Messages[0].CreatedBy)
+	assert.Equal(t, sentContent, detail.Messages[0].Content)
+}
+
+func TestWechatTakeoverMirrorsInboundAndRepliesWhileAgentIsOffline(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "takeover-already-offline-node", "registration", remoteModel.AgentStatusOffline)
+	agentService := NewAgentService()
+	service := NewConversationService(agentService)
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
+	require.NoError(t, err)
+	botID := snowflake.ID(9004)
+	require.NoError(t, service.repository.SetTakeover(conversation.ID, botID, "wx-user", time.Now().UnixMilli()))
+
+	var sentContent string
+	service.SetTakeoverSender(func(_ context.Context, _ snowflake.ID, _ string, content string) error {
+		sentContent = content
+		return nil
+	})
+	require.NoError(t, service.HandleWechatInbound(botID, "wx-user", "is anyone there?"))
+	assert.Contains(t, sentContent, "已离线")
+
+	detail, err := service.Get(conversation.ID)
+	require.NoError(t, err)
+	require.Len(t, detail.Messages, 2)
+	assert.Equal(t, remoteModel.MessageRoleUser, detail.Messages[0].Role)
+	assert.Equal(t, "wechat-bot", detail.Messages[0].CreatedBy)
+	assert.Equal(t, "is anyone there?", detail.Messages[0].Content)
+	assert.Equal(t, remoteModel.MessageRoleAssistant, detail.Messages[1].Role)
+	assert.Equal(t, "system", detail.Messages[1].CreatedBy)
+	assert.Equal(t, sentContent, detail.Messages[1].Content)
+}
+
 func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	database := setupAgentServiceTestDB(t)
 	agent := seedTestAgent(t, database, "console-node", "registration", remoteModel.AgentStatusOnline)
@@ -65,13 +148,16 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	agentService := NewAgentService()
 	service := NewConversationService(agentService)
 	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{
-		AgentID: agent.ID, CLIType: remoteModel.CLITypeClaude, WorkingDirectory: "projects/api",
+		AgentID: agent.ID, CLIType: remoteModel.CLITypeClaude, PermissionMode: remoteModel.PermissionModeAutoEdit, WorkingDirectory: "projects/api",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, remoteModel.CLITypeClaude, conversation.CLIType)
+	assert.Equal(t, remoteModel.PermissionModeAutoEdit, conversation.PermissionMode)
 	assert.Equal(t, "projects/api", conversation.WorkingDirectory)
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: "SHELL"})
 	require.EqualError(t, err, "CLI 类型必须是 CODEX 或 CLAUDE")
+	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, PermissionMode: "ROOT"})
+	require.EqualError(t, err, "权限模式必须是 AUTO_EDIT 或 FULL_ACCESS")
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: "../outside"})
 	require.EqualError(t, err, "工作目录不能越出 workspace-root")
 	_, err = service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex, WorkingDirectory: `D:\outside`})
@@ -123,6 +209,7 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	require.NotNil(t, command)
 	assert.Equal(t, turn.AssistantMessage.ID, command.AssistantMessageID)
 	assert.Equal(t, remoteModel.CLITypeClaude, command.CLIType)
+	assert.Equal(t, remoteModel.PermissionModeAutoEdit, command.PermissionMode)
 	assert.Equal(t, "projects/api", command.WorkingDirectory)
 	assert.Contains(t, command.Prompt, "inspect this workspace")
 
@@ -163,6 +250,7 @@ func TestConversationTurnStreamsPinsAndDeletesMessages(t *testing.T) {
 	require.NotNil(t, rootCommand)
 	assert.Equal(t, rootTurn.AssistantMessage.ID, rootCommand.AssistantMessageID)
 	assert.Equal(t, remoteModel.CLITypeCodex, rootCommand.CLIType)
+	assert.Equal(t, remoteModel.PermissionModeFullAccess, rootCommand.PermissionMode)
 	assert.Equal(t, ".", rootCommand.WorkingDirectory)
 	_, err = service.Complete(&remoteReq.MessageResultParams{
 		AgentToken: "runtime-token",
@@ -222,6 +310,56 @@ func TestConversationRejectsIncompleteExecutionConfiguration(t *testing.T) {
 	var messageCount int64
 	require.NoError(t, database.Model(&remoteModel.Message{}).Where("conversation_id = ?", conversation.ID).Count(&messageCount).Error)
 	assert.Zero(t, messageCount)
+}
+
+func TestConversationTaskCanPauseAndResume(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "pause-node", "registration", remoteModel.AgentStatusOnline)
+	require.NoError(t, database.Model(&agent).Updates(map[string]any{
+		"token_hash": hashAgentToken("runtime-token"), "status": remoteModel.AgentStatusOnline,
+		"last_seen_at": time.Now().UnixMilli(),
+	}).Error)
+	service := NewConversationService(NewAgentService())
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{
+		AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex,
+	})
+	require.NoError(t, err)
+	turn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "implement pause"})
+	require.NoError(t, err)
+	command, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	require.NoError(t, err)
+	require.NotNil(t, command)
+	_, err = service.Acknowledge(&remoteReq.AcknowledgeCommandParams{AgentToken: "runtime-token", CommandID: command.CommandID})
+	require.NoError(t, err)
+
+	pausing, err := service.Pause(&remoteReq.ConversationTaskRequest{MessageID: turn.AssistantMessage.ID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.MessageStatusPausing, pausing.Status)
+	control, err := service.CommandStatus(&remoteReq.CommandStatusParams{AgentToken: "runtime-token", CommandID: command.CommandID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.CommandStatusPauseRequested, control.Status)
+
+	_, err = service.Complete(&remoteReq.MessageResultParams{AgentToken: "runtime-token", Request: remoteReq.MessageResultRequest{
+		MessageID: command.AssistantMessageID, Paused: true, Content: "partial output",
+	}})
+	require.NoError(t, err)
+	detail, err := service.Get(conversation.ID)
+	require.NoError(t, err)
+	require.Len(t, detail.Messages, 2)
+	assert.Equal(t, remoteModel.MessageStatusPaused, detail.Messages[1].Status)
+	assert.Equal(t, "partial output", detail.Messages[1].Content)
+
+	_, err = service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "another task"})
+	require.EqualError(t, err, "该会话有暂停的任务，请先恢复或删除会话")
+	resumed, err := service.Resume(&remoteReq.ConversationTaskRequest{MessageID: command.AssistantMessageID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.MessageStatusPending, resumed.Status)
+	assert.Empty(t, resumed.Content)
+	retry, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	require.NoError(t, err)
+	require.NotNil(t, retry)
+	assert.Equal(t, command.CommandID, retry.CommandID)
+	assert.Equal(t, int64(1), retry.NextChunkSequence)
 }
 
 func TestBuildConversationPromptPreservesInstructionAndLatestMessage(t *testing.T) {

@@ -20,17 +20,15 @@ func TestConfigNormalizeDefaults(t *testing.T) {
 	assert.Equal(t, "https://controller.example.com", config.ControllerURL)
 	assert.Equal(t, "codex", config.CodexCommand)
 	assert.Equal(t, []string{
-		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
-		"-c", "sandbox_workspace_write.network_access=true",
-		"--skip-git-repo-check", "-",
+		"exec", "--json", "--skip-git-repo-check", "-",
 	}, config.CodexArgs)
 	assert.Equal(t, "claude", config.ClaudeCommand)
-	assert.Equal(t, []string{"-p", "--permission-mode", "acceptEdits"}, config.ClaudeArgs)
+	assert.Equal(t, []string{"-p"}, config.ClaudeArgs)
 	assert.Equal(t, 25, config.PollWaitSeconds)
 	assert.Greater(t, config.RequestTimeoutSeconds, config.PollWaitSeconds)
 }
 
-func TestConfigNormalizesPersistedReadOnlyCodexArgs(t *testing.T) {
+func TestConfigPreservesPersistedCodexArgsForPerConversationPolicy(t *testing.T) {
 	config := Config{
 		ControllerURL:     "https://controller.example.com",
 		RegistrationToken: "secret",
@@ -42,8 +40,7 @@ func TestConfigNormalizesPersistedReadOnlyCodexArgs(t *testing.T) {
 
 	require.NoError(t, config.normalize())
 	assert.Equal(t, []string{
-		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
-		"-c", "sandbox_workspace_write.network_access=true", "-",
+		"exec", "--sandbox", "read-only", "-c", "sandbox_mode=read-only", "-",
 	}, config.CodexArgs)
 }
 

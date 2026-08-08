@@ -7,6 +7,7 @@ import (
 	remoteModel "apipig/app/apps/remote-agent/model"
 	remoteReq "apipig/app/apps/remote-agent/model/request"
 	remoteResp "apipig/app/apps/remote-agent/model/response"
+	coreAPI "apipig/core/api"
 	coreReq "apipig/core/api/request"
 	"apipig/core/api/response"
 	"apipig/core/db"
@@ -86,7 +87,7 @@ func (r conversationRepository) Delete(id snowflake.ID) error {
 			return err
 		}
 		for _, command := range commands {
-			if command.Status == remoteModel.CommandStatusDispatched || command.Status == remoteModel.CommandStatusAcknowledged {
+			if command.Status == remoteModel.CommandStatusDispatched || command.Status == remoteModel.CommandStatusAcknowledged || command.Status == remoteModel.CommandStatusPauseRequested {
 				return errors.New("Agent 正在响应时不能删除会话")
 			}
 		}
@@ -107,8 +108,8 @@ func (r conversationRepository) Delete(id snowflake.ID) error {
 
 func (r conversationRepository) CreateTurn(
 	conversation remoteModel.Conversation,
-	userMessage, assistantMessage remoteModel.Message,
-	command remoteModel.Command,
+	userMessage, assistantMessage *remoteModel.Message,
+	command *remoteModel.Command,
 	now int64, source string,
 ) error {
 	return r.db().Transaction(func(tx *gorm.DB) error {
@@ -129,6 +130,23 @@ func (r conversationRepository) CreateTurn(
 		if source == "WECHAT" && conversation.ControlMode != remoteModel.ConversationControlModeWechat {
 			return errors.New("该会话未开启微信接管")
 		}
+		var pausedCount int64
+		if err := tx.Model(&remoteModel.Command{}).
+			Where("conversation_id = ? AND status IN ?", conversation.ID, []string{
+				remoteModel.CommandStatusPauseRequested, remoteModel.CommandStatusPaused,
+			}).Count(&pausedCount).Error; err != nil {
+			return err
+		}
+		if pausedCount > 0 {
+			return errors.New("该会话有暂停的任务，请先恢复或删除会话")
+		}
+		var sequence int64
+		if err := tx.Model(&remoteModel.Message{}).Where("conversation_id = ?", conversation.ID).
+			Select("COALESCE(MAX(sequence), 0)").Scan(&sequence).Error; err != nil {
+			return err
+		}
+		userMessage.Sequence = sequence + 1
+		assistantMessage.Sequence = sequence + 2
 		reservation := tx.Model(&remoteModel.Agent{}).
 			Where("id = ? AND status = ? AND current_message_id = 0", conversation.AgentID, remoteModel.AgentStatusOnline).
 			Updates(map[string]any{"status": remoteModel.AgentStatusBusy, "current_message_id": assistantMessage.ID, "updated_at": now})
@@ -138,13 +156,13 @@ func (r conversationRepository) CreateTurn(
 		if reservation.RowsAffected == 0 {
 			return errors.New("Agent 不在线或正在处理其他消息")
 		}
-		if err := tx.Create(&userMessage).Error; err != nil {
+		if err := tx.Create(userMessage).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&assistantMessage).Error; err != nil {
+		if err := tx.Create(assistantMessage).Error; err != nil {
 			return err
 		}
-		if err := tx.Create(&command).Error; err != nil {
+		if err := tx.Create(command).Error; err != nil {
 			return err
 		}
 		updates := map[string]any{"last_message_at": now, "updated_at": now}
@@ -196,6 +214,61 @@ func (r conversationRepository) StopTakeover(id snowflake.ID, now int64) error {
 			return errors.New("Agent 正在响应时不能结束微信接管")
 		}
 		return tx.Model(&conversation).Updates(map[string]any{"control_mode": remoteModel.ConversationControlModeWeb, "wechat_bot_id": 0, "wechat_user_id": "", "wechat_takeover_at": 0, "updated_at": now}).Error
+	})
+}
+
+func (r conversationRepository) TakeoversByAgent(agentID snowflake.ID) ([]remoteModel.Conversation, error) {
+	var conversations []remoteModel.Conversation
+	err := r.db().Where("agent_id = ? AND control_mode = ?", agentID, remoteModel.ConversationControlModeWechat).
+		Order("wechat_takeover_at ASC").Find(&conversations).Error
+	return conversations, err
+}
+
+func (r conversationRepository) AppendTakeoverOutbound(botID snowflake.ID, userID, content string, now int64) (bool, error) {
+	var conversation remoteModel.Conversation
+	err := r.db().Where("control_mode = ? AND wechat_bot_id = ? AND wechat_user_id = ?",
+		remoteModel.ConversationControlModeWechat, botID, userID).First(&conversation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, r.appendTakeoverMessage(conversation, remoteModel.MessageRoleAssistant, content, "wechat-bot", now)
+}
+
+func (r conversationRepository) AppendTakeoverNotice(conversation remoteModel.Conversation, content, createdBy string, now int64) error {
+	return r.appendTakeoverMessage(conversation, remoteModel.MessageRoleAssistant, content, createdBy, now)
+}
+
+func (r conversationRepository) AppendTakeoverInbound(conversation remoteModel.Conversation, content string, now int64) error {
+	return r.appendTakeoverMessage(conversation, remoteModel.MessageRoleUser, content, "wechat-bot", now)
+}
+
+func (r conversationRepository) appendTakeoverMessage(conversation remoteModel.Conversation, role, content, createdBy string, now int64) error {
+	return r.db().Transaction(func(tx *gorm.DB) error {
+		var current remoteModel.Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, conversation.ID).Error; err != nil {
+			return err
+		}
+		if current.ControlMode != remoteModel.ConversationControlModeWechat ||
+			current.WechatBotID != conversation.WechatBotID || current.WechatUserID != conversation.WechatUserID {
+			return nil
+		}
+		var sequence int64
+		if err := tx.Model(&remoteModel.Message{}).Where("conversation_id = ?", current.ID).
+			Select("COALESCE(MAX(sequence), 0)").Scan(&sequence).Error; err != nil {
+			return err
+		}
+		message := remoteModel.Message{
+			MODEL:          coreAPI.MODEL{ID: db.GetId(), CreatedBy: createdBy, CreatedAt: now, UpdatedAt: now},
+			ConversationID: current.ID, AgentID: current.AgentID, Sequence: sequence + 1,
+			Role: role, Status: remoteModel.MessageStatusCompleted, Content: content,
+		}
+		if err := tx.Create(&message).Error; err != nil {
+			return err
+		}
+		return tx.Model(&current).Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error
 	})
 }
 
@@ -260,6 +333,114 @@ func (r conversationRepository) Acknowledge(agentID, commandID snowflake.ID, now
 	return nil
 }
 
+func (r conversationRepository) CommandStatus(agentID, commandID snowflake.ID) (string, error) {
+	var command remoteModel.Command
+	if err := r.db().Select("status").Where("id = ? AND agent_id = ?", commandID, agentID).First(&command).Error; err != nil {
+		return "", err
+	}
+	return command.Status, nil
+}
+
+func (r conversationRepository) Pause(messageID snowflake.ID, now int64) (remoteModel.Message, error) {
+	var message remoteModel.Message
+	err := r.db().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND role = ?", messageID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
+			return err
+		}
+		if message.Status == remoteModel.MessageStatusPaused || message.Status == remoteModel.MessageStatusPausing {
+			return nil
+		}
+		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+			return errors.New("已结束的任务不能暂停")
+		}
+		var command remoteModel.Command
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("assistant_message_id = ?", messageID).First(&command).Error; err != nil {
+			return err
+		}
+		switch command.Status {
+		case remoteModel.CommandStatusPending, remoteModel.CommandStatusDispatched:
+			if err := tx.Model(&command).Updates(map[string]any{
+				"status": remoteModel.CommandStatusPaused, "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			message.Status = remoteModel.MessageStatusPaused
+			if err := tx.Model(&message).Updates(map[string]any{
+				"status": message.Status, "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&remoteModel.Agent{}).
+				Where("id = ? AND current_message_id = ?", command.AgentID, messageID).
+				Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error
+		case remoteModel.CommandStatusAcknowledged:
+			if err := tx.Model(&command).Updates(map[string]any{
+				"status": remoteModel.CommandStatusPauseRequested, "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			message.Status = remoteModel.MessageStatusPausing
+			return tx.Model(&message).Updates(map[string]any{"status": message.Status, "updated_at": now}).Error
+		case remoteModel.CommandStatusPauseRequested:
+			message.Status = remoteModel.MessageStatusPausing
+			return nil
+		case remoteModel.CommandStatusPaused:
+			message.Status = remoteModel.MessageStatusPaused
+			return nil
+		default:
+			return errors.New("任务当前状态不能暂停")
+		}
+	})
+	message.UpdatedAt = now
+	return message, err
+}
+
+func (r conversationRepository) Resume(messageID snowflake.ID, now int64) (remoteModel.Message, error) {
+	var message remoteModel.Message
+	err := r.db().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND role = ?", messageID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
+			return err
+		}
+		if message.Status != remoteModel.MessageStatusPaused {
+			return errors.New("仅已暂停的任务可以恢复")
+		}
+		var command remoteModel.Command
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("assistant_message_id = ? AND status = ?", messageID, remoteModel.CommandStatusPaused).First(&command).Error; err != nil {
+			return errors.New("暂停任务的执行命令不存在")
+		}
+		reservation := tx.Model(&remoteModel.Agent{}).
+			Where("id = ? AND status = ? AND current_message_id = 0", command.AgentID, remoteModel.AgentStatusOnline).
+			Updates(map[string]any{"status": remoteModel.AgentStatusBusy, "current_message_id": messageID, "updated_at": now})
+		if reservation.Error != nil {
+			return reservation.Error
+		}
+		if reservation.RowsAffected == 0 {
+			return errors.New("Agent 不在线或正在处理其他消息")
+		}
+		if err := tx.Where("message_id = ?", messageID).Delete(&remoteModel.MessageChunk{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&command).Updates(map[string]any{
+			"status": remoteModel.CommandStatusPending, "dispatched_at": 0,
+			"acknowledged_at": 0, "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		message.Status = remoteModel.MessageStatusPending
+		message.Content = ""
+		message.ErrorMessage = ""
+		return tx.Model(&message).Updates(map[string]any{
+			"status": message.Status, "content": "", "error_message": "", "updated_at": now,
+		}).Error
+	})
+	message.UpdatedAt = now
+	return message, err
+}
+
 func (r conversationRepository) NextChunkSequence(messageID snowflake.ID) (int64, error) {
 	var maximum int64
 	err := r.db().Model(&remoteModel.MessageChunk{}).Where("message_id = ?", messageID).
@@ -297,14 +478,46 @@ func (r conversationRepository) AppendChunks(agentID snowflake.ID, messageID sno
 	})
 }
 
-func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.MessageResultRequest, now int64) (bool, error) {
-	completed := false
+func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.MessageResultRequest, now int64) (string, error) {
+	finalStatus := ""
 	err := r.db().Transaction(func(tx *gorm.DB) error {
 		var message remoteModel.Message
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND agent_id = ? AND role = ?", result.MessageID, agentID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
 			return err
 		}
 		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+			return nil
+		}
+		if result.Paused || message.Status == remoteModel.MessageStatusPausing {
+			if message.Status == remoteModel.MessageStatusPaused {
+				return nil
+			}
+			if message.Status != remoteModel.MessageStatusPausing {
+				return errors.New("任务当前未请求暂停")
+			}
+			content := result.Content
+			if content == "" {
+				content = message.Content
+			}
+			if err := tx.Model(&remoteModel.Message{}).Where("id = ?", result.MessageID).Updates(map[string]any{
+				"status": remoteModel.MessageStatusPaused, "content": content, "error_message": "", "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			command := tx.Model(&remoteModel.Command{}).
+				Where("assistant_message_id = ? AND agent_id = ? AND status = ?", result.MessageID, agentID, remoteModel.CommandStatusPauseRequested).
+				Updates(map[string]any{"status": remoteModel.CommandStatusPaused, "updated_at": now})
+			if command.Error != nil {
+				return command.Error
+			}
+			if command.RowsAffected == 0 {
+				return errors.New("暂停请求状态已失效")
+			}
+			if err := tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, result.MessageID).
+				Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			finalStatus = remoteModel.MessageStatusPaused
 			return nil
 		}
 		status := remoteModel.MessageStatusCompleted
@@ -333,10 +546,10 @@ func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.
 			Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		completed = true
+		finalStatus = status
 		return nil
 	})
-	return completed, err
+	return finalStatus, err
 }
 
 func (r conversationRepository) StreamEvent(messageID snowflake.ID, afterSequence int64) (remoteResp.MessageStreamEvent, error) {

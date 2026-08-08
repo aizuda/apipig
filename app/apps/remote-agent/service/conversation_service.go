@@ -36,7 +36,9 @@ type ConversationService struct {
 }
 
 func NewConversationService(agentService *AgentService) *ConversationService {
-	return &ConversationService{agentService: agentService, repository: conversationRepository{}, now: time.Now}
+	service := &ConversationService{agentService: agentService, repository: conversationRepository{}, now: time.Now}
+	agentService.SetStatusChangeHandler(service.handleAgentStatusChange)
+	return service
 }
 
 func (s *ConversationService) SetTakeoverSender(sender func(context.Context, snowflake.ID, string, string) error) {
@@ -89,7 +91,67 @@ func (s *ConversationService) HandleWechatInbound(botID snowflake.ID, userID, co
 		return err
 	}
 	_, err := s.send(conversation.ID, content, "WECHAT")
+	if err != nil {
+		agent, agentErr := s.agentService.repository.Get(conversation.AgentID)
+		if agentErr == nil && agent.Status == remoteModel.AgentStatusOffline {
+			if mirrorErr := s.repository.AppendTakeoverInbound(conversation, strings.TrimSpace(content), s.now().UnixMilli()); mirrorErr != nil {
+				return mirrorErr
+			}
+			s.notifyAgentOffline(agent, conversation)
+			return nil
+		}
+	}
 	return err
+}
+
+// HandleWechatOutbound mirrors messages sent manually from the Bot management
+// console into the currently taken-over Agent conversation.
+func (s *ConversationService) HandleWechatOutbound(botID snowflake.ID, userID, content string) error {
+	if botID == 0 || strings.TrimSpace(userID) == "" || strings.TrimSpace(content) == "" {
+		return nil
+	}
+	_, err := s.repository.AppendTakeoverOutbound(botID, strings.TrimSpace(userID), strings.TrimSpace(content), s.now().UnixMilli())
+	return err
+}
+
+func (s *ConversationService) handleAgentStatusChange(agent remoteModel.Agent, previousStatus string) {
+	if agent.Status != remoteModel.AgentStatusOffline ||
+		(previousStatus != remoteModel.AgentStatusOnline && previousStatus != remoteModel.AgentStatusBusy) {
+		return
+	}
+	conversations, err := s.repository.TakeoversByAgent(agent.ID)
+	if err != nil {
+		if global.LOG != nil {
+			global.LOG.Error("查询 Agent 离线接管会话失败", zap.String("agentId", agent.ID.String()), zap.Error(err))
+		}
+		return
+	}
+	for _, conversation := range conversations {
+		s.notifyAgentOffline(agent, conversation)
+	}
+}
+
+func (s *ConversationService) notifyAgentOffline(agent remoteModel.Agent, conversation remoteModel.Conversation) {
+	if s.takeoverSender == nil || conversation.WechatBotID == 0 || strings.TrimSpace(conversation.WechatUserID) == "" {
+		return
+	}
+	name := strings.TrimSpace(agent.Name)
+	if name == "" {
+		name = agent.AgentKey
+	}
+	content := fmt.Sprintf("Agent %q 已离线，当前接管会话暂时无法处理新消息，请等待 Agent 恢复在线。", name)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	err := s.takeoverSender(ctx, conversation.WechatBotID, conversation.WechatUserID, content)
+	cancel()
+	if err != nil {
+		if global.LOG != nil {
+			global.LOG.Error("发送 Agent 离线微信通知失败", zap.String("agentId", agent.ID.String()), zap.Error(err))
+		}
+		return
+	}
+	if err := s.repository.AppendTakeoverNotice(conversation, content, "system", s.now().UnixMilli()); err != nil && global.LOG != nil {
+		global.LOG.Error("同步 Agent 离线通知到接管会话失败", zap.String("agentId", agent.ID.String()), zap.Error(err))
+	}
 }
 
 func (s *ConversationService) Create(request *remoteReq.ConversationCreateRequest) (remoteModel.Conversation, error) {
@@ -109,6 +171,10 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 	cliType := strings.ToUpper(strings.TrimSpace(request.CLIType))
 	if cliType != remoteModel.CLITypeCodex && cliType != remoteModel.CLITypeClaude {
 		return remoteModel.Conversation{}, errors.New("CLI 类型必须是 CODEX 或 CLAUDE")
+	}
+	permissionMode := remoteModel.NormalizePermissionMode(request.PermissionMode)
+	if strings.TrimSpace(request.PermissionMode) != "" && permissionMode != strings.ToUpper(strings.TrimSpace(request.PermissionMode)) {
+		return remoteModel.Conversation{}, errors.New("权限模式必须是 AUTO_EDIT 或 FULL_ACCESS")
 	}
 	conversationID := db.GetId()
 	workingDirectory := strings.TrimSpace(request.WorkingDirectory)
@@ -134,7 +200,7 @@ func (s *ConversationService) Create(request *remoteReq.ConversationCreateReques
 	now := s.now().UnixMilli()
 	conversation := remoteModel.Conversation{
 		MODEL:   coreAPI.MODEL{ID: conversationID, CreatedBy: "admin", CreatedAt: now, UpdatedAt: now},
-		AgentID: request.AgentID, Title: title, CLIType: cliType, WorkingDirectory: workingDirectory,
+		AgentID: request.AgentID, Title: title, CLIType: cliType, PermissionMode: permissionMode, WorkingDirectory: workingDirectory,
 		Status: remoteModel.ConversationStatusActive, LastMessageAt: now, ControlMode: remoteModel.ConversationControlModeWeb,
 	}
 	return conversation, s.repository.Create(&conversation)
@@ -235,6 +301,28 @@ func (s *ConversationService) Send(request *remoteReq.SendMessageRequest) (remot
 	return s.send(request.ConversationID, content, "WEB")
 }
 
+func (s *ConversationService) Pause(request *remoteReq.ConversationTaskRequest) (remoteModel.Message, error) {
+	if request == nil || request.MessageID == 0 {
+		return remoteModel.Message{}, errors.New("任务消息 ID 不能为空")
+	}
+	message, err := s.repository.Pause(request.MessageID, s.now().UnixMilli())
+	if err == nil && message.Status == remoteModel.MessageStatusPaused {
+		s.agentService.publishAgentByID(message.AgentID, remoteModel.AgentStatusBusy)
+	}
+	return message, err
+}
+
+func (s *ConversationService) Resume(request *remoteReq.ConversationTaskRequest) (remoteModel.Message, error) {
+	if request == nil || request.MessageID == 0 {
+		return remoteModel.Message{}, errors.New("任务消息 ID 不能为空")
+	}
+	message, err := s.repository.Resume(request.MessageID, s.now().UnixMilli())
+	if err == nil {
+		s.agentService.publishAgentByID(message.AgentID, remoteModel.AgentStatusOnline)
+	}
+	return message, err
+}
+
 func (s *ConversationService) send(conversationID snowflake.ID, content, source string) (remoteResp.SendMessageResult, error) {
 	conversation, err := s.repository.Get(conversationID)
 	if err != nil {
@@ -277,7 +365,7 @@ func (s *ConversationService) send(conversationID snowflake.ID, content, source 
 		AssistantMessageID: assistantMessage.ID, Type: remoteModel.CommandTypeConversationTurn,
 		Payload: buildConversationPrompt(messages, content), Status: remoteModel.CommandStatusPending,
 	}
-	if err := s.repository.CreateTurn(conversation, userMessage, assistantMessage, command, now, source); err != nil {
+	if err := s.repository.CreateTurn(conversation, &userMessage, &assistantMessage, &command, now, source); err != nil {
 		return remoteResp.SendMessageResult{}, err
 	}
 	s.agentService.publishAgentByID(conversation.AgentID, remoteModel.AgentStatusOnline)
@@ -323,7 +411,7 @@ func (s *ConversationService) NextCommand(params *remoteReq.NextCommandParams) (
 			return &remoteResp.CommandDispatch{
 				CommandID: command.ID, ConversationID: command.ConversationID, UserMessageID: command.UserMessageID,
 				AssistantMessageID: command.AssistantMessageID, Type: command.Type,
-				CLIType: conversation.CLIType, WorkingDirectory: conversation.WorkingDirectory,
+				CLIType: conversation.CLIType, PermissionMode: remoteModel.NormalizePermissionMode(conversation.PermissionMode), WorkingDirectory: conversation.WorkingDirectory,
 				Prompt: command.Payload, NextChunkSequence: next,
 			}, nil
 		}
@@ -346,6 +434,18 @@ func (s *ConversationService) Acknowledge(params *remoteReq.AcknowledgeCommandPa
 		return false, err
 	}
 	return true, s.repository.Acknowledge(agent.ID, params.CommandID, s.now().UnixMilli())
+}
+
+func (s *ConversationService) CommandStatus(params *remoteReq.CommandStatusParams) (remoteResp.CommandControlStatus, error) {
+	if params == nil || params.CommandID == 0 {
+		return remoteResp.CommandControlStatus{}, errors.New("命令 ID 不能为空")
+	}
+	agent, err := s.agentService.Authenticate(params.AgentToken)
+	if err != nil {
+		return remoteResp.CommandControlStatus{}, err
+	}
+	status, err := s.repository.CommandStatus(agent.ID, params.CommandID)
+	return remoteResp.CommandControlStatus{Status: status}, err
 }
 
 func (s *ConversationService) AppendChunks(params *remoteReq.MessageChunkUploadParams) (bool, error) {
@@ -394,14 +494,15 @@ func (s *ConversationService) Complete(params *remoteReq.MessageResultParams) (b
 	if err != nil {
 		return false, err
 	}
-	completed, err := s.repository.Complete(agent.ID, params.Request, s.now().UnixMilli())
+	finalStatus, err := s.repository.Complete(agent.ID, params.Request, s.now().UnixMilli())
 	if err != nil {
 		return false, err
 	}
+	completed := finalStatus != ""
 	if completed {
 		s.agentService.publishAgentByID(agent.ID, remoteModel.AgentStatusBusy)
 	}
-	if completed && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
+	if completed && finalStatus != remoteModel.MessageStatusPaused && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
 		content := params.Request.Content
 		if !params.Request.Success {
 			content = "Agent 执行失败：" + params.Request.ErrorMessage
@@ -433,6 +534,9 @@ func validateConversationExecution(conversation remoteModel.Conversation) error 
 	}
 	if strings.TrimSpace(conversation.WorkingDirectory) == "" {
 		return errors.New("会话工作目录不能为空")
+	}
+	if conversation.PermissionMode != "" && remoteModel.NormalizePermissionMode(conversation.PermissionMode) != conversation.PermissionMode {
+		return errors.New("会话权限模式必须是 AUTO_EDIT 或 FULL_ACCESS")
 	}
 	return nil
 }

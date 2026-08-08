@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ExternalLink, Pencil, Plus, Search, Trash2, Webhook } from '@lucide/vue'
+import { Bell, ExternalLink, Pencil, Plus, Search, Trash2, Webhook } from '@lucide/vue'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -24,6 +24,7 @@ import AppPagination from '@/components/AppPagination.vue'
 import CodeReviewSectionNav from './components/CodeReviewSectionNav.vue'
 import ProjectEditorDialog from './components/ProjectEditorDialog.vue'
 import WebhookCredentialsDialog from './components/WebhookCredentialsDialog.vue'
+import PushChannelsDialog from './components/PushChannelsDialog.vue'
 
 defineOptions({ name: 'CodeReviewProjects' })
 
@@ -40,6 +41,7 @@ const status = ref(0)
 const editorOpen = ref(false)
 const deleteTarget = ref<ReviewProject | null>(null)
 const webhookDialog = reactive({ open: false, projectName: '', url: '', secret: '' })
+const pushDialog = reactive({ open: false, project: null as ReviewProject | null })
 
 const emptyProject = (): ReviewProject => ({
   name: '',
@@ -136,6 +138,15 @@ function showWebhook(project: ReviewProject) {
     `/apps/code-review/webhook/${encodeURIComponent(project.webhookKey || '')}`,
   )
   webhookDialog.secret = ''
+}
+
+function showPushChannels(project: ReviewProject) {
+  pushDialog.project = project
+  pushDialog.open = true
+}
+
+function updatePushChannels(channels: ReviewProject['pushChannels']) {
+  if (pushDialog.project) pushDialog.project.pushChannels = channels
 }
 
 async function confirmDelete() {
@@ -304,6 +315,9 @@ onMounted(async () => {
                   </Badge>
                 </td>
                 <td class="px-4 py-4 text-right">
+                  <Button variant="ghost" size="sm" class="gap-1.5" @click="showPushChannels(project)">
+                    <Bell class="h-4 w-4" />推送渠道
+                  </Button>
                   <Button variant="ghost" size="sm" class="gap-1.5" @click="showWebhook(project)">
                     <Webhook class="h-4 w-4" />WebHook
                   </Button>
@@ -357,6 +371,14 @@ onMounted(async () => {
       :webhook-url="webhookDialog.url"
       :webhook-secret="webhookDialog.secret"
       @close="webhookDialog.open = false"
+    />
+    <PushChannelsDialog
+      :open="pushDialog.open"
+      :project-id="pushDialog.project?.id"
+      :project-name="pushDialog.project?.name || ''"
+      :channels="pushDialog.project?.pushChannels || []"
+      @close="pushDialog.open = false"
+      @saved="updatePushChannels"
     />
 
     <AlertDialog

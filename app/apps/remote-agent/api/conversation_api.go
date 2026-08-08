@@ -62,6 +62,18 @@ func (a *ConversationApi) Send(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Send, &request, err)
 }
 
+func (a *ConversationApi) Pause(c *fiber.Ctx) error {
+	var request remoteReq.ConversationTaskRequest
+	err := a.BodyParser(c, &request, "Remote Agent task pause")
+	return response.Execute(c, a.service.Pause, &request, err)
+}
+
+func (a *ConversationApi) Resume(c *fiber.Ctx) error {
+	var request remoteReq.ConversationTaskRequest
+	err := a.BodyParser(c, &request, "Remote Agent task resume")
+	return response.Execute(c, a.service.Resume, &request, err)
+}
+
 func (a *ConversationApi) StartTakeover(c *fiber.Ctx) error {
 	var request remoteReq.ConversationTakeoverRequest
 	err := a.BodyParser(c, &request, "Remote Agent 微信接管")
@@ -87,6 +99,14 @@ func (a *ConversationApi) Acknowledge(c *fiber.Ctx) error {
 	err := a.BodyParser(c, &body, "Remote Agent command acknowledgement")
 	params := &remoteReq.AcknowledgeCommandParams{AgentToken: bearerToken(c.Get(fiber.HeaderAuthorization)), CommandID: body.CommandID}
 	return response.Execute(c, a.service.Acknowledge, params, err)
+}
+
+func (a *ConversationApi) CommandStatus(c *fiber.Ctx) error {
+	commandID, err := snowflake.ParseString(c.Query("commandId"))
+	params := &remoteReq.CommandStatusParams{
+		AgentToken: bearerToken(c.Get(fiber.HeaderAuthorization)), CommandID: commandID,
+	}
+	return response.Execute(c, a.service.CommandStatus, params, err)
 }
 
 func (a *ConversationApi) AppendChunks(c *fiber.Ctx) error {
@@ -126,7 +146,7 @@ func (a *ConversationApi) Stream(c *fiber.Ctx) error {
 				}
 				sequence = chunk.Sequence
 			}
-			if event.Message.Status == remoteModel.MessageStatusCompleted || event.Message.Status == remoteModel.MessageStatusFailed {
+			if event.Message.Status == remoteModel.MessageStatusCompleted || event.Message.Status == remoteModel.MessageStatusFailed || event.Message.Status == remoteModel.MessageStatusPaused {
 				_ = writeSSE(writer, "done", event.Message)
 				return
 			}

@@ -117,6 +117,23 @@ func (r gormAgentRepository) RecoverInterruptedTurn(agentID, messageID snowflake
 			return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
 				Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
 		}
+		var storedCommand remoteModel.Command
+		if err := tx.Where("assistant_message_id = ? AND agent_id = ?", messageID, agentID).
+			First(&storedCommand).Error; err != nil {
+			return err
+		}
+		if storedCommand.Status == remoteModel.CommandStatusPauseRequested || storedCommand.Status == remoteModel.CommandStatusPaused {
+			if err := tx.Model(&remoteModel.Message{}).Where("id = ?", messageID).
+				Updates(map[string]any{"status": remoteModel.MessageStatusPaused, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&remoteModel.Command{}).Where("id = ?", storedCommand.ID).
+				Updates(map[string]any{"status": remoteModel.CommandStatusPaused, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
+				Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
+		}
 		// 未完成输出从头重试，因此先清除已有分片和助手消息中的部分内容。
 		if err := tx.Where("message_id = ?", messageID).Delete(&remoteModel.MessageChunk{}).Error; err != nil {
 			return err

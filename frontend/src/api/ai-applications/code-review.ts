@@ -20,6 +20,18 @@ export interface ReviewProject {
   webhookSecret?: string
   repositoryToken?: string
   rotateWebhookSecret?: boolean
+  pushChannels?: PushChannel[]
+}
+
+export type PushChannelType = 'wecom_robot' | 'dingtalk_robot' | 'wechat_bot'
+export interface PushChannel {
+  id?: string
+  projectId?: string
+  type: PushChannelType
+  name: string
+  enabled: boolean
+  config: Record<string, string>
+  secretConfigured?: boolean
 }
 
 export interface ReviewProjectSaveResult {
@@ -83,4 +95,14 @@ export const codeReviewApi = {
     return get<ReviewTask>(`/ai-applications/code-review/task/get?${query}`)
   },
   retryTask: (id: string) => post<boolean>('/ai-applications/code-review/task/retry', { id }),
+  savePushChannels: (projectId: string, channels: PushChannel[]) =>
+    post<{ channels: PushChannel[] }>('/ai-applications/code-review/project/push-channels', {
+      projectId,
+      channels,
+    }),
+  testPushChannel: (projectId: string, channel: PushChannel) =>
+    post<boolean>('/ai-applications/code-review/project/push-channels/test', {
+      projectId,
+      channel,
+    }),
 }

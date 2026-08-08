@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	wechatModel "apipig/app/apps/wechat-bot/model"
+	wechatReq "apipig/app/apps/wechat-bot/model/request"
 	"apipig/core/api"
 	"apipig/global"
 	"apipig/toolkit/snowflake"
@@ -120,4 +122,36 @@ func TestRuntimeSendRejectsExpiredContext(t *testing.T) {
 
 	_, err := runtime.Send(context.Background(), botID, "contact-3", "reply")
 	require.ErrorContains(t, err, "超过 24 小时")
+}
+
+func TestBotServiceSendMirrorsOnlyAfterWechatAcceptsMessage(t *testing.T) {
+	setupRuntimeTestDB(t)
+	botID := snowflake.ID(90004)
+	createRuntimeTestBot(t, botID)
+	require.NoError(t, global.DB.Create(&wechatModel.Contact{
+		MODEL: api.MODEL{ID: 91004, CreatedAt: time.Now().UnixMilli()}, BotRecordID: botID,
+		UserID: "contact-4", ContextToken: "encrypted:context-4", LastActiveAt: time.Now().UnixMilli(),
+	}).Error)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ret":0}`))
+	}))
+	defer server.Close()
+
+	service := newBotService(testVault{})
+	service.runtime.conns[botID] = &botConnection{client: ilink.NewClient("bot-token", ilink.WithBaseURL(server.URL))}
+	var mirroredBotID snowflake.ID
+	var mirroredUserID, mirroredContent string
+	service.SetOutboundHandler(func(id snowflake.ID, userID, content string) error {
+		mirroredBotID, mirroredUserID, mirroredContent = id, userID, content
+		return errors.New("local mirror failed")
+	})
+
+	sent, err := service.Send(&wechatReq.SendMessageRequest{BotID: botID, UserID: "contact-4", Content: "hello"})
+	require.NoError(t, err)
+	require.Equal(t, "outbound", sent.Direction)
+	require.Equal(t, botID, mirroredBotID)
+	require.Equal(t, "contact-4", mirroredUserID)
+	require.Equal(t, "hello", mirroredContent)
 }

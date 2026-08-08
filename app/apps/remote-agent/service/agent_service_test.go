@@ -30,7 +30,8 @@ func TestCreateAndRegisterUsesOneAgentRecord(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, credential.ConfigYAML, "controller-url: https://controller.example.com/admin")
-	assert.Contains(t, credential.ConfigYAML, "sandbox_workspace_write.network_access=true")
+	assert.Contains(t, credential.ConfigYAML, "skip-git-repo-check")
+	assert.NotContains(t, credential.ConfigYAML, "sandbox_workspace_write.network_access")
 	assert.NotContains(t, credential.ConfigYAML, "--full-auto")
 	registration, err := service.Register(&remoteReq.RegisterParams{
 		BootstrapToken: credential.RegistrationToken, IPAddress: "192.0.2.10",
@@ -279,6 +280,7 @@ func TestRemoteConversationModelsMigrate(t *testing.T) {
 	}
 	assert.True(t, database.Migrator().HasColumn(&remoteModel.Conversation{}, "Pinned"))
 	assert.True(t, database.Migrator().HasColumn(&remoteModel.Conversation{}, "PinnedAt"))
+	assert.True(t, database.Migrator().HasColumn(&remoteModel.Conversation{}, "PermissionMode"))
 }
 
 func setupAgentServiceTestDB(t *testing.T) *gorm.DB {

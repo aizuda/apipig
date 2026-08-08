@@ -86,6 +86,7 @@ type ConversationCreateRequest struct {
 	AgentID          snowflake.ID `json:"agentId" swaggertype:"string"`
 	Title            string       `json:"title"`
 	CLIType          string       `json:"cliType"`
+	PermissionMode   string       `json:"permissionMode"`
 	WorkingDirectory string       `json:"workingDirectory"`
 }
 
@@ -120,6 +121,10 @@ type SendMessageRequest struct {
 	Content        string       `json:"content"`
 }
 
+type ConversationTaskRequest struct {
+	MessageID snowflake.ID `json:"messageId" swaggertype:"string"`
+}
+
 type ConversationTakeoverRequest struct {
 	ID     snowflake.ID `json:"id" swaggertype:"string"`
 	BotID  snowflake.ID `json:"botId" swaggertype:"string"`
@@ -137,6 +142,11 @@ type NextCommandParams struct {
 }
 
 type AcknowledgeCommandParams struct {
+	AgentToken string
+	CommandID  snowflake.ID
+}
+
+type CommandStatusParams struct {
 	AgentToken string
 	CommandID  snowflake.ID
 }
@@ -159,6 +169,7 @@ type MessageChunkUploadParams struct {
 type MessageResultRequest struct {
 	MessageID    snowflake.ID `json:"messageId" swaggertype:"string"`
 	Success      bool         `json:"success"`
+	Paused       bool         `json:"paused,omitempty"`
 	Content      string       `json:"content"`
 	ErrorMessage string       `json:"errorMessage"`
 }

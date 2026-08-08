@@ -32,11 +32,9 @@ var (
 	errAgentDisabled = errors.New("Agent 已禁用")
 	// defaultCodexArgs 通过标准输入向 Codex CLI 传递会话提示词。
 	defaultCodexArgs = []string{
-		"--ask-for-approval", "never", "exec", "--json", "--sandbox", "workspace-write",
-		"-c", "sandbox_workspace_write.network_access=true",
-		"--skip-git-repo-check", "-",
+		"exec", "--json", "--skip-git-repo-check", "-",
 	}
-	defaultClaudeArgs = []string{"-p", "--permission-mode", "acceptEdits"}
+	defaultClaudeArgs = []string{"-p"}
 	// agentKeyPattern 限制 Agent Key 仅包含适合作为稳定标识的安全字符。
 	agentKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )
@@ -47,6 +45,8 @@ type AgentService struct {
 	now             func() time.Time
 	livenessTimeout func() time.Duration
 	events          *agentEventBroker
+	statusHandlerMu sync.RWMutex
+	statusHandler   func(remoteModel.Agent, string)
 	livenessMu      sync.Mutex
 	livenessTimers  map[snowflake.ID]*agentLivenessTimer
 }
@@ -149,8 +149,23 @@ func (s *AgentService) AgentEvents() (<-chan remoteResp.AgentEvent, func()) {
 	return s.events.subscribe()
 }
 
+func (s *AgentService) SetStatusChangeHandler(handler func(remoteModel.Agent, string)) {
+	s.statusHandlerMu.Lock()
+	s.statusHandler = handler
+	s.statusHandlerMu.Unlock()
+}
+
 func (s *AgentService) publishAgent(agent remoteModel.Agent, previousStatus string) {
 	s.publishAgentEvent("upsert", agent, previousStatus)
+	if previousStatus == "" || previousStatus == agent.Status {
+		return
+	}
+	s.statusHandlerMu.RLock()
+	handler := s.statusHandler
+	s.statusHandlerMu.RUnlock()
+	if handler != nil {
+		handler(agent, previousStatus)
+	}
 }
 
 func (s *AgentService) publishAgentEvent(action string, agent remoteModel.Agent, previousStatus string) {

@@ -22,4 +22,6 @@ func (r *CodeReviewRouter) InitAdminRouter(router fiber.Router) {
 	task.Post("page", api.ReviewApi.TaskApi.Page)
 	task.Get("get", api.ReviewApi.TaskApi.Get)
 	task.Post("retry", api.ReviewApi.TaskApi.Retry)
+	project.Post("push-channels", api.ReviewApi.PushChannelApi.Save)
+	project.Post("push-channels/test", api.ReviewApi.PushChannelApi.Test)
 }

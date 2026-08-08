@@ -14,6 +14,7 @@ func (r *RemoteAgentRouter) InitAgentRouter(router fiber.Router) {
 	router.Post("disconnect", api.RemoteAgentApi.AgentApi.Disconnect)
 	router.Get("command/next", api.RemoteAgentApi.ConversationApi.NextCommand)
 	router.Post("command/acknowledge", api.RemoteAgentApi.ConversationApi.Acknowledge)
+	router.Get("command/status", api.RemoteAgentApi.ConversationApi.CommandStatus)
 	router.Post("message/chunks", api.RemoteAgentApi.ConversationApi.AppendChunks)
 	router.Post("message/result", api.RemoteAgentApi.ConversationApi.Complete)
 }
@@ -37,6 +38,8 @@ func (r *RemoteAgentRouter) InitAdminRouter(router fiber.Router) {
 	conversation.Post("rename", api.RemoteAgentApi.ConversationApi.Rename)
 	conversation.Post("delete", api.RemoteAgentApi.ConversationApi.Delete)
 	conversation.Post("message/send", api.RemoteAgentApi.ConversationApi.Send)
+	conversation.Post("task/pause", api.RemoteAgentApi.ConversationApi.Pause)
+	conversation.Post("task/resume", api.RemoteAgentApi.ConversationApi.Resume)
 	conversation.Post("takeover/start", api.RemoteAgentApi.ConversationApi.StartTakeover)
 	conversation.Post("takeover/stop", api.RemoteAgentApi.ConversationApi.StopTakeover)
 	conversation.Post("message/stream", api.RemoteAgentApi.ConversationApi.Stream)

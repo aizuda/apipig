@@ -32,6 +32,10 @@ func Routers() *fiber.App {
 		JSONEncoder: json.Marshal,
 		JSONDecoder: json.Unmarshal,
 	})
+	wechatBotService.WechatBotService.BotService.SetInboundHandler(remoteAgentService.RemoteAgentService.ConversationService.HandleWechatInbound)
+	wechatBotService.WechatBotService.BotService.SetOutboundHandler(remoteAgentService.RemoteAgentService.ConversationService.HandleWechatOutbound)
+	remoteAgentService.RemoteAgentService.ConversationService.SetTakeoverSender(wechatBotService.WechatBotService.BotService.SendTakeover)
+	wechatBotService.StartWechatBots()
 	if err := remoteAgentService.RemoteAgentService.AgentService.StartLivenessTracking(); err != nil {
 		global.LOG.Panic("start remote agent liveness tracking failed", zap.Error(err))
 	}
@@ -129,9 +133,6 @@ func Routers() *fiber.App {
 		wechatBotRouter.WechatBotRoutes.InitAdminRouter(wechatBotAdminGroup)
 	}
 	reviewService.StartReview()
-	wechatBotService.WechatBotService.BotService.SetInboundHandler(remoteAgentService.RemoteAgentService.ConversationService.HandleWechatInbound)
-	remoteAgentService.RemoteAgentService.ConversationService.SetTakeoverSender(wechatBotService.WechatBotService.BotService.SendTakeover)
-	wechatBotService.StartWechatBots()
 
 	global.LOG.Debug("router register success")
 

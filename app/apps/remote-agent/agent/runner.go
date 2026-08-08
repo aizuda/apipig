@@ -20,7 +20,7 @@ import (
 	"apipig/toolkit/snowflake"
 )
 
-const Version = "0.3.3"
+const Version = "0.5.0"
 
 type Runner struct {
 	config            Config
@@ -89,15 +89,13 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 func (r *Runner) logCodexExecutionPolicy() {
-	command, args, err := r.executor.cliCommand(remoteModel.CLITypeCodex)
+	command, args, err := r.executor.cliCommand(remoteModel.CLITypeCodex, remoteModel.PermissionModeFullAccess)
 	if err != nil {
 		r.logger.Printf("codex execution policy unavailable: %v", err)
 		return
 	}
-	resolved := command
-	if path, lookErr := exec.LookPath(command); lookErr == nil {
-		resolved = path
-	} else {
+	resolved, _ := resolveCLIExecutable(command, remoteModel.CLITypeCodex)
+	if _, lookErr := exec.LookPath(command); lookErr != nil {
 		r.logger.Printf("codex executable lookup failed command=%q: %v", command, lookErr)
 	}
 	r.logger.Printf("codex execution policy agent-version=%s executable=%q args=%q sandbox=%s network-access=%s", Version, resolved, sanitizeCLIArgs(args), codexSandboxMode(args), codexNetworkAccess(args))
@@ -177,10 +175,10 @@ func (r *Runner) handleCommand(ctx context.Context, command Command) {
 	r.currentMessage = command.AssistantMessageID
 	r.cancelCurrent = cancel
 	r.mu.Unlock()
-	go r.execute(executionCtx, ctx, command)
+	go r.execute(executionCtx, cancel, ctx, command)
 }
 
-func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Command) {
+func (r *Runner) execute(executionCtx context.Context, cancelExecution context.CancelFunc, lifecycleCtx context.Context, command Command) {
 	defer func() {
 		r.mu.Lock()
 		r.currentMessage = 0
@@ -192,13 +190,11 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 	networkAccess := "n/a"
 	executable := ""
 	var effectiveArgs []string
-	commandName, args, commandErr := r.executor.cliCommand(command.CLIType)
+	commandName, args, commandErr := r.executor.cliCommand(command.CLIType, command.PermissionMode)
 	if commandErr == nil {
 		executable = commandName
 		effectiveArgs = args
-		if path, lookErr := exec.LookPath(commandName); lookErr == nil {
-			executable = path
-		}
+		executable, _ = resolveCLIExecutable(commandName, command.CLIType)
 	}
 	if strings.EqualFold(command.CLIType, remoteModel.CLITypeCodex) {
 		if commandErr == nil {
@@ -207,12 +203,16 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 		}
 	}
 	r.logger.Printf(
-		"starting conversation turn %s cli=%s executable=%q args=%q workspace-root=%q working-directory=%q sandbox=%s network-access=%s agent-version=%s",
-		command.AssistantMessageID.String(), command.CLIType, executable, sanitizeCLIArgs(effectiveArgs), r.config.WorkspaceRoot,
+		"starting conversation turn %s cli=%s permission-mode=%s executable=%q args=%q workspace-root=%q working-directory=%q sandbox=%s network-access=%s agent-version=%s",
+		command.AssistantMessageID.String(), command.CLIType, remoteModel.NormalizePermissionMode(command.PermissionMode), executable, sanitizeCLIArgs(effectiveArgs), r.config.WorkspaceRoot,
 		command.WorkingDirectory, sandboxMode, networkAccess, Version,
 	)
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)
-	result := r.executor.ExecuteTurn(executionCtx, command.CLIType, command.WorkingDirectory, command.Prompt, uploader.Append)
+	controlCtx, stopControl := context.WithCancel(lifecycleCtx)
+	var paused atomic.Bool
+	go r.watchCommandControl(controlCtx, command.CommandID, &paused, cancelExecution)
+	result := r.executor.ExecuteTurn(executionCtx, command.CLIType, command.PermissionMode, command.WorkingDirectory, command.Prompt, uploader.Append)
+	stopControl()
 	if err := uploader.Close(lifecycleCtx); err != nil {
 		result.Success = false
 		if result.ErrorMessage == "" {
@@ -220,6 +220,11 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 		}
 	}
 	report := MessageResult{MessageID: command.AssistantMessageID, Success: result.Success, Content: result.Content, ErrorMessage: result.ErrorMessage}
+	if paused.Load() {
+		report.Success = false
+		report.Paused = true
+		report.ErrorMessage = ""
+	}
 	for {
 		reportCtx, cancel := context.WithTimeout(lifecycleCtx, time.Duration(r.config.RequestTimeoutSeconds)*time.Second)
 		err := r.client.Complete(reportCtx, report)
@@ -231,6 +236,27 @@ func (r *Runner) execute(executionCtx, lifecycleCtx context.Context, command Com
 		r.logger.Printf("report conversation result failed: %v", err)
 		if !sleepContext(lifecycleCtx, 5*time.Second) {
 			return
+		}
+	}
+}
+
+func (r *Runner) watchCommandControl(ctx context.Context, commandID snowflake.ID, paused *atomic.Bool, cancel context.CancelFunc) {
+	ticker := time.NewTicker(750 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		status, err := r.client.CommandStatus(ctx, commandID)
+		if err == nil && (status == remoteModel.CommandStatusPauseRequested || status == remoteModel.CommandStatusPaused) {
+			paused.Store(true)
+			cancel()
+			return
+		}
+		if err != nil && ctx.Err() == nil {
+			r.logger.Printf("command control poll failed: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
 	}
 }

@@ -5,8 +5,9 @@ export type AgentStatus = 'ONLINE' | 'OFFLINE' | 'BUSY' | 'DISABLED'
 export type ConversationStatus = 'ACTIVE'
 export type ConversationControlMode = 'WEB' | 'WECHAT'
 export type CLIType = 'CODEX' | 'CLAUDE'
+export type PermissionMode = 'AUTO_EDIT' | 'FULL_ACCESS'
 export type MessageRole = 'USER' | 'ASSISTANT'
-export type MessageStatus = 'PENDING' | 'STREAMING' | 'COMPLETED' | 'FAILED'
+export type MessageStatus = 'PENDING' | 'STREAMING' | 'PAUSING' | 'PAUSED' | 'COMPLETED' | 'FAILED'
 
 export interface RemoteAgent {
   id: string
@@ -71,6 +72,7 @@ export interface RemoteConversation {
   agentId: string
   title: string
   cliType: CLIType
+  permissionMode: PermissionMode
   workingDirectory: string
   status: ConversationStatus
   pinned: boolean
@@ -93,6 +95,7 @@ export interface RemoteMessage {
   status: MessageStatus
   content: string
   errorMessage: string
+  createdBy?: string
   createdAt: number
   updatedAt: number
 }
@@ -164,11 +167,18 @@ export const remoteAgentApi = {
   deleteAgent: (id: string) => post<boolean>('/ai-applications/remote-agent/agent/delete', { id }),
   conversationPage: (params: ConversationPageParams) =>
     post<PageResult<RemoteConversation>>('/ai-applications/remote-agent/conversation/page', params),
-  createConversation: (agentId: string, cliType: CLIType, workingDirectory: string, title = '') =>
+  createConversation: (
+    agentId: string,
+    cliType: CLIType,
+    permissionMode: PermissionMode,
+    workingDirectory: string,
+    title = '',
+  ) =>
     post<RemoteConversation>('/ai-applications/remote-agent/conversation/create', {
       agentId,
       title,
       cliType,
+      permissionMode,
       workingDirectory,
     }),
   getConversation: (id: string) =>
@@ -186,6 +196,10 @@ export const remoteAgentApi = {
       conversationId,
       content,
     }),
+  pauseTask: (messageId: string) =>
+    post<RemoteMessage>('/ai-applications/remote-agent/conversation/task/pause', { messageId }),
+  resumeTask: (messageId: string) =>
+    post<RemoteMessage>('/ai-applications/remote-agent/conversation/task/resume', { messageId }),
   startTakeover: (id: string, botId: string, userId: string) =>
     post<RemoteConversation>('/ai-applications/remote-agent/conversation/takeover/start', {
       id,

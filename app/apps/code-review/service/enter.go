@@ -12,9 +12,10 @@ import (
 )
 
 type ReviewServiceGroup struct {
-	ProjectService *ProjectService
-	TaskService    *TaskService
-	WebhookService *WebhookService
+	ProjectService     *ProjectService
+	TaskService        *TaskService
+	WebhookService     *WebhookService
+	PushChannelService *pushChannelService
 }
 
 type taskRunner struct {
@@ -29,14 +30,16 @@ type taskRunner struct {
 
 func NewReviewServiceGroup() *ReviewServiceGroup {
 	runner := &taskRunner{gateway: aiService.AiService.GatewayService}
-	projectService := &ProjectService{vault: aiService.AiService.Vault}
+	pushService := &pushChannelService{vault: aiService.AiService.Vault}
+	projectService := &ProjectService{vault: aiService.AiService.Vault, push: pushService}
 	taskService := &TaskService{runner: runner}
-	runnerService := &reviewExecutor{runner: runner, vault: aiService.AiService.Vault}
+	runnerService := &reviewExecutor{runner: runner, vault: aiService.AiService.Vault, push: pushService}
 	runner.startExecutor = runnerService.execute
 	return &ReviewServiceGroup{
-		ProjectService: projectService,
-		TaskService:    taskService,
-		WebhookService: &WebhookService{vault: aiService.AiService.Vault, runner: runner},
+		ProjectService:     projectService,
+		TaskService:        taskService,
+		WebhookService:     &WebhookService{vault: aiService.AiService.Vault, runner: runner},
+		PushChannelService: pushService,
 	}
 }
 
