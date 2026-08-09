@@ -21,6 +21,7 @@ import {
   Send,
   ShieldCheck,
   ShieldPlus,
+  Square,
   Smartphone,
   Trash2,
   User,
@@ -119,7 +120,7 @@ const currentTask = computed(() =>
     .find(
       (message) =>
         message.role === 'ASSISTANT' &&
-        ['PENDING', 'STREAMING', 'PAUSING', 'PAUSED'].includes(message.status),
+        ['PENDING', 'STREAMING', 'PAUSING', 'CANCELLING', 'PAUSED'].includes(message.status),
     ),
 )
 const canSend = computed(
@@ -294,7 +295,8 @@ async function syncTakeoverConversation() {
         .reverse()
         .find(
           (item) =>
-            item.role === 'ASSISTANT' && ['PENDING', 'STREAMING', 'PAUSING'].includes(item.status),
+            item.role === 'ASSISTANT' &&
+            ['PENDING', 'STREAMING', 'PAUSING', 'CANCELLING'].includes(item.status),
         )
       if (active) void streamMessage(active)
     }
@@ -359,10 +361,11 @@ async function selectConversation(conversation: RemoteConversation) {
       .reverse()
       .find(
         (item) =>
-          item.role === 'ASSISTANT' && ['PENDING', 'STREAMING', 'PAUSING'].includes(item.status),
-      )
+          item.role === 'ASSISTANT' &&
+          ['PENDING', 'STREAMING', 'PAUSING', 'CANCELLING'].includes(item.status),
+    )
     if (active) {
-      active.content = ''
+      if (active.status !== 'CANCELLING') active.content = ''
       void streamMessage(active)
     }
     await scrollToBottom()
@@ -390,7 +393,13 @@ async function sendMessage() {
 
 async function pauseCurrentTask() {
   const task = currentTask.value
-  if (!task || task.status === 'PAUSED' || task.status === 'PAUSING' || taskControlLoading.value)
+  if (
+    !task ||
+    task.status === 'PAUSED' ||
+    task.status === 'PAUSING' ||
+    task.status === 'CANCELLING' ||
+    taskControlLoading.value
+  )
     return
   taskControlLoading.value = true
   try {
@@ -422,6 +431,28 @@ async function resumeCurrentTask() {
     toast.success('任务已恢复')
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '恢复任务失败')
+  } finally {
+    taskControlLoading.value = false
+  }
+}
+
+async function cancelCurrentTask() {
+  const task = currentTask.value
+  if (
+    !task ||
+    task.status === 'PAUSED' ||
+    task.status === 'PAUSING' ||
+    task.status === 'CANCELLING' ||
+    taskControlLoading.value
+  )
+    return
+  taskControlLoading.value = true
+  try {
+    const updated = await remoteAgentApi.cancelTask(task.id)
+    Object.assign(task, updated)
+    toast.success('任务已取消')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '取消任务失败')
   } finally {
     taskControlLoading.value = false
   }
@@ -498,17 +529,18 @@ async function syncStreamingMessage(
 ) {
   const conversationId = selectedConversation.value?.id
   if (!conversationId) return false
-  if (['COMPLETED', 'FAILED', 'PAUSED'].includes(message.status)) return true
+  if (['COMPLETED', 'FAILED', 'PAUSED', 'CANCELLED'].includes(message.status)) return true
   try {
     const detailResult = await remoteAgentApi.getConversation(conversationId)
     const stored = detailResult.messages.find((item) => item.id === message.id)
     if (!stored) return false
-    const terminal = ['COMPLETED', 'FAILED', 'PAUSED'].includes(stored.status)
+    const terminal = ['COMPLETED', 'FAILED', 'PAUSED', 'CANCELLED'].includes(stored.status)
     if (terminal) Object.assign(message, stored)
     else if (
       message.status !== 'COMPLETED' &&
       message.status !== 'FAILED' &&
       message.status !== 'PAUSED' &&
+      message.status !== 'CANCELLED' &&
       stored.content.length >= message.content.length
     ) {
       message.content = stored.content
@@ -832,7 +864,11 @@ onBeforeUnmount(() => {
           </div>
           <div v-if="selectedConversation" class="flex shrink-0 items-center gap-2">
             <Button
-              v-if="currentTask && currentTask.status !== 'PAUSED'"
+              v-if="
+                currentTask &&
+                currentTask.status !== 'PAUSED' &&
+                currentTask.status !== 'CANCELLING'
+              "
               size="icon"
               variant="outline"
               :title="currentTask.status === 'PAUSING' ? '正在暂停任务' : '暂停当前任务'"
@@ -840,6 +876,26 @@ onBeforeUnmount(() => {
               @click="pauseCurrentTask"
             >
               <Pause class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="currentTask && currentTask.status !== 'PAUSED'"
+              size="icon"
+              variant="destructive"
+              :title="
+                currentTask.status === 'PAUSING'
+                  ? '正在暂停任务'
+                  : currentTask.status === 'CANCELLING'
+                    ? '正在取消任务'
+                    : '取消当前任务'
+              "
+              :disabled="
+                taskControlLoading ||
+                currentTask.status === 'PAUSING' ||
+                currentTask.status === 'CANCELLING'
+              "
+              @click="cancelCurrentTask"
+            >
+              <Square class="h-4 w-4 fill-current" />
             </Button>
             <Button
               v-if="currentTask?.status === 'PAUSED'"
@@ -905,7 +961,9 @@ onBeforeUnmount(() => {
                     formatTime(message.createdAt)
                   }}</span
                   ><Badge v-if="message.status === 'PAUSING'" variant="secondary">暂停中</Badge
-                  ><Badge v-if="message.status === 'PAUSED'" variant="outline">已暂停</Badge>
+                  ><Badge v-if="message.status === 'PAUSED'" variant="outline">已暂停</Badge
+                  ><Badge v-if="message.status === 'CANCELLING'" variant="secondary">取消中</Badge
+                  ><Badge v-if="message.status === 'CANCELLED'" variant="outline">已取消</Badge>
                 </div>
                 <MarkdownContent
                   v-if="message.content"
@@ -920,7 +978,11 @@ onBeforeUnmount(() => {
                         ? '正在暂停任务...'
                         : message.status === 'PAUSED'
                           ? '任务已暂停，可恢复'
-                          : '正在响应...'
+                          : message.status === 'CANCELLING'
+                            ? '正在取消任务...'
+                            : message.status === 'CANCELLED'
+                              ? '任务已取消'
+                              : '正在响应...'
                   }}
                 </div>
                 <p

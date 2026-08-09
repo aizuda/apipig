@@ -23,7 +23,8 @@ type PushChannel struct {
 
 func (PushChannel) TableName() string { return "ap_review_push_channel" }
 
-// PushChannelView is the safe API representation. Config never contains raw secrets.
+// PushChannelView is the API representation. Project responses mask secrets;
+// the authenticated editor endpoint may populate Config with decrypted values.
 type PushChannelView struct {
 	ID               snowflake.ID      `json:"id" swaggertype:"string"`
 	ProjectID        snowflake.ID      `json:"projectId" swaggertype:"string"`

@@ -112,7 +112,7 @@ func (r gormAgentRepository) RecoverInterruptedTurn(agentID, messageID snowflake
 			First(&message).Error; err != nil {
 			return err
 		}
-		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed || message.Status == remoteModel.MessageStatusCancelled {
 			// 终态消息无需重试，仅清除客户端异常退出后残留的占用标记。
 			return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
 				Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
@@ -121,6 +121,14 @@ func (r gormAgentRepository) RecoverInterruptedTurn(agentID, messageID snowflake
 		if err := tx.Where("assistant_message_id = ? AND agent_id = ?", messageID, agentID).
 			First(&storedCommand).Error; err != nil {
 			return err
+		}
+		if storedCommand.Status == remoteModel.CommandStatusCancelled || message.Status == remoteModel.MessageStatusCancelling {
+			if err := tx.Model(&remoteModel.Message{}).Where("id = ?", messageID).
+				Updates(map[string]any{"status": remoteModel.MessageStatusCancelled, "error_message": "任务已取消", "updated_at": now}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, messageID).
+				Updates(map[string]any{"current_message_id": 0, "updated_at": now}).Error
 		}
 		if storedCommand.Status == remoteModel.CommandStatusPauseRequested || storedCommand.Status == remoteModel.CommandStatusPaused {
 			if err := tx.Model(&remoteModel.Message{}).Where("id = ?", messageID).

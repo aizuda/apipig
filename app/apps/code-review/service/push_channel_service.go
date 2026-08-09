@@ -32,13 +32,23 @@ type pushChannelService struct{ vault aiService.CredentialVault }
 type PushChannelFacade = pushChannelService
 
 func (s *pushChannelService) List(projectID snowflake.ID) ([]reviewModel.PushChannelView, error) {
+	return s.list(projectID, false)
+}
+
+// ListForEdit returns decrypted channel configuration for the authenticated
+// admin editor. General project responses continue to use List and stay masked.
+func (s *pushChannelService) ListForEdit(projectID snowflake.ID) ([]reviewModel.PushChannelView, error) {
+	return s.list(projectID, true)
+}
+
+func (s *pushChannelService) list(projectID snowflake.ID, revealSecrets bool) ([]reviewModel.PushChannelView, error) {
 	var rows []reviewModel.PushChannel
 	if err := global.DB.Where("project_id = ?", projectID).Order("created_at ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	result := make([]reviewModel.PushChannelView, 0, len(rows))
 	for _, row := range rows {
-		view, err := s.toView(row)
+		view, err := s.toView(row, revealSecrets)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +162,7 @@ func (s *pushChannelService) fromRequest(projectID snowflake.ID, input reviewReq
 	return reviewModel.PushChannel{MODEL: reviewModel.PushChannel{}.MODEL, ProjectID: projectID, Type: typ, Name: name, Enabled: input.Enabled, Config: enc}, nil
 }
 
-func (s *pushChannelService) toView(row reviewModel.PushChannel) (reviewModel.PushChannelView, error) {
+func (s *pushChannelService) toView(row reviewModel.PushChannel, revealSecrets bool) (reviewModel.PushChannelView, error) {
 	config, err := s.decryptConfig(row.Config)
 	if err != nil {
 		return reviewModel.PushChannelView{}, err
@@ -161,7 +171,9 @@ func (s *pushChannelService) toView(row reviewModel.PushChannel) (reviewModel.Pu
 	for key, value := range config {
 		if strings.Contains(strings.ToLower(key), "secret") || strings.Contains(strings.ToLower(key), "token") || key == "webhookUrl" {
 			secretConfigured = secretConfigured || value != ""
-			config[key] = ""
+			if !revealSecrets {
+				config[key] = ""
+			}
 		}
 	}
 	return reviewModel.PushChannelView{ID: row.ID, ProjectID: row.ProjectID, Type: row.Type, Name: row.Name, Enabled: row.Enabled, Config: config, SecretConfigured: secretConfigured}, nil
@@ -214,7 +226,7 @@ func (s *pushChannelService) push(task reviewModel.Task, project reviewModel.Pro
 		logReviewError("加载推送渠道失败", err)
 		return
 	}
-	message := fmt.Sprintf("代码评审结果\n项目：%s\n仓库：%s\n标题：%s\n风险：%s\n\n%s", project.Name, task.RepositoryName, task.Title, task.RiskLevel, task.Summary)
+	message := buildReviewPushMessage(task, project)
 	for _, row := range rows {
 		config, err := s.decryptConfig(row.Config)
 		if err != nil {
@@ -225,6 +237,74 @@ func (s *pushChannelService) push(task reviewModel.Task, project reviewModel.Pro
 			logReviewError("发送代码评审结果失败", err)
 		}
 	}
+}
+
+const reviewPushFindingLimit = 3
+
+// buildReviewPushMessage intentionally leaves the full Markdown report in the
+// system. Push channels only need a compact summary that can be scanned quickly.
+func buildReviewPushMessage(task reviewModel.Task, project reviewModel.Project) string {
+	summary := strings.TrimSpace(task.Summary)
+	if summary == "" {
+		summary = "暂无风险摘要"
+	}
+	summary = truncateReviewPushText(summary, 300)
+
+	var findings []reviewResp.Finding
+	if strings.TrimSpace(task.Findings) != "" {
+		_ = json.Unmarshal([]byte(task.Findings), &findings)
+	}
+
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "代码评审结果\n项目：%s\n仓库：%s\n标题：%s\n风险等级：%s\n风险摘要：%s\n\n重点提示：", project.Name, task.RepositoryName, task.Title, task.RiskLevel, summary)
+	if len(findings) == 0 {
+		builder.WriteString("\n暂无结构化问题")
+	} else {
+		limit := len(findings)
+		if limit > reviewPushFindingLimit {
+			limit = reviewPushFindingLimit
+		}
+		for _, finding := range findings[:limit] {
+			builder.WriteString("\n- ")
+			builder.WriteString(formatReviewPushFinding(finding))
+		}
+		if remaining := len(findings) - limit; remaining > 0 {
+			fmt.Fprintf(&builder, "\n还有 %d 条问题，请前往系统查看完整报告", remaining)
+		}
+	}
+	builder.WriteString("\n\n更多详情请前往系统“AI 应用 > 代码评审 > 评审任务”查看完整报告。")
+	return builder.String()
+}
+
+func formatReviewPushFinding(finding reviewResp.Finding) string {
+	severity := strings.TrimSpace(finding.Severity)
+	if severity == "" {
+		severity = "提示"
+	}
+	title := strings.TrimSpace(finding.Title)
+	if title == "" {
+		title = strings.TrimSpace(finding.Description)
+	}
+	if title == "" {
+		title = "发现待关注问题"
+	}
+	title = truncateReviewPushText(title, 160)
+	location := strings.TrimSpace(finding.File)
+	if location != "" && finding.Line > 0 {
+		location = fmt.Sprintf("%s:%d", location, finding.Line)
+	}
+	if location != "" {
+		return fmt.Sprintf("[%s] %s（%s）", severity, title, location)
+	}
+	return fmt.Sprintf("[%s] %s", severity, title)
+}
+
+func truncateReviewPushText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if maxRunes <= 0 || len([]rune(value)) <= maxRunes {
+		return value
+	}
+	return string([]rune(value)[:maxRunes-1]) + "…"
 }
 
 func (s *pushChannelService) send(ctx context.Context, typ string, config map[string]string, message string) (bool, error) {

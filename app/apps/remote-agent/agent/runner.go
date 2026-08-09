@@ -210,7 +210,8 @@ func (r *Runner) execute(executionCtx context.Context, cancelExecution context.C
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)
 	controlCtx, stopControl := context.WithCancel(lifecycleCtx)
 	var paused atomic.Bool
-	go r.watchCommandControl(controlCtx, command.CommandID, &paused, cancelExecution)
+	var cancelled atomic.Bool
+	go r.watchCommandControl(controlCtx, command.CommandID, &paused, &cancelled, cancelExecution)
 	result := r.executor.ExecuteTurn(executionCtx, command.CLIType, command.PermissionMode, command.WorkingDirectory, command.Prompt, uploader.Append)
 	stopControl()
 	if err := uploader.Close(lifecycleCtx); err != nil {
@@ -223,6 +224,11 @@ func (r *Runner) execute(executionCtx context.Context, cancelExecution context.C
 	if paused.Load() {
 		report.Success = false
 		report.Paused = true
+		report.ErrorMessage = ""
+	}
+	if cancelled.Load() {
+		report.Success = false
+		report.Cancelled = true
 		report.ErrorMessage = ""
 	}
 	for {
@@ -240,13 +246,18 @@ func (r *Runner) execute(executionCtx context.Context, cancelExecution context.C
 	}
 }
 
-func (r *Runner) watchCommandControl(ctx context.Context, commandID snowflake.ID, paused *atomic.Bool, cancel context.CancelFunc) {
+func (r *Runner) watchCommandControl(ctx context.Context, commandID snowflake.ID, paused, cancelled *atomic.Bool, cancel context.CancelFunc) {
 	ticker := time.NewTicker(750 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		status, err := r.client.CommandStatus(ctx, commandID)
 		if err == nil && (status == remoteModel.CommandStatusPauseRequested || status == remoteModel.CommandStatusPaused) {
 			paused.Store(true)
+			cancel()
+			return
+		}
+		if err == nil && status == remoteModel.CommandStatusCancelled {
+			cancelled.Store(true)
 			cancel()
 			return
 		}

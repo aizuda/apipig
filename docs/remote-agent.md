@@ -59,7 +59,7 @@ claude -p --permission-mode acceptEdits
 
 Agent 必须以拥有项目读写权限的普通系统用户运行。在 Linux/macOS 上应让该用户拥有项目目录和 `.git` 的读写权限；在 Windows 上需确保启动 Agent 的用户（包括服务账户）对项目目录具有“修改”权限。不要通过 root/管理员权限绕过目录授权。
 
-Agent 进程在执行轮次期间意外退出时，下次注册会自动清理未完成的部分输出并重新派发该轮次。
+Agent 进程在执行轮次期间意外退出时，下次注册会自动清理未完成的部分输出并重新派发该轮次。会话窗口支持暂停、恢复和取消正在执行的任务；取消会终止 Agent 上对应的 CLI 进程，任务状态变为 `CANCELLED`，不会再次派发。
 
 Agent 注册、心跳状态变化和正常退出会立即通过 SSE 推送到控制台，列表和详情页不再定时查询 Agent 状态。SSE 断线重连后只执行一次状态校准。进程崩溃、断电或网络中断无法主动上报时，Controller 会刷新该 Agent 独立的心跳截止计时器，并在 30 秒超时后推送离线事件；不会周期性扫描 Agent 表。
 
@@ -93,3 +93,6 @@ Agent 接口：
 - `GET /v1/ai-applications/remote-agent/conversation/get?id=<conversation-id>`
 - `POST /v1/ai-applications/remote-agent/conversation/message/send`
 - `POST /v1/ai-applications/remote-agent/conversation/message/stream`
+- `POST /v1/ai-applications/remote-agent/conversation/task/pause`
+- `POST /v1/ai-applications/remote-agent/conversation/task/resume`
+- `POST /v1/ai-applications/remote-agent/conversation/task/cancel`

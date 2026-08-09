@@ -397,6 +397,60 @@ func (r conversationRepository) Pause(messageID snowflake.ID, now int64) (remote
 	return message, err
 }
 
+func (r conversationRepository) Cancel(messageID snowflake.ID, now int64) (remoteModel.Message, error) {
+	var message remoteModel.Message
+	err := r.db().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND role = ?", messageID, remoteModel.MessageRoleAssistant).First(&message).Error; err != nil {
+			return err
+		}
+		if message.Status == remoteModel.MessageStatusCancelled || message.Status == remoteModel.MessageStatusCancelling {
+			return nil
+		}
+		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed || message.Status == remoteModel.MessageStatusPaused {
+			return errors.New("已结束的任务不能取消")
+		}
+		var command remoteModel.Command
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("assistant_message_id = ?", messageID).First(&command).Error; err != nil {
+			return err
+		}
+		switch command.Status {
+		case remoteModel.CommandStatusPending, remoteModel.CommandStatusDispatched, remoteModel.CommandStatusAcknowledged:
+		default:
+			return errors.New("任务当前状态不能取消")
+		}
+		acknowledged := command.Status == remoteModel.CommandStatusAcknowledged
+		if err := tx.Model(&command).Updates(map[string]any{"status": remoteModel.CommandStatusCancelled, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		messageStatus := remoteModel.MessageStatusCancelled
+		if acknowledged {
+			messageStatus = remoteModel.MessageStatusCancelling
+		}
+		message.Status = messageStatus
+		if err := tx.Model(&message).Updates(map[string]any{
+			"status": message.Status, "error_message": map[bool]string{true: "", false: "任务已取消"}[acknowledged], "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		// An acknowledged command is still running on the Agent. Its control
+		// poll will stop the process and Complete will release the reservation.
+		if acknowledged {
+			return tx.Model(&remoteModel.Conversation{}).Where("id = ?", message.ConversationID).
+				Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error
+		}
+		if err := tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", command.AgentID, messageID).
+			Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&remoteModel.Conversation{}).Where("id = ?", message.ConversationID).
+			Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error
+	})
+	message.UpdatedAt = now
+	return message, err
+}
+
 func (r conversationRepository) Resume(messageID snowflake.ID, now int64) (remoteModel.Message, error) {
 	var message remoteModel.Message
 	err := r.db().Transaction(func(tx *gorm.DB) error {
@@ -486,6 +540,39 @@ func (r conversationRepository) Complete(agentID snowflake.ID, result remoteReq.
 			return err
 		}
 		if message.Status == remoteModel.MessageStatusCompleted || message.Status == remoteModel.MessageStatusFailed {
+			return nil
+		}
+		if message.Status == remoteModel.MessageStatusCancelled {
+			if err := tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, result.MessageID).
+				Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			finalStatus = remoteModel.MessageStatusCancelled
+			return nil
+		}
+		if result.Cancelled || message.Status == remoteModel.MessageStatusCancelling {
+			content := result.Content
+			if content == "" {
+				content = message.Content
+			}
+			if err := tx.Model(&remoteModel.Message{}).Where("id = ?", result.MessageID).Updates(map[string]any{
+				"status": remoteModel.MessageStatusCancelled, "content": content, "error_message": "任务已取消", "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&remoteModel.Command{}).Where("assistant_message_id = ? AND agent_id = ?", result.MessageID, agentID).
+				Updates(map[string]any{"status": remoteModel.CommandStatusCancelled, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&remoteModel.Agent{}).Where("id = ? AND current_message_id = ?", agentID, result.MessageID).
+				Updates(map[string]any{"status": remoteModel.AgentStatusOnline, "current_message_id": 0, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&remoteModel.Conversation{}).Where("id = ?", message.ConversationID).
+				Updates(map[string]any{"last_message_at": now, "updated_at": now}).Error; err != nil {
+				return err
+			}
+			finalStatus = remoteModel.MessageStatusCancelled
 			return nil
 		}
 		if result.Paused || message.Status == remoteModel.MessageStatusPausing {

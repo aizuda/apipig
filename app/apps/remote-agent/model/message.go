@@ -9,12 +9,14 @@ const (
 	MessageRoleUser      = "USER"
 	MessageRoleAssistant = "ASSISTANT"
 
-	MessageStatusPending   = "PENDING"
-	MessageStatusStreaming = "STREAMING"
-	MessageStatusPausing   = "PAUSING"
-	MessageStatusPaused    = "PAUSED"
-	MessageStatusCompleted = "COMPLETED"
-	MessageStatusFailed    = "FAILED"
+	MessageStatusPending    = "PENDING"
+	MessageStatusStreaming  = "STREAMING"
+	MessageStatusPausing    = "PAUSING"
+	MessageStatusCancelling = "CANCELLING"
+	MessageStatusPaused     = "PAUSED"
+	MessageStatusCompleted  = "COMPLETED"
+	MessageStatusFailed     = "FAILED"
+	MessageStatusCancelled  = "CANCELLED"
 )
 
 type Message struct {

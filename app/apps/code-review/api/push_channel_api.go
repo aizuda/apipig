@@ -13,6 +13,13 @@ type PushChannelApi struct {
 	service *service.PushChannelFacade
 }
 
+func (a *PushChannelApi) ListForEdit(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderCacheControl, "no-store")
+	c.Set(fiber.HeaderPragma, "no-cache")
+	id, err := a.IdParser(c)
+	return response.Execute(c, a.service.ListForEdit, id, err)
+}
+
 func (a *PushChannelApi) Save(c *fiber.Ctx) error {
 	var params reviewReq.PushChannelsSaveRequest
 	err := a.BodyParser(c, &params, "代码评审推送渠道")

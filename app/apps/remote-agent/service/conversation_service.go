@@ -323,6 +323,14 @@ func (s *ConversationService) Resume(request *remoteReq.ConversationTaskRequest)
 	return message, err
 }
 
+func (s *ConversationService) Cancel(request *remoteReq.ConversationTaskRequest) (remoteModel.Message, error) {
+	if request == nil || request.MessageID == 0 {
+		return remoteModel.Message{}, errors.New("任务消息 ID 不能为空")
+	}
+	message, err := s.repository.Cancel(request.MessageID, s.now().UnixMilli())
+	return message, err
+}
+
 func (s *ConversationService) send(conversationID snowflake.ID, content, source string) (remoteResp.SendMessageResult, error) {
 	conversation, err := s.repository.Get(conversationID)
 	if err != nil {
@@ -502,7 +510,7 @@ func (s *ConversationService) Complete(params *remoteReq.MessageResultParams) (b
 	if completed {
 		s.agentService.publishAgentByID(agent.ID, remoteModel.AgentStatusBusy)
 	}
-	if completed && finalStatus != remoteModel.MessageStatusPaused && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
+	if completed && finalStatus != remoteModel.MessageStatusPaused && finalStatus != remoteModel.MessageStatusCancelled && conversation.ControlMode == remoteModel.ConversationControlModeWechat && conversation.WechatBotID != 0 && conversation.WechatUserID != "" && s.takeoverSender != nil {
 		content := params.Request.Content
 		if !params.Request.Success {
 			content = "Agent 执行失败：" + params.Request.ErrorMessage

@@ -362,6 +362,53 @@ func TestConversationTaskCanPauseAndResume(t *testing.T) {
 	assert.Equal(t, int64(1), retry.NextChunkSequence)
 }
 
+func TestConversationTaskCanCancel(t *testing.T) {
+	database := setupAgentServiceTestDB(t)
+	agent := seedTestAgent(t, database, "cancel-node", "registration", remoteModel.AgentStatusOnline)
+	require.NoError(t, database.Model(&agent).Updates(map[string]any{
+		"token_hash": hashAgentToken("runtime-token"), "last_seen_at": time.Now().UnixMilli(),
+	}).Error)
+	service := NewConversationService(NewAgentService())
+	conversation, err := service.Create(&remoteReq.ConversationCreateRequest{AgentID: agent.ID, CLIType: remoteModel.CLITypeCodex})
+	require.NoError(t, err)
+
+	turn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "cancel before dispatch"})
+	require.NoError(t, err)
+	cancelled, err := service.Cancel(&remoteReq.ConversationTaskRequest{MessageID: turn.AssistantMessage.ID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.MessageStatusCancelled, cancelled.Status)
+	assert.Equal(t, "任务已取消", cancelled.ErrorMessage)
+	var command remoteModel.Command
+	require.NoError(t, database.Where("assistant_message_id = ?", turn.AssistantMessage.ID).First(&command).Error)
+	assert.Equal(t, remoteModel.CommandStatusCancelled, command.Status)
+	var storedAgent remoteModel.Agent
+	require.NoError(t, database.First(&storedAgent, agent.ID).Error)
+	assert.Equal(t, remoteModel.AgentStatusOnline, storedAgent.Status)
+	assert.Zero(t, storedAgent.CurrentMessageID)
+
+	nextTurn, err := service.Send(&remoteReq.SendMessageRequest{ConversationID: conversation.ID, Content: "cancel while running"})
+	require.NoError(t, err)
+	dispatched, err := service.NextCommand(&remoteReq.NextCommandParams{AgentToken: "runtime-token", WaitSeconds: 1})
+	require.NoError(t, err)
+	require.NotNil(t, dispatched)
+	_, err = service.Acknowledge(&remoteReq.AcknowledgeCommandParams{AgentToken: "runtime-token", CommandID: dispatched.CommandID})
+	require.NoError(t, err)
+	cancelled, err = service.Cancel(&remoteReq.ConversationTaskRequest{MessageID: nextTurn.AssistantMessage.ID})
+	require.NoError(t, err)
+	assert.Equal(t, remoteModel.MessageStatusCancelling, cancelled.Status)
+	require.NoError(t, database.First(&storedAgent, agent.ID).Error)
+	assert.Equal(t, remoteModel.AgentStatusBusy, storedAgent.Status)
+	assert.Equal(t, nextTurn.AssistantMessage.ID, storedAgent.CurrentMessageID)
+
+	_, err = service.Complete(&remoteReq.MessageResultParams{AgentToken: "runtime-token", Request: remoteReq.MessageResultRequest{
+		MessageID: nextTurn.AssistantMessage.ID, Cancelled: true,
+	}})
+	require.NoError(t, err)
+	require.NoError(t, database.First(&storedAgent, agent.ID).Error)
+	assert.Equal(t, remoteModel.AgentStatusOnline, storedAgent.Status)
+	assert.Zero(t, storedAgent.CurrentMessageID)
+}
+
 func TestBuildConversationPromptPreservesInstructionAndLatestMessage(t *testing.T) {
 	messages := []remoteModel.Message{{
 		Role: remoteModel.MessageRoleAssistant, Status: remoteModel.MessageStatusCompleted,

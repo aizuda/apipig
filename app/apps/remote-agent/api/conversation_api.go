@@ -74,6 +74,12 @@ func (a *ConversationApi) Resume(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Resume, &request, err)
 }
 
+func (a *ConversationApi) Cancel(c *fiber.Ctx) error {
+	var request remoteReq.ConversationTaskRequest
+	err := a.BodyParser(c, &request, "Remote Agent task cancel")
+	return response.Execute(c, a.service.Cancel, &request, err)
+}
+
 func (a *ConversationApi) StartTakeover(c *fiber.Ctx) error {
 	var request remoteReq.ConversationTakeoverRequest
 	err := a.BodyParser(c, &request, "Remote Agent 微信接管")
@@ -146,7 +152,7 @@ func (a *ConversationApi) Stream(c *fiber.Ctx) error {
 				}
 				sequence = chunk.Sequence
 			}
-			if event.Message.Status == remoteModel.MessageStatusCompleted || event.Message.Status == remoteModel.MessageStatusFailed || event.Message.Status == remoteModel.MessageStatusPaused {
+			if event.Message.Status == remoteModel.MessageStatusCompleted || event.Message.Status == remoteModel.MessageStatusFailed || event.Message.Status == remoteModel.MessageStatusPaused || event.Message.Status == remoteModel.MessageStatusCancelled {
 				_ = writeSSE(writer, "done", event.Message)
 				return
 			}

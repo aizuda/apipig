@@ -95,6 +95,10 @@ export const codeReviewApi = {
     return get<ReviewTask>(`/ai-applications/code-review/task/get?${query}`)
   },
   retryTask: (id: string) => post<boolean>('/ai-applications/code-review/task/retry', { id }),
+  getPushChannels: (projectId: string) => {
+    const query = new URLSearchParams({ id: projectId })
+    return get<PushChannel[]>(`/ai-applications/code-review/project/push-channels?${query}`)
+  },
   savePushChannels: (projectId: string, channels: PushChannel[]) =>
     post<{ channels: PushChannel[] }>('/ai-applications/code-review/project/push-channels', {
       projectId,

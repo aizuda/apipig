@@ -18,6 +18,7 @@ func (r *CodeReviewRouter) InitAdminRouter(router fiber.Router) {
 	project.Get("get", api.ReviewApi.ProjectApi.Get)
 	project.Post("page", api.ReviewApi.ProjectApi.Page)
 	project.Post("delete", api.ReviewApi.ProjectApi.Delete)
+	project.Get("push-channels", api.ReviewApi.PushChannelApi.ListForEdit)
 	task := router.Group("task/")
 	task.Post("page", api.ReviewApi.TaskApi.Page)
 	task.Get("get", api.ReviewApi.TaskApi.Get)

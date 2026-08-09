@@ -38,6 +38,8 @@ export interface LayoutProps {
   mode?: LayoutMode
   variant?: LayoutVariant
   collapsed?: boolean
+  /** Whether the sidebar is completely hidden. */
+  hidden?: boolean
   class?: HTMLAttributes['class']
 }
 

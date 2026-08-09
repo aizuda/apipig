@@ -22,17 +22,18 @@ The JSON shape is intentionally extensible. Current payloads are:
 - DingTalk robot: `{ "webhookUrl": "...", "secret": "..." }` (secret is optional)
 - WeChat Bot: `{ "botId": "...", "userId": "..." }`
 
-Webhook URLs and signing secrets are encrypted with the existing `CredentialVault`. API responses
-return masked secret fields and a `secretConfigured` flag; leaving a masked field empty preserves
-the stored value when channels are saved.
+Webhook URLs and signing secrets are encrypted with the existing `CredentialVault`. Project list
+responses return masked secret fields and a `secretConfigured` flag. The authenticated channel
+editor endpoint returns decrypted values so the password inputs can be populated and revealed by
+the operator; leaving a masked field empty still preserves the stored value when channels are saved.
 
 ## Admin API
 
 - `POST /v1/ai-applications/code-review/project/push-channels` replaces the channel set for a project.
+- `GET /v1/ai-applications/code-review/project/push-channels?id={projectId}` returns channel values for the authenticated editor.
 - `POST /v1/ai-applications/code-review/project/push-channels/test` sends a test message.
 
 When a review task reaches `succeeded`, enabled channels are dispatched asynchronously. A channel
 failure is logged and does not change the review task result. DingTalk signing follows the official
 timestamp + HMAC-SHA256 convention; WeCom uses the robot webhook payload, and WeChat Bot sends to
 the selected contact through the existing Bot runtime.
-

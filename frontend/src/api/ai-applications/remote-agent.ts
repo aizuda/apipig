@@ -7,7 +7,15 @@ export type ConversationControlMode = 'WEB' | 'WECHAT'
 export type CLIType = 'CODEX' | 'CLAUDE'
 export type PermissionMode = 'AUTO_EDIT' | 'FULL_ACCESS'
 export type MessageRole = 'USER' | 'ASSISTANT'
-export type MessageStatus = 'PENDING' | 'STREAMING' | 'PAUSING' | 'PAUSED' | 'COMPLETED' | 'FAILED'
+export type MessageStatus =
+  | 'PENDING'
+  | 'STREAMING'
+  | 'PAUSING'
+  | 'CANCELLING'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
 
 export interface RemoteAgent {
   id: string
@@ -200,6 +208,8 @@ export const remoteAgentApi = {
     post<RemoteMessage>('/ai-applications/remote-agent/conversation/task/pause', { messageId }),
   resumeTask: (messageId: string) =>
     post<RemoteMessage>('/ai-applications/remote-agent/conversation/task/resume', { messageId }),
+  cancelTask: (messageId: string) =>
+    post<RemoteMessage>('/ai-applications/remote-agent/conversation/task/cancel', { messageId }),
   startTakeover: (id: string, botId: string, userId: string) =>
     post<RemoteConversation>('/ai-applications/remote-agent/conversation/takeover/start', {
       id,

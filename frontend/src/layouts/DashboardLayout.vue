@@ -61,8 +61,6 @@ const tabsStore = useTabsStore()
 
 const { menuItems, visibleMenuItems, activeMenuItem, currentTopNavId } = useRouteMenu()
 
-const layoutRef = ref<InstanceType<typeof Layout> | null>(null)
-
 const activeTopNavId = ref('')
 const activeDoubleSidebarId = ref('')
 
@@ -312,6 +310,7 @@ const hasDoubleSidebar = computed(
  * 侧边栏折叠状态（使用 ref 以支持双向绑定）
  */
 const sidebarCollapsed = ref(themeStore.sidebarCollapsed)
+const sidebarHidden = ref(false)
 
 /**
  * 同步 themeStore 的折叠状态到本地 ref
@@ -439,10 +438,10 @@ onUnmounted(() => {
 
 <template>
   <Layout
-    ref="layoutRef"
     :mode="themeStore.layoutMode"
     :variant="themeStore.layoutVariant"
     v-model:collapsed="sidebarCollapsed"
+    v-model:hidden="sidebarHidden"
     class="transition-colors duration-300"
   >
     <!-- mixed-double 模式 -->
@@ -694,7 +693,7 @@ onUnmounted(() => {
     <!-- sidebar 模式 -->
     <template v-else-if="hasSidebar">
       <LayoutSidebarApp
-        v-show="!layoutRef?.hidden"
+        v-show="!sidebarHidden"
         :menus="sidebarMenus"
         :collapsed="sidebarCollapsed"
         :width="themeStore.sidebarWidth"

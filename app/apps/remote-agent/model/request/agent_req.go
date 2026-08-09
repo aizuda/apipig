@@ -170,6 +170,7 @@ type MessageResultRequest struct {
 	MessageID    snowflake.ID `json:"messageId" swaggertype:"string"`
 	Success      bool         `json:"success"`
 	Paused       bool         `json:"paused,omitempty"`
+	Cancelled    bool         `json:"cancelled,omitempty"`
 	Content      string       `json:"content"`
 	ErrorMessage string       `json:"errorMessage"`
 }

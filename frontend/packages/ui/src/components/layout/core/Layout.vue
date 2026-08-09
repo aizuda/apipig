@@ -13,9 +13,17 @@ const props = withDefaults(defineProps<LayoutProps>(), {
 
 const emit = defineEmits<{
   'update:collapsed': [value: boolean]
+  'update:hidden': [value: boolean]
 }>()
 
 const collapsed = useVModel(props, 'collapsed', emit, {
+  defaultValue: false,
+  passive: true,
+})
+
+// Keep the complete-hide state controlled by the parent, just like collapsed.
+// This avoids relying on a component instance exposed ref in parent templates.
+const hidden = useVModel(props, 'hidden', emit, {
   defaultValue: false,
   passive: true,
 })
@@ -31,8 +39,6 @@ const doubleSidebarExpandedId = ref<string | null>(null)
 /**
  * 侧栏完全隐藏状态（由顶栏 SidebarTrigger 控制）
  */
-const hidden = ref(false)
-
 /**
  * 双栏侧栏的二级菜单是否真正展开（有子菜单）
  */
