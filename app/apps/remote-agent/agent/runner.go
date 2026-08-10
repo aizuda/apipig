@@ -18,9 +18,8 @@ import (
 	remoteModel "apipig/app/apps/remote-agent/model"
 	remoteReq "apipig/app/apps/remote-agent/model/request"
 	"apipig/toolkit/snowflake"
+	buildversion "apipig/version"
 )
-
-const Version = "0.5.0"
 
 type Runner struct {
 	config            Config
@@ -98,7 +97,7 @@ func (r *Runner) logCodexExecutionPolicy() {
 	if _, lookErr := exec.LookPath(command); lookErr != nil {
 		r.logger.Printf("codex executable lookup failed command=%q: %v", command, lookErr)
 	}
-	r.logger.Printf("codex execution policy agent-version=%s executable=%q args=%q sandbox=%s network-access=%s", Version, resolved, sanitizeCLIArgs(args), codexSandboxMode(args), codexNetworkAccess(args))
+	r.logger.Printf("codex execution policy agent-version=%s executable=%q args=%q sandbox=%s network-access=%s", buildversion.Version, resolved, sanitizeCLIArgs(args), codexSandboxMode(args), codexNetworkAccess(args))
 }
 
 func (r *Runner) disconnect() {
@@ -205,7 +204,7 @@ func (r *Runner) execute(executionCtx context.Context, cancelExecution context.C
 	r.logger.Printf(
 		"starting conversation turn %s cli=%s permission-mode=%s executable=%q args=%q workspace-root=%q working-directory=%q sandbox=%s network-access=%s agent-version=%s",
 		command.AssistantMessageID.String(), command.CLIType, remoteModel.NormalizePermissionMode(command.PermissionMode), executable, sanitizeCLIArgs(effectiveArgs), r.config.WorkspaceRoot,
-		command.WorkingDirectory, sandboxMode, networkAccess, Version,
+		command.WorkingDirectory, sandboxMode, networkAccess, buildversion.Version,
 	)
 	uploader := newMessageUploader(lifecycleCtx, r.client, command.AssistantMessageID, command.NextChunkSequence)
 	controlCtx, stopControl := context.WithCancel(lifecycleCtx)

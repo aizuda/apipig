@@ -3,6 +3,7 @@ package initialize
 import (
 	"apipig/config"
 	"apipig/toolkit"
+	buildversion "apipig/version"
 	"apipig/web"
 	"crypto/rand"
 	"encoding/base64"
@@ -162,7 +163,7 @@ func newSetupApp(configPath string) *fiber.App {
 
 func defaultSetupRequest() setupRequest {
 	return setupRequest{
-		Version:       "1.0.0",
+		Version:       buildversion.Version,
 		Port:          setupPort,
 		DBType:        "sqlite",
 		SQLitePath:    "apipig.db?_busy_timeout=30000",

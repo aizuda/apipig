@@ -11,6 +11,7 @@
 - 文本消息长轮询接收及本地持久化；
 - 按联系人保存最新 `context_token`，在 24 小时窗口内发送文本回复；
 - 账户、联系人和消息管理页面。
+- 对外 Webhook 推送，使用加密保存的密钥认证，并在未指定联系人时选择最近有效会话。
 
 ## 对 openilink-hub 的分析与取舍
 
@@ -22,7 +23,7 @@
 | `bot.Manager` 多实例生命周期 | `service.Runtime` 管理每个 Bot 的 SDK Client | 保留进程内多账户连接和恢复能力 |
 | Bot credentials / sync state | 独立 Bot 表保存加密 Token、Base URL 和游标 | 长轮询重启后可继续消费，不暴露凭据 |
 | Message / context token store | 联系人表保存最新加密上下文，消息表保存展示字段 | 满足可回复和管理控制台的最小数据面 |
-| App、Webhook、WebSocket、AI 多路分发 | 暂不引入 | 属于 Hub 的应用平台层，不是通信接入层 |
+| App、WebSocket、AI 多路分发 | 暂不引入 | 属于 Hub 的应用平台层，不是通信接入层 |
 | CDN 媒体下载、上传和 SILK 转码 | 暂不引入 | 首版仅承诺文本通信，降低文件存储与安全面 |
 | 24 小时提醒、链路追踪 | 暂不引入 | 可在稳定的消息事件边界上继续扩展 |
 
@@ -36,6 +37,8 @@
 
 管理端发送 -> 校验 Bot 在线和 24h 窗口 -> 解密 context_token
           -> SDK SendText -> Outbound Message
+
+外部 Webhook -> 校验 Webhook Secret -> 选择联系人 -> SDK SendText
 ```
 
 - `model.Bot`：账户身份、连接状态、加密凭据、同步游标和聚合计数；
@@ -58,6 +61,7 @@
 ## 安全策略
 
 - Bot Token 和联系人 `context_token` 使用项目现有 AES-256-GCM `CredentialVault` 加密；
+- Webhook Secret 使用同一 `CredentialVault` 加密，管理端仅在首次生成或轮换时返回一次明文；
 - API 和 JSON 响应永不返回 Bot Token、同步游标或上下文令牌；
 - 删除账户时硬删除该账户的本地联系人和消息记录；
 - 所有管理接口挂载在现有 JWT/RBAC 中间件之后；
@@ -81,7 +85,16 @@
 | GET | `contacts?botId=...` | 查询最近联系人及回复窗口 |
 | POST | `messages` | 查询联系人消息记录 |
 | POST | `send` | 在有效上下文窗口内发送文本消息 |
+| POST | `webhook/credentials` | 生成或轮换 Webhook URL 和认证密钥（管理端） |
+
+对外 Webhook 地址为 `/v1/apps/wechat-bot/webhook/:webhookKey`，无需 JWT，生产环境必须使用
+HTTPS。调用方不传输
+Webhook Secret，而是提供 `X-Webhook-Timestamp`（毫秒时间戳）和
+`X-Webhook-Signature`。签名算法与钉钉机器人一致：
+`Base64(HMAC-SHA256(timestamp + "\\n" + webhookSecret))`，服务端仅接受前后 5 分钟内的请求。
+请求体为 `{"content":"消息内容"}`，也可传 `userId` 指定联系人；省略 `userId` 时自动使用
+该 Bot 最近 24 小时内活跃的联系人。Webhook Secret 轮换后旧密钥立即失效。
 
 ## 后续扩展边界
 
-媒体消息应继续调用 SDK 的 `DownloadMedia` 和 `SendMediaFile`，但需要先增加受控对象存储、大小限制、MIME 校验和清理策略。AI 自动回复、Webhook 或 WebSocket 分发应订阅持久化后的入站消息事件，不应进入 SDK Runtime 或改变游标提交逻辑。
+媒体消息应继续调用 SDK 的 `DownloadMedia` 和 `SendMediaFile`，但需要先增加受控对象存储、大小限制、MIME 校验和清理策略。Webhook 目前只接受文本消息，不改变 Runtime 的入站游标和幂等处理。

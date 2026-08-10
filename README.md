@@ -5,9 +5,11 @@
 
 ```shell
 goreleaser release --snapshot --clean
-
-goreleaser release --snapshot --clean --config cmd/remote-agent/.goreleaser.yaml
 ```
+
+无 Git tag 的 snapshot 版本从 `version/version.go` 的 `version.Default` 读取；正式版本仍以发布 tag 为准，二者通过同一份 GoReleaser 配置注入到两个二进制中。
+
+发布正式版本时，先确保 tag 与 `version.Default` 一致，再创建对应的 Git tag（例如 `v1.2.3`），并执行 `goreleaser release --clean`。发布前校验会阻止 tag 与源码版本不一致的构建；通过后会从同一个 tag 和 commit 同时产出 `apipig` 与 `apipig-remote-agent`，并生成一份包含全部资产的校验文件。
 
 - 打包无 cmd 窗口命令
 

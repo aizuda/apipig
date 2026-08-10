@@ -1873,7 +1873,7 @@
       const themeLabel = document.getElementById("theme-label");
       const progressSteps = Array.from(document.querySelectorAll(".progress-step"));
 
-      let setupVersion = "1.0.0";
+      let setupVersion = "";
       let restartPolling = false;
       let submitPhase = "idle";
 
@@ -2115,7 +2115,7 @@
       function renderPreview() {
         const state = readState();
         const yaml = [
-          `version: ${state.version || "1.0.0"}`,
+          ...(state.version ? [`version: ${state.version}`] : []),
           "system:",
           `  port: ${state.port || 9527}`,
           `  db-type: ${state.dbType || "sqlite"}`,

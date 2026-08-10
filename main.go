@@ -13,7 +13,7 @@ import (
 //go:generate go mod download
 
 // @title iota api
-// @version 1.0.0
+// @version dev
 // @description artificial intelligence message push service
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header

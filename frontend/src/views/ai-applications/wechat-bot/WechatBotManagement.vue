@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Trash2,
+  Webhook,
 } from '@lucide/vue'
 import {
   AlertDialog,
@@ -33,11 +34,13 @@ import {
   wechatBotApi,
   type WechatBot,
   type WechatBotStatus,
+  type WechatWebhookCredentials,
 } from '@/api/ai-applications/wechat-bot'
 import AppPageHeader from '@/components/AppPageHeader.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import WechatBindDialog from './components/WechatBindDialog.vue'
 import WechatMessageConsole from './components/WechatMessageConsole.vue'
+import WechatWebhookDialog from './components/WechatWebhookDialog.vue'
 import { formatWechatTime, wechatStatusLabel, wechatStatusVariant } from './presentation'
 
 defineOptions({ name: 'WechatBot' })
@@ -68,6 +71,9 @@ const deleteTarget = ref<WechatBot | null>(null)
 const deleting = ref(false)
 const actionID = ref('')
 const consoleBot = ref<WechatBot | null>(null)
+const webhookTarget = ref<WechatBot | null>(null)
+const webhookCredentials = ref<WechatWebhookCredentials | null>(null)
+const webhookLoading = ref(false)
 let refreshTimer: number | undefined
 
 const onlineCount = computed(() => bots.value.filter((item) => item.status === 'ONLINE').length)
@@ -235,6 +241,39 @@ async function confirmDelete() {
   }
 }
 
+async function openWebhook(bot: WechatBot) {
+  webhookTarget.value = bot
+  webhookCredentials.value = null
+  webhookLoading.value = true
+  try {
+    webhookCredentials.value = await wechatBotApi.webhookCredentials(bot.id)
+    await loadBots(true)
+  } catch (error) {
+    webhookTarget.value = null
+    toast.error(error instanceof Error ? error.message : '加载 Webhook 凭据失败')
+  } finally {
+    webhookLoading.value = false
+  }
+}
+
+async function rotateWebhookSecret() {
+  if (!webhookTarget.value || webhookLoading.value) return
+  webhookLoading.value = true
+  try {
+    webhookCredentials.value = await wechatBotApi.webhookCredentials(webhookTarget.value.id, true)
+    toast.success('Webhook 密钥已轮换')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '轮换 Webhook 密钥失败')
+  } finally {
+    webhookLoading.value = false
+  }
+}
+
+function closeWebhook() {
+  webhookTarget.value = null
+  webhookCredentials.value = null
+}
+
 function searchBots() {
   page.value = 1
   void loadBots()
@@ -378,6 +417,14 @@ onBeforeUnmount(() => {
                     <Button
                       variant="ghost"
                       size="icon"
+                      title="Webhook 接入"
+                      @click="openWebhook(bot)"
+                    >
+                      <Webhook class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       title="重新连接"
                       :disabled="!bot.enabled || actionID === bot.id"
                       @click="reconnect(bot)"
@@ -456,6 +503,15 @@ onBeforeUnmount(() => {
       :open="Boolean(consoleBot)"
       :bot="consoleBot"
       @close="consoleBot = null"
+    />
+
+    <WechatWebhookDialog
+      :open="Boolean(webhookTarget)"
+      :bot-name="webhookTarget?.name || ''"
+      :credentials="webhookCredentials"
+      :loading="webhookLoading"
+      @close="closeWebhook"
+      @rotate="rotateWebhookSecret"
     />
 
     <Dialog

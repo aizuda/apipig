@@ -8,6 +8,10 @@ import (
 
 type WechatBotRouter struct{}
 
+func (r *WechatBotRouter) InitWebhookRouter(router fiber.Router) {
+	router.Post("/apps/wechat-bot/webhook/:webhookKey", api.WechatBotApi.BotApi.WebhookPush)
+}
+
 func (r *WechatBotRouter) InitAdminRouter(router fiber.Router) {
 	bot := router.Group("bot/")
 	bot.Post("page", api.WechatBotApi.BotApi.Page)
@@ -21,4 +25,5 @@ func (r *WechatBotRouter) InitAdminRouter(router fiber.Router) {
 	bot.Get("contacts", api.WechatBotApi.BotApi.Contacts)
 	bot.Post("messages", api.WechatBotApi.BotApi.Messages)
 	bot.Post("send", api.WechatBotApi.BotApi.Send)
+	bot.Post("webhook/credentials", api.WechatBotApi.BotApi.WebhookCredentials)
 }

@@ -56,6 +56,11 @@ export interface BindStatusResult {
   bot?: WechatBot
 }
 
+export interface WechatWebhookCredentials {
+  webhookUrl: string
+  webhookSecret?: string
+}
+
 export const wechatBotApi = {
   page: (params: { page: number; pageSize: number; keyword?: string; status?: string }) =>
     post<PageResult<WechatBot>>('/ai-applications/wechat-bot/bot/page', params),
@@ -86,4 +91,9 @@ export const wechatBotApi = {
     }),
   send: (botId: string, userId: string, content: string) =>
     post<WechatMessage>('/ai-applications/wechat-bot/bot/send', { botId, userId, content }),
+  webhookCredentials: (id: string, rotateSecret = false) =>
+    post<WechatWebhookCredentials>('/ai-applications/wechat-bot/bot/webhook/credentials', {
+      id,
+      rotateSecret,
+    }),
 }

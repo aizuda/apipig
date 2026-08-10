@@ -4,7 +4,7 @@
         "description": "artificial intelligence message push service",
         "title": "apipig api",
         "contact": {},
-        "version": "1.0.0"
+        "version": "dev"
     },
     "paths": {
         "/v1/analytic/device-post-msg-stats": {

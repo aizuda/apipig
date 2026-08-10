@@ -2,6 +2,7 @@ package core
 
 import (
 	"apipig/global"
+	buildversion "apipig/version"
 	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
@@ -41,6 +42,7 @@ func Viper(path ...string) *viper.Viper {
 
 	// 设置默认值
 	v.SetDefault("system.node", 0)
+	v.SetDefault("system.version", buildversion.Version)
 	v.SetDefault("system.aes-key", "18ffc810652aa83a")
 	v.SetDefault("system.session-cron", "*/5 * * * *")
 	v.SetDefault("system.print-route", false)

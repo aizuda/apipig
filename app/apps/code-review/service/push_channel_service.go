@@ -202,8 +202,8 @@ func validateChannelConfig(typ string, config map[string]string) error {
 			return errors.New("Webhook 地址格式不正确")
 		}
 	case reviewModel.PushChannelTypeWechatBot:
-		if config["botId"] == "" || config["userId"] == "" {
-			return errors.New("请选择微信 Bot 和可用会话")
+		if config["botId"] == "" {
+			return errors.New("请选择微信 Bot")
 		}
 	}
 	return nil

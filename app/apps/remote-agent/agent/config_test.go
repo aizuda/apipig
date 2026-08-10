@@ -1,6 +1,7 @@
 package agent
 
 import (
+	buildversion "apipig/version"
 	"os"
 	"path/filepath"
 	"testing"
@@ -81,6 +82,7 @@ func TestConfigRegistrationIncludesHostname(t *testing.T) {
 	registration := config.Registration()
 
 	assert.Equal(t, "test-host", registration.Hostname)
+	assert.Equal(t, buildversion.Version, registration.AgentVersion)
 }
 
 func TestWithinRoot(t *testing.T) {

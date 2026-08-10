@@ -20,6 +20,8 @@ type Bot struct {
 	Name          string `gorm:"size:100;not null;index" json:"name"`
 	BotID         string `gorm:"size:200;not null;uniqueIndex" json:"botId"`
 	BotToken      string `gorm:"type:text;not null" json:"-"`
+	WebhookKey    string `gorm:"size:80;index" json:"webhookKey,omitempty"`
+	WebhookSecret string `gorm:"type:text" json:"-"`
 	BaseURL       string `gorm:"size:1000;not null" json:"baseUrl"`
 	ILinkUserID   string `gorm:"size:200;not null" json:"iLinkUserId"`
 	Status        string `gorm:"size:30;not null;index" json:"status"`

@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +22,14 @@ import (
 	"apipig/global"
 	"apipig/toolkit/snowflake"
 
+	"github.com/gofiber/fiber/v2"
 	ilink "github.com/openilink/openilink-sdk-go"
 	"gorm.io/gorm"
 )
+
+var ErrWebhookUnauthorized = errors.New("Webhook 认证失败")
+
+const webhookTimestampSkew = 5 * time.Minute
 
 type bindSession struct {
 	mu          sync.Mutex
@@ -40,6 +48,7 @@ type BotService struct {
 	runtime         *Runtime
 	bindMu          sync.RWMutex
 	sessions        map[string]*bindSession
+	credentialMu    sync.Mutex
 	outboundHandler func(snowflake.ID, string, string) error
 }
 
@@ -54,6 +63,19 @@ func (s *BotService) SetOutboundHandler(handler func(snowflake.ID, string, strin
 }
 
 func (s *BotService) SendTakeover(ctx context.Context, botID snowflake.ID, userID, content string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		var contact wechatModel.Contact
+		cutoff := time.Now().Add(-sendWindow).UnixMilli()
+		if err := global.DB.Where("bot_record_id = ? AND last_active_at > ?", botID, cutoff).
+			Order("last_active_at DESC, id DESC").First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("没有可发送的有效会话，请先让用户向 Bot 发送一条消息")
+			}
+			return err
+		}
+		userID = contact.UserID
+	}
 	_, err := s.runtime.Send(ctx, botID, userID, content)
 	return err
 }
@@ -297,21 +319,155 @@ func (s *BotService) Send(params *wechatReq.SendMessageRequest) (wechatModel.Mes
 	if content == "" || len([]byte(content)) > 4000 {
 		return empty, errors.New("消息不能为空且不能超过 4000 字节")
 	}
+	userID := strings.TrimSpace(params.UserID)
+	return s.send(params.BotID, userID, content)
+}
+
+func (s *BotService) WebhookCredentials(params *wechatReq.WebhookCredentialsParams) (wechatResp.WebhookCredentialsResult, error) {
+	var result wechatResp.WebhookCredentialsResult
+	if params == nil || params.Ctx == nil || params.Request.ID == 0 {
+		return result, errors.New("Bot ID 不能为空")
+	}
+	s.credentialMu.Lock()
+	defer s.credentialMu.Unlock()
+	var bot wechatModel.Bot
+	if err := global.DB.First(&bot, params.Request.ID).Error; err != nil {
+		return result, err
+	}
+	var plaintextSecret string
+	if strings.TrimSpace(bot.WebhookKey) == "" {
+		key, err := s.uniqueWebhookKey()
+		if err != nil {
+			return result, err
+		}
+		bot.WebhookKey = key
+	}
+	if strings.TrimSpace(bot.WebhookSecret) == "" || params.Request.RotateSecret {
+		secret, err := randomSessionID()
+		if err != nil {
+			return result, err
+		}
+		encrypted, err := s.vault.Encrypt(secret)
+		if err != nil {
+			return result, err
+		}
+		bot.WebhookSecret = encrypted
+		plaintextSecret = secret
+	}
+	if err := global.DB.Model(&bot).Updates(map[string]any{
+		"webhook_key": bot.WebhookKey, "webhook_secret": bot.WebhookSecret,
+	}).Error; err != nil {
+		return result, err
+	}
+	result.WebhookURL = fmt.Sprintf("%s/v1/apps/wechat-bot/webhook/%s", requestContextBaseURL(params.Ctx), bot.WebhookKey)
+	result.WebhookSecret = plaintextSecret
+	return result, nil
+}
+
+func (s *BotService) WebhookPush(params *wechatReq.WebhookPushParams) (wechatResp.WebhookPushResult, error) {
+	var result wechatResp.WebhookPushResult
+	if params == nil || strings.TrimSpace(params.WebhookKey) == "" {
+		return result, ErrWebhookUnauthorized
+	}
+	var bot wechatModel.Bot
+	if err := global.DB.Where("webhook_key = ?", strings.TrimSpace(params.WebhookKey)).First(&bot).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return result, ErrWebhookUnauthorized
+		}
+		return result, err
+	}
+	secret, err := s.vault.Decrypt(bot.WebhookSecret)
+	if err != nil {
+		return result, err
+	}
+	if !verifyWebhookSignature(secret, params.Timestamp, params.Signature, time.Now()) {
+		return result, ErrWebhookUnauthorized
+	}
+	if !bot.Enabled || bot.Status != wechatModel.BotStatusOnline {
+		return result, errors.New("微信 Bot 当前不在线")
+	}
+	content := strings.TrimSpace(params.Request.Content)
+	if content == "" || len([]byte(content)) > 4000 {
+		return result, errors.New("消息不能为空且不能超过 4000 字节")
+	}
+	userID := strings.TrimSpace(params.Request.UserID)
+	if userID == "" {
+		var contact wechatModel.Contact
+		cutoff := time.Now().Add(-sendWindow).UnixMilli()
+		if err := global.DB.Where("bot_record_id = ? AND last_active_at > ?", bot.ID, cutoff).
+			Order("last_active_at DESC, id DESC").First(&contact).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return result, errors.New("没有可发送的有效会话，请先让用户向 Bot 发送一条消息")
+			}
+			return result, err
+		}
+		userID = contact.UserID
+	}
+	message, err := s.send(bot.ID, userID, content)
+	if err != nil {
+		return result, err
+	}
+	result.Message = message
+	return result, nil
+}
+
+func verifyWebhookSignature(secret, timestamp, provided string, now time.Time) bool {
+	secret = strings.TrimSpace(secret)
+	timestamp = strings.TrimSpace(timestamp)
+	provided = strings.TrimSpace(provided)
+	if secret == "" || timestamp == "" || provided == "" {
+		return false
+	}
+	timestampMillis, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return false
+	}
+	nowMillis := now.UnixMilli()
+	skewMillis := webhookTimestampSkew.Milliseconds()
+	if timestampMillis < nowMillis-skewMillis || timestampMillis > nowMillis+skewMillis {
+		return false
+	}
+	received, err := base64.StdEncoding.DecodeString(provided)
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(timestamp + "\n" + secret))
+	return hmac.Equal(received, mac.Sum(nil))
+}
+
+func (s *BotService) send(botID snowflake.ID, userID, content string) (wechatModel.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	userID := strings.TrimSpace(params.UserID)
-	message, err := s.runtime.Send(ctx, params.BotID, userID, content)
+	message, err := s.runtime.Send(ctx, botID, userID, content)
 	if err != nil {
-		return empty, err
+		return wechatModel.Message{}, err
 	}
 	if s.outboundHandler != nil {
-		if mirrorErr := s.outboundHandler(params.BotID, userID, content); mirrorErr != nil {
+		if mirrorErr := s.outboundHandler(botID, userID, content); mirrorErr != nil {
 			// The WeChat message has already been accepted upstream. Do not return an
 			// error that could make the operator retry and send a duplicate message.
 			logWechatError("同步 Bot 管理端消息到 Agent 接管会话", mirrorErr)
 		}
 	}
 	return message, nil
+}
+
+func (s *BotService) uniqueWebhookKey() (string, error) {
+	for attempts := 0; attempts < 5; attempts++ {
+		key, err := randomSessionID()
+		if err != nil {
+			return "", err
+		}
+		var count int64
+		if err := global.DB.Model(&wechatModel.Bot{}).Where("webhook_key = ?", key).Count(&count).Error; err != nil {
+			return "", err
+		}
+		if count == 0 {
+			return key, nil
+		}
+	}
+	return "", errors.New("生成 Webhook 标识失败，请重试")
 }
 
 func (s *BotService) saveConfirmedBot(session *bindSession, status *ilink.QRStatusResponse) (wechatModel.Bot, error) {
@@ -392,4 +548,12 @@ func randomSessionID() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func requestContextBaseURL(c *fiber.Ctx) string {
+	baseURL := strings.TrimRight(c.BaseURL(), "/")
+	if index := strings.LastIndex(c.Path(), "/v1/"); index > 0 {
+		baseURL += strings.TrimRight(c.Path()[:index], "/")
+	}
+	return baseURL
 }

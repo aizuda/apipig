@@ -76,3 +76,25 @@ type SendMessageRequest struct {
 	UserID  string       `json:"userId"`
 	Content string       `json:"content"`
 }
+
+type WebhookCredentialsRequest struct {
+	ID           snowflake.ID `json:"id" swaggertype:"string"`
+	RotateSecret bool         `json:"rotateSecret"`
+}
+
+type WebhookCredentialsParams struct {
+	Ctx     *fiber.Ctx
+	Request WebhookCredentialsRequest
+}
+
+type WebhookPushRequest struct {
+	UserID  string `json:"userId"`
+	Content string `json:"content"`
+}
+
+type WebhookPushParams struct {
+	WebhookKey string
+	Timestamp  string
+	Signature  string
+	Request    WebhookPushRequest
+}

@@ -20,7 +20,8 @@ The JSON shape is intentionally extensible. Current payloads are:
 
 - WeCom robot: `{ "webhookUrl": "..." }`
 - DingTalk robot: `{ "webhookUrl": "...", "secret": "..." }` (secret is optional)
-- WeChat Bot: `{ "botId": "...", "userId": "..." }`
+- WeChat Bot: `{ "botId": "...", "userId": "..." }`; `userId` may be empty to use the
+  most recently active contact within the 24-hour send window.
 
 Webhook URLs and signing secrets are encrypted with the existing `CredentialVault`. Project list
 responses return masked secret fields and a `secretConfigured` flag. The authenticated channel
@@ -36,4 +37,5 @@ the operator; leaving a masked field empty still preserves the stored value when
 When a review task reaches `succeeded`, enabled channels are dispatched asynchronously. A channel
 failure is logged and does not change the review task result. DingTalk signing follows the official
 timestamp + HMAC-SHA256 convention; WeCom uses the robot webhook payload, and WeChat Bot sends to
-the selected contact through the existing Bot runtime.
+the selected contact, or the most recently active contact when `userId` is empty, through the
+existing Bot runtime.

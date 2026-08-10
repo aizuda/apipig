@@ -24,3 +24,12 @@ type ContactResult struct {
 	LastActiveAt int64        `json:"lastActiveAt"`
 	CanSend      bool         `json:"canSend"`
 }
+
+type WebhookCredentialsResult struct {
+	WebhookURL    string `json:"webhookUrl"`
+	WebhookSecret string `json:"webhookSecret,omitempty"`
+}
+
+type WebhookPushResult struct {
+	Message wechatModel.Message `json:"message"`
+}

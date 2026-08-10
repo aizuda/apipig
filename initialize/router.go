@@ -77,6 +77,7 @@ func Routers() *fiber.App {
 		sysRouter.SysRouter.InitWebRouter(publicGroup)
 		aiRouter.AiRouter.InitProtocolRouter(publicGroup)
 		reviewRouter.ReviewRouter.InitWebhookRouter(publicGroup)
+		wechatBotRouter.WechatBotRoutes.InitWebhookRouter(publicGroup)
 	}
 
 	// Agent-facing endpoints use a dedicated bootstrap/per-agent token flow.

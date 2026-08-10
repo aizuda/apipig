@@ -1,6 +1,7 @@
 package agent
 
 import (
+	buildversion "apipig/version"
 	"errors"
 	"net/url"
 	"os"
@@ -135,6 +136,6 @@ func (c *Config) normalize() error {
 func (c Config) Registration() RegistrationInfo {
 	return RegistrationInfo{
 		AgentKey: c.AgentKey, Hostname: c.hostname, OperatingSystem: runtime.GOOS,
-		Architecture: runtime.GOARCH, CPUInfo: logicalCPUInfo(), AgentVersion: Version,
+		Architecture: runtime.GOARCH, CPUInfo: logicalCPUInfo(), AgentVersion: buildversion.Version,
 	}
 }

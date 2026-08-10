@@ -6,6 +6,7 @@ project_name: apipig
 before:
   hooks:
     - go mod verify
+    - go test ./version -args -expected-version={{ .Version }}
 
 builds:
   - id: apipig
@@ -16,7 +17,23 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w
+      - -s -w -X apipig/version.Version={{ .Version }}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+  - id: remote-agent
+    main: ./cmd/remote-agent
+    binary: remote-agent
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X apipig/version.Version={{ .Version }}
     goos:
       - linux
       - windows
@@ -41,13 +58,34 @@ archives:
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
+  - id: remote-agent
+    ids:
+      - remote-agent
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      apipig-remote-agent_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - src: cmd/remote-agent/remote-agent.example.yaml
+        dst: remote-agent.example.yaml
+      - src: docs/remote-agent.md
 
 checksum:
-  name_template: checksums.txt
+  name_template: apipig_{{ .Version }}_checksums.txt
   algorithm: sha256
 
 snapshot:
-  version_template: "{{ incpatch .Version }}"
+  version_template: >-
+    {{- $line := filter (mustReadFile "version/version.go") "^const Default = \"[^\"]+\"$" -}}
+    {{- trimsuffix (trimprefix (trim $line) "const Default = \"") "\"" -}}
 
 changelog:
   sort: asc
