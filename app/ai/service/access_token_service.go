@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -24,13 +25,16 @@ func (s *AccessTokenService) persistence() AIStore {
 }
 
 func (s *AccessTokenService) Authenticate(rawToken string, clientIP string) (model.AccessToken, error) {
-	trimmedToken := strings.TrimSpace(rawToken)
-	if trimmedToken == "" {
+	if strings.TrimSpace(rawToken) == "" {
 		return model.AccessToken{}, errors.New("API Token is required")
 	}
+	candidates, err := gatewayTokenLookupCandidates(rawToken)
+	if err != nil {
+		return model.AccessToken{}, errors.New("API Token is invalid or disabled")
+	}
 	var token model.AccessToken
-	err := s.persistence().Query(model.AccessToken{}).
-		Where("token IN ? AND status = ?", []string{hashGatewayToken(trimmedToken), trimmedToken}, gatewayStatusNormal).
+	err = s.persistence().Query(model.AccessToken{}).
+		Where("token IN ? AND status = ?", candidates, gatewayStatusNormal).
 		First(&token).Error
 	if err != nil {
 		return model.AccessToken{}, errors.New("API Token is invalid or disabled")
@@ -40,6 +44,13 @@ func (s *AccessTokenService) Authenticate(rawToken string, clientIP string) (mod
 	}
 	if !accessTokenAllowsIP(token, clientIP) {
 		return model.AccessToken{}, errors.New("当前 IP 不允许使用此 API 密钥")
+	}
+	if !isHashedGatewayToken(token.Token) {
+		if err := s.persistence().Query(model.AccessToken{}).Where("id = ?", token.ID).
+			UpdateColumn("token", candidates[0]).Error; err != nil {
+			return model.AccessToken{}, errors.New("API Token 安全升级失败")
+		}
+		token.Token = candidates[0]
 	}
 	return token, nil
 }
@@ -82,7 +93,7 @@ func (s *AccessTokenService) Save(params *aiReq.AccessTokenSaveParams) (aiResp.A
 		if err != nil {
 			return aiResp.AccessTokenSaveResult{}, err
 		}
-		m.Token = rawToken
+		m.Token = hashGatewayToken(rawToken)
 		m.MODEL = db.NewModel(params.Ctx)
 		var success bool
 		err = s.persistence().Transaction(func(store AIStore) error {
@@ -128,11 +139,10 @@ func (s *AccessTokenService) ChangeStatus(params *aiReq.StatusChangeParams) (boo
 	return changeResourceStatus(s.persistence(), model.AccessToken{}, "API 密钥", params)
 }
 
-// Delete 根据 ID 集合批量删除访问令牌。
-// UpdateTags replaces tag relations without changing other API token fields.
+// UpdateTags 仅替换标签关联，不修改 API 密钥的其他字段。
 func (s *AccessTokenService) UpdateTags(params *aiReq.AccessTokenTagUpdateParams) (bool, error) {
 	if params == nil || params.ID == 0 {
-		return false, errors.New("\u8bf7\u9009\u62e9\u8981\u66f4\u65b0\u6807\u7b7e\u7684 API \u5bc6\u94a5")
+		return false, errors.New("请选择要更新标签的 API 密钥")
 	}
 	store := s.persistence()
 	var token model.AccessToken
@@ -154,9 +164,10 @@ func (s *AccessTokenService) UpdateTags(params *aiReq.AccessTokenTagUpdateParams
 	return true, nil
 }
 
+// Delete 根据 ID 集合批量删除访问令牌。
 func (s *AccessTokenService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的访问 Token")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的访问 Token"); err != nil {
+		return false, err
 	}
 	var success bool
 	err := s.persistence().Transaction(func(store AIStore) error {
@@ -178,6 +189,7 @@ func (s *AccessTokenService) Get(id snowflake.ID) (m model.AccessToken, err erro
 	if err == nil {
 		syncAccessTokenAmounts(&m)
 		err = loadAccessTokenTagIDs(s.persistence(), &m)
+		m.Token = ""
 	}
 	return
 }
@@ -260,6 +272,7 @@ func (s *AccessTokenService) Page(params *aiReq.AccessTokenPageParams) (response
 	pageRecords := make([]aiResp.AccessTokenPageRecord, 0, len(tokens))
 	for _, token := range tokens {
 		channel := channelsByID[token.ChannelID]
+		token.Token = ""
 		token.TagIDs = tagIDsByTokenID[token.ID]
 		pageRecords = append(pageRecords, aiResp.AccessTokenPageRecord{
 			AccessToken:  token,
@@ -282,7 +295,8 @@ func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParam
 	var tagID snowflake.ID
 	var accessTokenID snowflake.ID
 	if params != nil {
-		page, pageSize, offset = params.PageOffset()
+		safePageInfo := normalizeAIPageInfo(params.PageInfo)
+		page, pageSize, offset = safePageInfo.PageOffset()
 		keyword = strings.ToLower(strings.TrimSpace(params.Keyword))
 		tagID = params.TagID
 		accessTokenID = params.AccessTokenID
@@ -461,6 +475,7 @@ func (s *AccessTokenService) Statistics(params *aiReq.AccessTokenStatisticsParam
 func normalizeAccessToken(m *model.AccessToken) error {
 	m.Name = strings.TrimSpace(m.Name)
 	m.Models = normalizeModels(m.Models)
+	m.Remark = strings.TrimSpace(m.Remark)
 	if err := normalizeAccessTokenIPRule(m); err != nil {
 		return err
 	}
@@ -496,6 +511,9 @@ func normalizeAccessTokenTagIDs(tagIDs []snowflake.ID) []snowflake.ID {
 func validateAccessTokenTagIDs(store AIStore, tagIDs []snowflake.ID) error {
 	if tagIDs == nil || len(tagIDs) == 0 {
 		return nil
+	}
+	if len(tagIDs) > maxAIBulkIDs {
+		return fmt.Errorf("单个 API 密钥关联标签不能超过 %d 个", maxAIBulkIDs)
 	}
 	var count int64
 	if err := store.Query(model.AccessTokenTag{}).Where("id IN ?", tagIDs).Count(&count).Error; err != nil {

@@ -51,6 +51,15 @@ func (s *ChannelAccountService) Save(params *aiReq.ChannelAccountSaveParams) (bo
 	if m.ChannelID == 0 || m.Name == "" {
 		return false, errors.New("关联渠道和账户名称不能为空")
 	}
+	if err := validateTextFields(
+		textField{m.Name, 80, "账户名称"},
+		textField{m.Models, 1000, "账户模型映射"}, textField{m.Remark, 255, "账户备注"},
+	); err != nil {
+		return false, err
+	}
+	if err := validateByteFields(byteField{m.APIKey, 3000, "账户 API Key"}); err != nil {
+		return false, err
+	}
 	var channel model.Channel
 	if err := s.persistence().GetByID(&channel, m.ChannelID); err != nil {
 		return false, errors.New("关联渠道不存在")
@@ -119,8 +128,8 @@ func (s *ChannelAccountService) ChangeStatus(params *aiReq.StatusChangeParams) (
 
 // Delete 根据 ID 集合批量删除渠道账户。
 func (s *ChannelAccountService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的账户")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的账户"); err != nil {
+		return false, err
 	}
 	success, err := s.persistence().DeleteByIDs(model.ChannelAccount{}, idsReq.Ids)
 	if success && s.gateway != nil {
@@ -132,11 +141,9 @@ func (s *ChannelAccountService) Delete(idsReq *request.IdsReq) (bool, error) {
 // Get 根据 ID 查询渠道账户。
 func (s *ChannelAccountService) Get(id snowflake.ID) (m model.ChannelAccount, err error) {
 	err = s.persistence().GetByID(&m, id)
-	if err != nil {
-		return m, err
+	if err == nil && m.APIKey != "" {
+		m.APIKey = maskedCredential
 	}
-	_, vault := s.dependencies()
-	m.APIKey, err = vault.Decrypt(m.APIKey)
 	return
 }
 
@@ -211,12 +218,10 @@ func (s *ChannelAccountService) Page(params *aiReq.ChannelAccountPageParams) (re
 		}
 	}
 	pageRecords := make([]aiResp.ChannelAccountPageRecord, 0, len(accounts))
-	_, vault := s.dependencies()
 	for _, account := range accounts {
 		channel := channelsByID[account.ChannelID]
-		account.APIKey, err = vault.Decrypt(account.APIKey)
-		if err != nil {
-			return result, err
+		if account.APIKey != "" {
+			account.APIKey = maskedCredential
 		}
 		pageRecords = append(pageRecords, aiResp.ChannelAccountPageRecord{
 			ChannelAccount: account,

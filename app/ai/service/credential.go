@@ -36,6 +36,22 @@ func isHashedGatewayToken(value string) bool {
 	return strings.HasPrefix(value, tokenHashPrefix)
 }
 
+// gatewayTokenLookupCandidates 生成数据库查询候选值。
+//
+// 哈希值只允许作为数据库中的存储格式，不能再次充当 Bearer Token；否则一旦管理接口、
+// 备份或日志泄露哈希，攻击者无需知道原始 Token 也能直接调用网关。第二个候选值仅用于
+// 兼容历史版本保存的明文 Token，认证成功后会立即迁移为哈希。
+func gatewayTokenLookupCandidates(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, errors.New("API Token 不能为空")
+	}
+	if isHashedGatewayToken(raw) {
+		return nil, errors.New("API Token 格式无效")
+	}
+	return []string{hashGatewayToken(raw), raw}, nil
+}
+
 func isMaskedCredential(value string) bool {
 	return strings.TrimSpace(value) == maskedCredential
 }

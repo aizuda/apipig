@@ -83,7 +83,7 @@ func parseAccessTokenIPRuleJSON(value string) (accessTokenIPRule, error) {
 	if value == "" {
 		return rule, nil
 	}
-	if err := json.Unmarshal([]byte(value), &rule); err != nil {
+	if err := decodeStrictJSON(value, &rule); err != nil {
 		return accessTokenIPRule{}, errors.New("API 密钥 IP 规则必须是有效的 JSON")
 	}
 	rule.Whitelist = normalizeAccessTokenIPRules(rule.Whitelist)

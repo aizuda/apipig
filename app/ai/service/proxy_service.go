@@ -95,8 +95,8 @@ func (s *ProxyService) ChangeStatus(params *aiReq.StatusChangeParams) (bool, err
 
 // Delete 根据 ID 集合批量删除代理节点。
 func (s *ProxyService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的代理")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的代理"); err != nil {
+		return false, err
 	}
 	var channelCount int64
 	if err := s.persistence().Query(model.Channel{}).Where("proxy_id IN ?", idsReq.Ids).Count(&channelCount).Error; err != nil {
@@ -160,6 +160,9 @@ func (s *ProxyService) Page(params *aiReq.ProxyPageParams) (response.PageResult,
 func normalizeProxy(m *model.Proxy) {
 	m.Name = strings.TrimSpace(m.Name)
 	m.Scheme = strings.ToLower(defaultString(strings.TrimSpace(m.Scheme), "http"))
-	m.Host = strings.TrimSpace(m.Host)
+	m.Host = strings.Trim(strings.TrimSpace(m.Host), "[]")
+	m.Username = strings.TrimSpace(m.Username)
+	m.Region = strings.TrimSpace(m.Region)
+	m.Remark = strings.TrimSpace(m.Remark)
 	m.Status = api.NormalDisable(m.Status)
 }

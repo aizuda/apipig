@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"strings"
 )
 
@@ -29,7 +28,7 @@ type ModelPricingRule struct {
 func normalizeModelPricing(value string) (string, error) {
 	rules := make([]ModelPricingRule, 0)
 	if strings.TrimSpace(value) != "" {
-		if err := json.Unmarshal([]byte(value), &rules); err != nil {
+		if err := decodeStrictJSON(value, &rules); err != nil {
 			return "", errors.New("模型计价配置不是有效 JSON")
 		}
 	}
@@ -45,8 +44,8 @@ func normalizeModelPricing(value string) (string, error) {
 		seen[rules[index].Model] = struct{}{}
 		prices := []float64{rules[index].InputPricePerMTokens, rules[index].OutputPricePerMTokens, rules[index].CacheReadPricePerMTokens, rules[index].CacheWritePricePerMTokens, rules[index].InputImagePricePerImage, rules[index].OutputImagePricePerImage, rules[index].InputImagePricePerMTokens, rules[index].OutputImagePricePerMTokens}
 		for _, price := range prices {
-			if math.IsNaN(price) || math.IsInf(price, 0) || price < 0 {
-				return "", errors.New("模型计价不能为负数、NaN 或无穷大")
+			if err := validateUSD(price, "模型计价"); err != nil {
+				return "", err
 			}
 		}
 		unit, err := normalizeModelPricingUnit(rules[index])
@@ -113,7 +112,7 @@ func calculatePricingRuleBilling(rule ModelPricingRule, usage BillingUsage, mult
 	standardMicroUSD := usdToMicroUSD(standardUSD)
 	snapshot, _ := json.Marshal(rule)
 	return BillingResult{
-		StandardMicroUSD: standardMicroUSD, EffectiveMicroUSD: int64(math.Round(float64(standardMicroUSD) * multiplier)),
+		StandardMicroUSD: standardMicroUSD, EffectiveMicroUSD: multiplyMicroUSD(standardMicroUSD, multiplier),
 		Multiplier: multiplier, PricingModel: rule.Model, PricingSnapshot: string(snapshot),
 	}
 }

@@ -3,6 +3,7 @@ package initialize
 import (
 	"fmt"
 
+	aiService "apipig/app/ai/service"
 	sysModel "apipig/app/sys/model"
 	"apipig/core/api"
 	"apipig/toolkit"
@@ -48,6 +49,9 @@ const (
 
 func initData(db *gorm.DB, admin *AdminAccount) error {
 	if err := autoMigrate(db); err != nil {
+		return err
+	}
+	if err := aiService.MigrateLegacyAccessTokenData(db); err != nil {
 		return err
 	}
 

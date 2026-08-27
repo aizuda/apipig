@@ -12,7 +12,7 @@ type Proxy struct {
 	Host      string `gorm:"size:120;not null" json:"host"`                  // 代理主机
 	Port      int    `gorm:"type:int;not null" json:"port"`                  // 代理端口
 	Username  string `gorm:"size:120" json:"username"`                       // 认证用户名
-	Password  string `gorm:"size:255" json:"password"`                       // 认证密码，生产环境建议加密存储
+	Password  string `gorm:"size:2048" json:"password"`                      // 认证密码，持久化时加密保存
 	Region    string `gorm:"size:80" json:"region"`                          // 代理所在区域
 	Status    uint   `gorm:"type:smallint;not null;default:1" json:"status"` // 状态：1 启用，2 禁用
 	Remark    string `gorm:"size:255" json:"remark"`                         // 备注

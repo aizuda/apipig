@@ -65,8 +65,8 @@ func (s *ProviderService) ChangeStatus(params *aiReq.StatusChangeParams) (bool, 
 
 // Delete 根据 ID 集合批量删除供应商配置。
 func (s *ProviderService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的供应商")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的供应商"); err != nil {
+		return false, err
 	}
 	var channelCount int64
 	if err := s.persistence().Query(model.Channel{}).Where("provider_id IN ?", idsReq.Ids).Count(&channelCount).Error; err != nil {
@@ -130,6 +130,7 @@ func normalizeProvider(m *model.Provider) {
 	m.Protocol = strings.ToLower(defaultString(strings.TrimSpace(m.Protocol), "openai"))
 	m.BaseURL = strings.TrimRight(strings.TrimSpace(m.BaseURL), "/")
 	m.Models = normalizeModels(m.Models)
+	m.Remark = strings.TrimSpace(m.Remark)
 	if m.TimeoutMs <= 0 {
 		m.TimeoutMs = 60000
 	}

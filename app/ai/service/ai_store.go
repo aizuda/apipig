@@ -42,7 +42,11 @@ func (s *gormAIStore) Create(value any) (bool, error) {
 }
 
 func (s *gormAIStore) Update(value any) (bool, error) {
-	err := s.database().Updates(value).Error
+	// Select("*") 允许业务字段显式清零；Omit 防止请求体覆盖主键和服务端审计字段。
+	err := s.database().Model(value).
+		Select("*").
+		Omit("id", "created_id", "created_by", "created_at", "updated_by", "deleted_at").
+		Updates(value).Error
 	return err == nil, err
 }
 

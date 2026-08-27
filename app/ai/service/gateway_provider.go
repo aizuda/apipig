@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -110,14 +111,60 @@ func buildGatewayHTTPClient(target routeTarget) (*http.Client, error) {
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
-	client := &http.Client{Timeout: timeout}
-	if target.Proxy == nil {
-		return client, nil
+	client := &http.Client{
+		Timeout:       timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	transport, err := buildProxyTransport(*target.Proxy)
+	var transport http.RoundTripper = http.DefaultTransport
+	if target.Proxy != nil {
+		proxyTransport, err := buildProxyTransport(*target.Proxy)
+		if err != nil {
+			return nil, err
+		}
+		// 模型对象按请求创建，关闭连接复用可避免独立代理 Transport 遗留空闲连接。
+		proxyTransport.DisableKeepAlives = true
+		transport = proxyTransport
+	}
+	client.Transport = &responseLimitTransport{base: transport, maxBytes: maxGatewayResponseBodyBytes}
+	return client, nil
+}
+
+type responseLimitTransport struct {
+	base     http.RoundTripper
+	maxBytes int64
+}
+
+func (t *responseLimitTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := t.base.RoundTrip(request)
 	if err != nil {
 		return nil, err
 	}
-	client.Transport = transport
-	return client, nil
+	if response.ContentLength > t.maxBytes {
+		_ = response.Body.Close()
+		return nil, errors.New("上游响应体超过 32 MiB 限制")
+	}
+	response.Body = &limitedResponseBody{ReadCloser: response.Body, remaining: t.maxBytes}
+	return response, nil
+}
+
+type limitedResponseBody struct {
+	io.ReadCloser
+	remaining int64
+}
+
+func (r *limitedResponseBody) Read(buffer []byte) (int, error) {
+	if r.remaining <= 0 {
+		var probe [1]byte
+		count, err := r.ReadCloser.Read(probe[:])
+		if count > 0 {
+			return 0, errors.New("上游响应体超过 32 MiB 限制")
+		}
+		return 0, err
+	}
+	if int64(len(buffer)) > r.remaining {
+		buffer = buffer[:r.remaining]
+	}
+	count, err := r.ReadCloser.Read(buffer)
+	r.remaining -= int64(count)
+	return count, err
 }

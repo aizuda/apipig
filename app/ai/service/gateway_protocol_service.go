@@ -12,7 +12,6 @@ import (
 
 	"apipig/app/ai/model"
 	aiReq "apipig/app/ai/model/request"
-	"apipig/core/db"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/zendev-sh/goai/provider"
@@ -46,7 +45,7 @@ func (s *GatewayService) ChatCompletions(c *fiber.Ctx) error {
 	languageModel, err := buildLanguageModel(call.Target, providerModel)
 	if err != nil {
 		s.finishGatewayCall(call, buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusBadGateway, 0), provider.Usage{}, err)
-		return writeGatewayError(c, "openai", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "openai", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	applyGatewayProviderOptions(call.Target, &params)
 	if req.Stream {
@@ -57,7 +56,7 @@ func (s *GatewayService) ChatCompletions(c *fiber.Ctx) error {
 	if err != nil {
 		logRecord.StatusCode = fiber.StatusBadGateway
 		s.finishGatewayCall(call, logRecord, provider.Usage{}, err)
-		return writeGatewayError(c, "openai", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "openai", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	s.finishGatewayCall(call, logRecord, result.Usage, nil)
 	c.Set("X-AI-Gateway-Request-ID", call.RequestID)
@@ -207,7 +206,7 @@ func (s *GatewayService) Messages(c *fiber.Ctx) error {
 	languageModel, err := buildLanguageModel(call.Target, providerModel)
 	if err != nil {
 		s.finishGatewayCall(call, buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusBadGateway, 0), provider.Usage{}, err)
-		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	if req.Stream {
 		return s.streamAnthropic(c, call, languageModel, params)
@@ -217,7 +216,7 @@ func (s *GatewayService) Messages(c *fiber.Ctx) error {
 	if err != nil {
 		logRecord.StatusCode = fiber.StatusBadGateway
 		s.finishGatewayCall(call, logRecord, provider.Usage{}, err)
-		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	s.finishGatewayCall(call, logRecord, result.Usage, nil)
 	c.Set("X-AI-Gateway-Request-ID", call.RequestID)
@@ -305,23 +304,21 @@ func (s *GatewayService) prepareGatewayCallWithToken(c *fiber.Ctx, token model.A
 	if !s.allowRate(fmt.Sprintf("channel:%d", target.Channel.ID), target.Channel.RPM, target.Channel.TPM, 0) {
 		return gatewayCall{}, fiber.StatusTooManyRequests, errors.New("渠道账号已触发限流")
 	}
-	requestID := strings.TrimSpace(c.Get("X-Request-ID"))
-	if requestID == "" {
-		requestID = fmt.Sprintf("gw-%d", db.GetId())
-	}
+	requestID := gatewayRequestID(c)
 	return gatewayCall{Token: token, Target: target, Model: modelID, Path: path, RequestID: requestID, StartedAt: time.Now()}, fiber.StatusOK, nil
 }
 
 func (s *GatewayService) finishGatewayCall(call gatewayCall, logRecord model.CallLog, usage provider.Usage, callErr error) {
 	logRecord.LatencyMs = time.Since(call.StartedAt).Milliseconds()
 	billingUsage := BillingUsage{InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, ReasoningTokens: usage.ReasoningTokens, CacheReadTokens: usage.CacheReadTokens, CacheWriteTokens: usage.CacheWriteTokens, InputImages: call.InputImages}
-	totalTokens := billingUsage.InputTokens + billingUsage.OutputTokens + billingUsage.CacheReadTokens + billingUsage.CacheWriteTokens
+	billingUsage = normalizeBillingUsage(billingUsage)
+	totalTokens := sumStoredTokenCounts(billingUsage.InputTokens, billingUsage.OutputTokens, billingUsage.CacheReadTokens, billingUsage.CacheWriteTokens)
 	s.recordRateTokens(fmt.Sprintf("token:%d", call.Token.ID), totalTokens)
 	s.recordRateTokens(fmt.Sprintf("channel:%d", call.Target.Channel.ID), totalTokens)
 	if callErr != nil {
 		logRecord.Success = gatewayStatusDisabled
 		message := redactSensitiveText(callErr.Error(), call.Target.Account.APIKey)
-		logRecord.ErrorMessage = string(limitBytes([]byte(message), 1000))
+		logRecord.ErrorMessage = truncateUTF8(message, 1000)
 		if logRecord.StatusCode < 400 {
 			logRecord.StatusCode = fiber.StatusBadGateway
 		}
@@ -350,7 +347,7 @@ func (s *GatewayService) streamOpenAI(c *fiber.Ctx, call gatewayCall, languageMo
 		cancel()
 		logRecord := buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusBadGateway, 0)
 		s.finishGatewayCall(call, logRecord, provider.Usage{}, err)
-		return writeGatewayError(c, "openai", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "openai", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	logRecord := buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusOK, 0)
 	c.Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -446,7 +443,7 @@ func (s *GatewayService) streamAnthropic(c *fiber.Ctx, call gatewayCall, languag
 		cancel()
 		logRecord := buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusBadGateway, 0)
 		s.finishGatewayCall(call, logRecord, provider.Usage{}, err)
-		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, err)
+		return writeGatewayError(c, "anthropic", fiber.StatusBadGateway, gatewayCallClientError(call, err))
 	}
 	logRecord := buildCallLog(c, call.RequestID, call.Token, call.Target, call.Model, call.Path, fiber.StatusOK, 0)
 	c.Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -597,6 +594,15 @@ func errorText(err error) string {
 		return "unknown error"
 	}
 	return redactSensitiveText(err.Error())
+}
+
+func gatewayCallClientError(call gatewayCall, err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.New(redactSensitiveText(
+		err.Error(), call.Target.Account.APIKey, proxyPassword(call.Target.Proxy),
+	))
 }
 
 func splitModels(value string) []string {

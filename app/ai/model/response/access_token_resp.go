@@ -13,7 +13,7 @@ type AccessTokenPageRecord struct {
 }
 
 // AccessTokenSaveResult 返回访问令牌保存结果。
-// Token 仅在系统新建密钥时返回一次，后续查询和编辑不会再返回明文。
+// Token 仅在系统新建密钥时返回一次，后续查询和编辑不会返回明文或哈希。
 type AccessTokenSaveResult struct {
 	Success bool   `json:"success"`
 	Token   string `json:"token,omitempty"`

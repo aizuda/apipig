@@ -56,7 +56,7 @@ func parseAccessTokenRateLimitRule(value string) (accessTokenRateLimitRule, erro
 	if value == "" {
 		return rule, nil
 	}
-	if err := json.Unmarshal([]byte(value), &rule); err != nil {
+	if err := decodeStrictJSON(value, &rule); err != nil {
 		return accessTokenRateLimitRule{}, errors.New("API 密钥速率限制规则必须是有效的 JSON")
 	}
 	return rule, nil

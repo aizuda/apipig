@@ -13,7 +13,7 @@ type AccessTokenSaveParams struct {
 	AccessToken *aiModel.AccessToken `json:"accessToken"` // 待保存的访问令牌数据
 }
 
-// AccessTokenTagUpdateParams defines a tag-only update request for an API token.
+// AccessTokenTagUpdateParams 定义仅更新 API 密钥标签的请求。
 type AccessTokenTagUpdateParams struct {
 	ID     snowflake.ID   `json:"id" validate:"required"`
 	TagIDs []snowflake.ID `json:"tagIds"`

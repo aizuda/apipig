@@ -27,6 +27,7 @@ import (
 func Routers() *fiber.App {
 	var app = fiber.New(fiber.Config{
 		DisableStartupMessage: true,
+		BodyLimit:             8 << 20,
 
 		// https://github.com/goccy/go-json
 		JSONEncoder: json.Marshal,
@@ -97,9 +98,9 @@ func Routers() *fiber.App {
 
 	}
 
-	// AI 网关管理面接口，复用系统 JWT/RBAC。
+	// AI 网关管理面先校验 JWT，再按请求路径映射已有菜单资源并校验角色权限。
 	aiGroup := app.Group(prefix + "/ai/")
-	aiGroup.Use(middleware.JWTAuth()).Use(middleware.RbacHandler())
+	aiGroup.Use(middleware.JWTAuth()).Use(middleware.RequireAIResourceAccess())
 	{
 		aiRouter.AiRouter.InitGatewayAdminRouter(aiGroup)
 		aiRouter.AiRouter.InitProviderRouter(aiGroup)

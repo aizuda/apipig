@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 
 	"apipig/app/ai/model"
@@ -34,6 +35,15 @@ func (s *CallLogService) Create(logRecord model.CallLog) error {
 func (s *CallLogService) Page(params *aiReq.CallLogPageParams) (response.PageResult, error) {
 	query := s.persistence().Query(model.CallLog{})
 	if params != nil {
+		if params.Success != 0 && params.Success != gatewayStatusNormal && params.Success != gatewayStatusDisabled {
+			return response.PageResult{}, errors.New("调用结果状态仅支持成功或失败")
+		}
+		if params.StartAt < 0 || params.EndAt < 0 {
+			return response.PageResult{}, errors.New("调用日志时间不能为负数")
+		}
+		if params.StartAt > 0 && params.EndAt > 0 && params.EndAt < params.StartAt {
+			return response.PageResult{}, errors.New("调用日志结束时间不能早于开始时间")
+		}
 		if keyword := strings.TrimSpace(params.Keyword); keyword != "" {
 			likeKeyword := "%" + keyword + "%"
 			query = query.Where(

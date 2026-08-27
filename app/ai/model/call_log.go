@@ -32,8 +32,8 @@ type CallLog struct {
 	TotalTokens          int          `gorm:"type:int;not null;default:0" json:"totalTokens"`                        // 总 token 数量
 	PricingModel         string       `gorm:"size:160" json:"pricingModel"`                                          // 命中的计价模型
 	PricingSnapshot      string       `gorm:"type:text" json:"pricingSnapshot"`                                      // 计价规则快照
-	StandardCost         float64      `gorm:"type:decimal(18,8);not null;default:0" json:"standardCost"`             // 倍率前标准成本，仅用于展示
-	Cost                 float64      `gorm:"type:decimal(18,8);not null;default:0" json:"cost"`                     // 渠道倍率后的有效成本
+	StandardCost         float64      `gorm:"type:decimal(24,8);not null;default:0" json:"standardCost"`             // 倍率前标准成本，仅用于展示
+	Cost                 float64      `gorm:"type:decimal(24,8);not null;default:0" json:"cost"`                     // 渠道倍率后的有效成本
 	StandardCostMicroUSD int64        `gorm:"type:bigint;not null;default:0" json:"standardCostMicroUsd"`            // 倍率前标准成本，微美元
 	CostMicroUSD         int64        `gorm:"type:bigint;not null;default:0" json:"costMicroUsd"`                    // 有效成本，微美元
 	CostMultiplier       float64      `gorm:"type:decimal(12,6);not null;default:1" json:"costMultiplier"`           // 调用时渠道倍率快照

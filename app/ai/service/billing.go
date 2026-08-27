@@ -10,6 +10,12 @@ import (
 
 const microUSDScale int64 = 1_000_000
 
+const (
+	maxUSDValue         = 999_999_999_999.0
+	maxMicroUSDValue    = int64(maxUSDValue * float64(microUSDScale))
+	maxStoredTokenCount = int(^uint32(0) >> 1)
+)
+
 // BillingUsage 是跨协议统一后的可计费用量。
 type BillingUsage struct {
 	InputTokens       int
@@ -45,10 +51,24 @@ type AccessTokenUsageRecord struct {
 }
 
 func usdToMicroUSD(value float64) int64 {
-	if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+	if value <= 0 || math.IsNaN(value) {
 		return 0
 	}
+	if math.IsInf(value, 1) || value >= maxUSDValue {
+		return maxMicroUSDValue
+	}
 	return int64(math.Round(value * float64(microUSDScale)))
+}
+
+func multiplyMicroUSD(value int64, multiplier float64) int64 {
+	if value <= 0 || multiplier <= 0 || math.IsNaN(multiplier) {
+		return 0
+	}
+	result := float64(value) * multiplier
+	if math.IsInf(result, 1) || result >= float64(maxMicroUSDValue) {
+		return maxMicroUSDValue
+	}
+	return int64(math.Round(result))
 }
 
 func microUSDToUSD(value int64) float64 {
@@ -62,6 +82,9 @@ func validateUSD(value float64, field string) error {
 	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
 		return errors.New(field + "不能为负数、NaN 或无穷大")
 	}
+	if value > maxUSDValue {
+		return errors.New(field + "超过系统金额上限")
+	}
 	return nil
 }
 
@@ -73,6 +96,7 @@ func normalizedCostMultiplier(value float64) float64 {
 }
 
 func applyBillingToLog(logRecord *model.CallLog, usage BillingUsage, billing BillingResult) {
+	usage = normalizeBillingUsage(usage)
 	logRecord.PromptTokens = usage.InputTokens
 	logRecord.CompletionTokens = usage.OutputTokens
 	logRecord.ReasoningTokens = usage.ReasoningTokens
@@ -82,7 +106,7 @@ func applyBillingToLog(logRecord *model.CallLog, usage BillingUsage, billing Bil
 	logRecord.OutputImages = usage.OutputImages
 	logRecord.InputImageTokens = usage.InputImageTokens
 	logRecord.OutputImageTokens = usage.OutputImageTokens
-	logRecord.TotalTokens = usage.InputTokens + usage.OutputTokens + usage.CacheReadTokens + usage.CacheWriteTokens
+	logRecord.TotalTokens = sumStoredTokenCounts(usage.InputTokens, usage.OutputTokens, usage.CacheReadTokens, usage.CacheWriteTokens)
 	logRecord.StandardCostMicroUSD = billing.StandardMicroUSD
 	logRecord.CostMicroUSD = billing.EffectiveMicroUSD
 	logRecord.StandardCost = microUSDToUSD(billing.StandardMicroUSD)
@@ -90,6 +114,41 @@ func applyBillingToLog(logRecord *model.CallLog, usage BillingUsage, billing Bil
 	logRecord.CostMultiplier = billing.Multiplier
 	logRecord.PricingModel = billing.PricingModel
 	logRecord.PricingSnapshot = billing.PricingSnapshot
+}
+
+func normalizeBillingUsage(usage BillingUsage) BillingUsage {
+	usage.InputTokens = normalizeStoredTokenCount(usage.InputTokens)
+	usage.OutputTokens = normalizeStoredTokenCount(usage.OutputTokens)
+	usage.ReasoningTokens = normalizeStoredTokenCount(usage.ReasoningTokens)
+	usage.CacheReadTokens = normalizeStoredTokenCount(usage.CacheReadTokens)
+	usage.CacheWriteTokens = normalizeStoredTokenCount(usage.CacheWriteTokens)
+	usage.InputImages = normalizeStoredTokenCount(usage.InputImages)
+	usage.OutputImages = normalizeStoredTokenCount(usage.OutputImages)
+	usage.InputImageTokens = normalizeStoredTokenCount(usage.InputImageTokens)
+	usage.OutputImageTokens = normalizeStoredTokenCount(usage.OutputImageTokens)
+	return usage
+}
+
+func normalizeStoredTokenCount(value int) int {
+	if value <= 0 {
+		return 0
+	}
+	if value > maxStoredTokenCount {
+		return maxStoredTokenCount
+	}
+	return value
+}
+
+func sumStoredTokenCounts(values ...int) int {
+	total := 0
+	for _, value := range values {
+		value = normalizeStoredTokenCount(value)
+		if value > maxStoredTokenCount-total {
+			return maxStoredTokenCount
+		}
+		total += value
+	}
+	return total
 }
 
 func quotaExhausted(token model.AccessToken) bool {

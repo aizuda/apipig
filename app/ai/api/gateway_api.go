@@ -6,6 +6,7 @@ import (
 	"apipig/core/api"
 	"apipig/core/api/response"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -62,6 +63,9 @@ func (a *GatewayApi) AIChatStream(c *fiber.Ctx) error {
 // ProxyOpenAI 处理 OpenAI 兼容协议的对外流量转发。
 func (a *GatewayApi) ProxyOpenAI(c *fiber.Ctx) error {
 	upstream := "/" + c.Params("*")
+	if query := strings.TrimSpace(string(c.Context().QueryArgs().QueryString())); query != "" {
+		upstream += "?" + query
+	}
 	return a.service.ProxyOpenAI(&aiReq.GatewayProxyParams{
 		Ctx:      c,
 		RawBody:  c.Body(),

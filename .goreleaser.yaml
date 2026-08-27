@@ -24,7 +24,18 @@ builds:
       - darwin
     goarch:
       - amd64
+      - '386'
+      - arm
       - arm64
+    goarm:
+      - '7'
+    ignore:
+      - goos: darwin
+        goarch: '386'
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
   - id: remote-agent
     main: ./cmd/remote-agent
     binary: remote-agent
@@ -40,7 +51,18 @@ builds:
       - darwin
     goarch:
       - amd64
+      - '386'
+      - arm
       - arm64
+    goarm:
+      - '7'
+    ignore:
+      - goos: darwin
+        goarch: '386'
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
 
 archives:
   - id: apipig
@@ -55,9 +77,9 @@ archives:
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else }}{{ .Arch }}{{ end }}
+      {{- .Os }}_
+      {{- .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
   - id: remote-agent
     ids:
       - remote-agent
@@ -70,9 +92,9 @@ archives:
     name_template: >-
       apipig-remote-agent_
       {{- .Version }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else }}{{ .Arch }}{{ end }}
+      {{- .Os }}_
+      {{- .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     files:
       - src: cmd/remote-agent/remote-agent.example.yaml
         dst: remote-agent.example.yaml

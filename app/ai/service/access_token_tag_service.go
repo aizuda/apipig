@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"apipig/app/ai/model"
@@ -72,8 +73,8 @@ func (s *AccessTokenTagService) Save(params *aiReq.AccessTokenTagSaveParams) (bo
 
 // Delete 批量删除 API 密钥标签。
 func (s *AccessTokenTagService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的标签")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的标签"); err != nil {
+		return false, err
 	}
 	var success bool
 	err := s.persistence().Transaction(func(store AIStore) error {
@@ -102,6 +103,9 @@ func (s *AccessTokenTagService) List(_ *request.Empty) (tags []model.AccessToken
 func (s *AccessTokenTagService) Sort(params *aiReq.AccessTokenTagSortParams) (bool, error) {
 	if params == nil || len(params.IDs) == 0 {
 		return false, errors.New("标签排序不能为空")
+	}
+	if len(params.IDs) > maxAIBulkIDs {
+		return false, fmt.Errorf("标签排序不能超过 %d 条", maxAIBulkIDs)
 	}
 	seen := make(map[string]struct{}, len(params.IDs))
 	for _, id := range params.IDs {

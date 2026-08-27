@@ -26,8 +26,7 @@ type Channel struct {
 	Remark         string       `gorm:"size:255" json:"remark"`                                            // 备注
 }
 
-// BeforeCreate keeps the JSON default in application code. MySQL does not
-// consistently support defaults on TEXT/JSON columns across supported versions.
+// BeforeCreate 在应用层补齐 JSON 默认值，兼容不支持 TEXT/JSON 默认值的 MySQL 版本。
 func (channel *Channel) BeforeCreate(*gorm.DB) error {
 	if strings.TrimSpace(channel.ModelPricing) == "" {
 		channel.ModelPricing = "[]"

@@ -69,16 +69,29 @@ func (r *gormGatewayRepository) Summary(startAt, endAt int64) (summary aiResp.Ga
 		{database.Model(&model.Channel{}), &summary.ChannelCount},
 		{database.Model(&model.AccessToken{}), &summary.TokenCount},
 		{database.Model(&model.Proxy{}), &summary.ProxyCount},
-		{database.Model(&model.CallLog{}), &summary.CallCount},
-		{database.Model(&model.CallLog{}).Where("success = ?", gatewayStatusNormal), &summary.SuccessCount},
-		{database.Model(&model.CallLog{}).Where("success = ?", gatewayStatusDisabled), &summary.ErrorCount},
 	}
 	for _, count := range counts {
 		if err = count.query.Count(count.value).Error; err != nil {
 			return summary, err
 		}
 	}
-	if err = database.Model(&model.CallLog{}).
+	callRange := func() *gorm.DB {
+		return database.Model(&model.CallLog{}).Where("created_at >= ? AND created_at <= ?", startAt, endAt)
+	}
+	callCounts := []struct {
+		query *gorm.DB
+		value *int64
+	}{
+		{callRange(), &summary.CallCount},
+		{callRange().Where("success = ?", gatewayStatusNormal), &summary.SuccessCount},
+		{callRange().Where("success = ?", gatewayStatusDisabled), &summary.ErrorCount},
+	}
+	for _, count := range callCounts {
+		if err = count.query.Count(count.value).Error; err != nil {
+			return summary, err
+		}
+	}
+	if err = callRange().
 		Select("COALESCE(SUM(total_tokens), 0), COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(reasoning_tokens), 0), COALESCE(SUM(cache_read_tokens), 0), COALESCE(SUM(cache_write_tokens), 0), COALESCE(SUM(standard_cost), 0), COALESCE(SUM(cost), 0)").
 		Row().
 		Scan(&summary.TotalTokens, &summary.PromptTokens, &summary.CompletionTokens, &summary.ReasoningTokens, &summary.CacheReadTokens, &summary.CacheWriteTokens, &summary.StandardCost, &summary.TotalCost); err != nil {
@@ -276,6 +289,16 @@ func (r *gormGatewayRepository) RecordAccessTokenUsage(record AccessTokenUsageRe
 	if err != nil {
 		return err
 	}
+	record.InputTokens = normalizeStoredTokenCount(record.InputTokens)
+	record.OutputTokens = normalizeStoredTokenCount(record.OutputTokens)
+	record.ReasoningTokens = normalizeStoredTokenCount(record.ReasoningTokens)
+	record.CacheReadTokens = normalizeStoredTokenCount(record.CacheReadTokens)
+	record.CacheWriteTokens = normalizeStoredTokenCount(record.CacheWriteTokens)
+	if record.EffectiveCostMicroUSD < 0 {
+		record.EffectiveCostMicroUSD = 0
+	} else if record.EffectiveCostMicroUSD > maxMicroUSDValue {
+		record.EffectiveCostMicroUSD = maxMicroUSDValue
+	}
 	updates := map[string]any{"last_used_at": record.OccurredAt}
 	if record.Success {
 		updates["success_count"] = gorm.Expr("success_count + 1")
@@ -285,8 +308,15 @@ func (r *gormGatewayRepository) RecordAccessTokenUsage(record AccessTokenUsageRe
 		updates["cache_read_tokens_total"] = gorm.Expr("cache_read_tokens_total + ?", record.CacheReadTokens)
 		updates["cache_write_tokens_total"] = gorm.Expr("cache_write_tokens_total + ?", record.CacheWriteTokens)
 		if record.EffectiveCostMicroUSD > 0 {
-			updates["used_micro_usd"] = gorm.Expr("used_micro_usd + ?", record.EffectiveCostMicroUSD)
-			updates["used_amount"] = gorm.Expr("used_amount + ?", microUSDToUSD(record.EffectiveCostMicroUSD))
+			costUSD := microUSDToUSD(record.EffectiveCostMicroUSD)
+			updates["used_micro_usd"] = gorm.Expr(
+				"CASE WHEN used_micro_usd >= ? - ? THEN ? ELSE used_micro_usd + ? END",
+				maxMicroUSDValue, record.EffectiveCostMicroUSD, maxMicroUSDValue, record.EffectiveCostMicroUSD,
+			)
+			updates["used_amount"] = gorm.Expr(
+				"CASE WHEN used_amount >= ? - ? THEN ? ELSE used_amount + ? END",
+				maxUSDValue, costUSD, maxUSDValue, costUSD,
+			)
 		}
 	} else {
 		updates["failure_count"] = gorm.Expr("failure_count + 1")

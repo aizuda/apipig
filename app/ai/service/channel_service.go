@@ -66,8 +66,8 @@ func (s *ChannelService) ChangeStatus(params *aiReq.StatusChangeParams) (bool, e
 
 // Delete 根据 ID 集合批量删除渠道账号。
 func (s *ChannelService) Delete(idsReq *request.IdsReq) (bool, error) {
-	if idsReq == nil || len(idsReq.Ids) == 0 {
-		return false, errors.New("请选择要删除的渠道")
+	if err := validateAIBulkIDs(idsReq, "请选择要删除的渠道"); err != nil {
+		return false, err
 	}
 	var accountCount int64
 	if err := s.persistence().Query(model.ChannelAccount{}).Where("channel_id IN ?", idsReq.Ids).Count(&accountCount).Error; err != nil {
@@ -211,6 +211,7 @@ func normalizeChannel(m *model.Channel) error {
 		return err
 	}
 	m.ModelPricing = pricing
+	m.Remark = strings.TrimSpace(m.Remark)
 	if m.Weight <= 0 {
 		m.Weight = 1
 	}

@@ -36,7 +36,7 @@ func TestSecureGatewayTokenAndHash(t *testing.T) {
 	assert.NotContains(t, hashGatewayToken(first), first)
 }
 
-func TestAuthenticateGatewayTokenKeepsPlaintext(t *testing.T) {
+func TestAuthenticateGatewayTokenMigratesLegacyPlaintext(t *testing.T) {
 	database := setupCredentialTestDB(t)
 	legacyToken := "sk-apipig-legacy"
 	require.NoError(t, database.Create(&model.AccessToken{
@@ -65,10 +65,10 @@ func TestAuthenticateGatewayTokenKeepsPlaintext(t *testing.T) {
 
 	var stored model.AccessToken
 	require.NoError(t, database.First(&stored, 1).Error)
-	assert.Equal(t, legacyToken, stored.Token)
+	assert.Equal(t, hashGatewayToken(legacyToken), stored.Token)
 }
 
-func TestManagementPagesReturnExpectedCredentials(t *testing.T) {
+func TestManagementPagesMaskCredentials(t *testing.T) {
 	database := setupCredentialTestDB(t)
 	providerID := snowflake.ID(10)
 	require.NoError(t, database.Create(&model.Provider{
@@ -95,17 +95,47 @@ func TestManagementPagesReturnExpectedCredentials(t *testing.T) {
 	accountPage, err := (&ChannelAccountService{}).Page(&aiReq.ChannelAccountPageParams{PageInfo: coreReq.PageInfo{Page: 1, PageSize: 10}})
 	require.NoError(t, err)
 	accounts := accountPage.Records.([]aiResp.ChannelAccountPageRecord)
-	assert.Equal(t, "secret-key", accounts[0].APIKey)
+	assert.Equal(t, maskedCredential, accounts[0].APIKey)
 
 	tokenPage, err := (&AccessTokenService{}).Page(&aiReq.AccessTokenPageParams{PageInfo: coreReq.PageInfo{Page: 1, PageSize: 10}})
 	require.NoError(t, err)
 	tokens := tokenPage.Records.([]aiResp.AccessTokenPageRecord)
-	assert.Equal(t, "sk-39c-example-0061", tokens[0].Token)
+	assert.Empty(t, tokens[0].Token)
 
 	proxyPage, err := (&ProxyService{}).Page(&aiReq.ProxyPageParams{PageInfo: coreReq.PageInfo{Page: 1, PageSize: 10}})
 	require.NoError(t, err)
 	proxies := proxyPage.Records.([]model.Proxy)
 	assert.Equal(t, maskedCredential, proxies[0].Password)
+}
+
+func TestHashedGatewayTokenCannotAuthenticateAsBearer(t *testing.T) {
+	database := setupCredentialTestDB(t)
+	rawToken := "sk-hash-is-not-a-bearer-token"
+	storedHash := hashGatewayToken(rawToken)
+	require.NoError(t, database.Create(&model.AccessToken{
+		MODEL: coreAPI.MODEL{ID: 15, CreatedId: 1, CreatedBy: "test", CreatedAt: 1},
+		Name:  "hashed", Token: storedHash, RPM: 60, Status: gatewayStatusNormal,
+	}).Error)
+
+	gateway := &GatewayService{}
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		_, err := gateway.authenticateGatewayToken(c)
+		return err
+	})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Authorization", "Bearer "+storedHash)
+	response, err := app.Test(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+	assert.Equal(t, fiber.StatusInternalServerError, response.StatusCode)
+
+	request = httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Authorization", "Bearer "+rawToken)
+	response, err = app.Test(request)
+	require.NoError(t, err)
+	defer response.Body.Close()
+	assert.Equal(t, fiber.StatusOK, response.StatusCode)
 }
 
 func TestGatewayRuntimeConcurrencyAndTPM(t *testing.T) {

@@ -36,14 +36,14 @@ func (a *AccessTokenApi) ChangeAccessTokenStatus(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.ChangeStatus, params, err)
 }
 
-// DeleteAccessToken 批量删除访问令牌。
-// UpdateAccessTokenTags updates only API token tag relations.
+// UpdateAccessTokenTags 仅更新 API 密钥标签关联。
 func (a *AccessTokenApi) UpdateAccessTokenTags(c *fiber.Ctx) error {
 	params := new(aiReq.AccessTokenTagUpdateParams)
-	err := a.BodyParserVerify(c, params, "API \u5bc6\u94a5\u6807\u7b7e")
+	err := a.BodyParserVerify(c, params, "API 密钥标签")
 	return response.Execute(c, a.service.UpdateTags, params, err)
 }
 
+// DeleteAccessToken 批量删除访问令牌。
 func (a *AccessTokenApi) DeleteAccessToken(c *fiber.Ctx) error {
 	var idsReq *request.IdsReq
 	err := a.BodyParser(c, &idsReq, "删除访问 Token")

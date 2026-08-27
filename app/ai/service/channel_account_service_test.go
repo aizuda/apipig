@@ -52,12 +52,12 @@ func TestChannelAccountRequiresChannelAndProtectsChannelDelete(t *testing.T) {
 	require.NoError(t, err)
 	pageRecords := pageResult.Records.([]aiResp.ChannelAccountPageRecord)
 	require.Len(t, pageRecords, 1)
-	require.Equal(t, "account-secret", pageRecords[0].APIKey)
+	require.Equal(t, maskedCredential, pageRecords[0].APIKey)
 	require.Equal(t, "OpenAI 主渠道", pageRecords[0].ChannelName)
 	require.Equal(t, "OpenAI", pageRecords[0].ProviderName)
 	account, err := accountService.Get(accountID)
 	require.NoError(t, err)
-	require.Equal(t, "account-secret", account.APIKey)
+	require.Equal(t, maskedCredential, account.APIKey)
 	success, err := accountService.Save(&aiReq.ChannelAccountSaveParams{Account: &model.ChannelAccount{
 		MODEL: api.MODEL{ID: accountID}, ChannelID: channelID, Name: "主账户更新", APIKey: maskedCredential, Models: "gpt-test", Status: 1,
 	}})

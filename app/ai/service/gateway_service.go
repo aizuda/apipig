@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"apipig/app/ai/model"
 	aiReq "apipig/app/ai/model/request"
@@ -114,10 +115,10 @@ func normalizeGatewaySummaryRange(params *aiReq.GatewaySummaryParams, now time.T
 		end = startOfLocalDay(time.UnixMilli(params.EndAt)).Add(24*time.Hour - time.Millisecond)
 	}
 	if end.Before(start) {
-		return 0, 0, errors.New("endAt must not be earlier than startAt")
+		return 0, 0, errors.New("结束时间不能早于开始时间")
 	}
 	if int(end.Sub(start).Hours()/24)+1 > 90 {
-		return 0, 0, errors.New("summary range must not exceed 90 days")
+		return 0, 0, errors.New("概览统计时间范围不能超过 90 天")
 	}
 	return start.UnixMilli(), end.UnixMilli(), nil
 }
@@ -140,10 +141,10 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 	if len(body) > maxGatewayRequestBodyBytes {
 		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "请求体超过 8 MiB 限制")
 	}
-	requestID := c.Get("X-Request-ID")
-	if requestID == "" {
-		requestID = fmt.Sprintf("gw-%d", db.GetId())
+	if err := validateGatewayUpstream(params.Upstream); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
+	requestID := gatewayRequestID(c)
 
 	token, err := s.authenticateGatewayToken(c)
 	if err != nil {
@@ -191,24 +192,29 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 
 	logRecord := buildCallLog(c, requestID, token, target, modelName, params.Upstream, statusCode, latency)
 	if err != nil {
+		safeError := redactSensitiveText(err.Error(), target.Account.APIKey, proxyPassword(target.Proxy))
 		logRecord.Success = gatewayStatusDisabled
-		logRecord.ErrorMessage = err.Error()
+		logRecord.ErrorMessage = truncateUTF8(safeError, 1000)
 		applyBillingToLog(&logRecord, BillingUsage{}, BillingResult{Multiplier: normalizedCostMultiplier(target.Channel.CostMultiplier)})
 		_ = s.saveCallLog(logRecord)
 		s.recordAccessTokenUsage(buildAccessTokenUsageRecord(token.ID, logRecord, BillingUsage{}))
 		s.recordBreakerFailure(target.Channel.ID)
-		return fiber.NewError(fiber.StatusBadGateway, err.Error())
+		return fiber.NewError(fiber.StatusBadGateway, safeError)
 	}
 
 	usage := parseUsage(respBody)
 	usage.InputImages = countRequestImages(body)
 	usage.OutputImages = countRequestImages(respBody)
-	totalTokens := usage.InputTokens + usage.OutputTokens + usage.CacheReadTokens + usage.CacheWriteTokens
+	usage = normalizeBillingUsage(usage)
+	totalTokens := sumStoredTokenCounts(usage.InputTokens, usage.OutputTokens, usage.CacheReadTokens, usage.CacheWriteTokens)
 	s.recordRateTokens(fmt.Sprintf("token:%d", token.ID), totalTokens)
 	s.recordRateTokens(fmt.Sprintf("channel:%d", target.Channel.ID), totalTokens)
 	if statusCode >= 400 {
 		logRecord.Success = gatewayStatusDisabled
-		logRecord.ErrorMessage = string(limitBytes(respBody, 1000))
+		logRecord.ErrorMessage = truncateUTF8(
+			redactSensitiveText(string(respBody), target.Account.APIKey, proxyPassword(target.Proxy)),
+			1000,
+		)
 		s.recordBreakerFailure(target.Channel.ID)
 	} else {
 		logRecord.Success = gatewayStatusNormal
@@ -223,7 +229,7 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 	s.recordAccessTokenUsage(buildAccessTokenUsageRecord(token.ID, logRecord, usage))
 
 	for key, values := range headers {
-		if strings.EqualFold(key, "Content-Length") || strings.EqualFold(key, "Transfer-Encoding") {
+		if isBlockedUpstreamResponseHeader(key) {
 			continue
 		}
 		for _, value := range values {
@@ -250,11 +256,20 @@ func (s *GatewayService) authenticateGatewayToken(c *fiber.Ctx) (token model.Acc
 		err = errors.New("缺少网关访问 Token")
 		return
 	}
-	hashed := hashGatewayToken(raw)
-	token, err = s.gatewayRepository().FindAccessToken([]string{hashed, raw})
+	candidates, candidateErr := gatewayTokenLookupCandidates(raw)
+	if candidateErr != nil {
+		return token, errors.New("网关访问 Token 无效或已禁用")
+	}
+	token, err = s.gatewayRepository().FindAccessToken(candidates)
 	if err != nil {
 		err = errors.New("网关访问 Token 无效或已禁用")
 		return
+	}
+	if !isHashedGatewayToken(token.Token) {
+		if err = s.gatewayRepository().UpdateAccessTokenHash(token.ID, candidates[0]); err != nil {
+			return token, errors.New("网关访问 Token 安全升级失败")
+		}
+		token.Token = candidates[0]
 	}
 	err = validateGatewayTokenAccess(token, c.IP())
 	return
@@ -290,22 +305,30 @@ func (s *GatewayService) forwardToUpstream(c *fiber.Ctx, target routeTarget, ups
 	req.Header.Set("Accept", c.Get("Accept", "application/json"))
 	req.Header.Set("X-AI-Gateway-Channel", target.Channel.Name)
 
-	client := &http.Client{Timeout: timeout}
+	client := &http.Client{
+		Timeout: timeout,
+		// 网关不自动跟随上游重定向，避免配置错误把服务端请求引向意外地址。
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	if target.Proxy != nil {
 		transport, err := buildProxyTransport(*target.Proxy)
 		if err != nil {
 			return 0, nil, nil, err
 		}
 		client.Transport = transport
+		defer transport.CloseIdleConnections()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, nil, err
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxGatewayResponseBodyBytes+1))
 	if err != nil {
 		return resp.StatusCode, nil, resp.Header, err
+	}
+	if len(respBody) > maxGatewayResponseBodyBytes {
+		return resp.StatusCode, nil, resp.Header, errors.New("上游响应体超过 32 MiB 限制")
 	}
 	return resp.StatusCode, respBody, resp.Header, nil
 }
@@ -328,11 +351,15 @@ func parseRequestModel(body []byte) string {
 }
 
 func replaceRequestModel(body []byte, modelName string) ([]byte, error) {
-	var payload map[string]any
+	var payload map[string]json.RawMessage
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
-	payload["model"] = modelName
+	encodedModel, err := json.Marshal(modelName)
+	if err != nil {
+		return nil, err
+	}
+	payload["model"] = encodedModel
 	return json.Marshal(payload)
 }
 
@@ -376,6 +403,7 @@ func parseUsage(body []byte) BillingUsage {
 }
 
 func buildAccessTokenUsageRecord(tokenID snowflake.ID, logRecord model.CallLog, usage BillingUsage) AccessTokenUsageRecord {
+	usage = normalizeBillingUsage(usage)
 	return AccessTokenUsageRecord{
 		TokenID:               tokenID,
 		Success:               logRecord.Success == gatewayStatusNormal,
@@ -395,11 +423,19 @@ func (s *GatewayService) recordAccessTokenUsage(record AccessTokenUsageRecord) {
 	}
 }
 
-func limitBytes(body []byte, max int) []byte {
-	if len(body) <= max {
-		return body
+func truncateUTF8(value string, maxBytes int) string {
+	value = strings.ToValidUTF8(value, "�")
+	if maxBytes <= 0 {
+		return ""
 	}
-	return body[:max]
+	if len(value) <= maxBytes {
+		return value
+	}
+	value = value[:maxBytes]
+	for !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 func buildProxyTransport(proxy model.Proxy) (*http.Transport, error) {
@@ -410,7 +446,52 @@ func buildProxyTransport(proxy model.Proxy) (*http.Transport, error) {
 	if proxy.Username != "" {
 		proxyURL.User = url.UserPassword(proxy.Username, proxy.Password)
 	}
-	return &http.Transport{
-		Proxy: http.ProxyURL(proxyURL),
-	}, nil
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = http.ProxyURL(proxyURL)
+	return transport, nil
+}
+
+func proxyPassword(proxy *model.Proxy) string {
+	if proxy == nil {
+		return ""
+	}
+	return proxy.Password
+}
+
+func gatewayRequestID(c *fiber.Ctx) string {
+	requestID := strings.TrimSpace(c.Get("X-Request-ID"))
+	if requestID != "" && len(requestID) <= 80 && !strings.ContainsAny(requestID, "\r\n") {
+		return requestID
+	}
+	return fmt.Sprintf("gw-%d", db.GetId())
+}
+
+func validateGatewayUpstream(upstream string) error {
+	if upstream == "" || len(upstream) > 2048 || strings.ContainsAny(upstream, "\r\n#") {
+		return errors.New("上游路径无效或过长")
+	}
+	parsed, err := url.ParseRequestURI(upstream)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") {
+		return errors.New("上游路径格式无效")
+	}
+	decodedPath, err := url.PathUnescape(parsed.EscapedPath())
+	if err != nil {
+		return errors.New("上游路径编码无效")
+	}
+	for _, segment := range strings.Split(decodedPath, "/") {
+		if segment == ".." {
+			return errors.New("上游路径不允许包含上级目录")
+		}
+	}
+	return nil
+}
+
+func isBlockedUpstreamResponseHeader(name string) bool {
+	switch http.CanonicalHeaderKey(name) {
+	case "Connection", "Content-Length", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
+		"Set-Cookie", "Te", "Trailer", "Transfer-Encoding", "Upgrade":
+		return true
+	default:
+		return false
+	}
 }
