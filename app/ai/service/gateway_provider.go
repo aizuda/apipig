@@ -55,7 +55,17 @@ func buildLanguageModel(target routeTarget, modelID string) (provider.LanguageMo
 			openai.WithBaseURL(baseURL),
 			openai.WithHTTPClient(httpClient),
 		), nil
-	case "qwen", "dashscope", "custom", "openai-compatible", "compat", "":
+	case "qwen", "dashscope":
+		// Qwen ASR's OpenAI-compatible endpoint is a standard
+		// /chat/completions endpoint. Keep the configured base URL intact so
+		// callers can use DashScope's /compatible-mode/v1 path.
+		return compat.Chat(modelID,
+			compat.WithProviderID(protocol),
+			compat.WithAPIKey(apiKey),
+			compat.WithBaseURL(baseURL),
+			compat.WithHTTPClient(httpClient),
+		), nil
+	case "custom", "openai-compatible", "compat", "":
 		return compat.Chat(modelID,
 			compat.WithProviderID(defaultString(protocol, "compat")),
 			compat.WithAPIKey(apiKey),
