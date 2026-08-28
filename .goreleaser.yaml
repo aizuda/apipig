@@ -106,7 +106,7 @@ checksum:
 
 snapshot:
   version_template: >-
-    {{- $line := filter (mustReadFile "version/version.go") "^const Default = \"[^\"]+\"$" -}}
+    {{- $line := filter (mustReadFile "version/version.go") "^const Default = \"[^\"]+\"[[:space:]]*$" -}}
     {{- trimsuffix (trimprefix (trim $line) "const Default = \"") "\"" -}}
 
 changelog:
