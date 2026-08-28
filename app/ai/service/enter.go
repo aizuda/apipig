@@ -27,7 +27,7 @@ func NewAIServiceGroup(vault CredentialVault) *AiServiceGroup {
 		vault = newAESCredentialVault(func() string { return global.CONFIG.AI.EncryptionKey })
 	}
 	store := newGormAIStore(func() *gorm.DB { return global.DB })
-	repository := newGormGatewayRepository(func() *gorm.DB { return global.DB })
+	repository := newGormGatewayRepository(func() *gorm.DB { return global.DB }, vault)
 	logSink := newAsyncCallLogSink(repository, func() AsyncLogOptions {
 		return AsyncLogOptions{
 			QueueSize:     global.CONFIG.AI.LogQueueSize,
@@ -45,7 +45,7 @@ func NewAIServiceGroup(vault CredentialVault) *AiServiceGroup {
 		ProviderService:       &ProviderService{gateway: gateway, store: store},
 		ChannelService:        &ChannelService{gateway: gateway, store: store},
 		ChannelAccountService: &ChannelAccountService{gateway: gateway, vault: vault, store: store},
-		AccessTokenService:    &AccessTokenService{store: store},
+		AccessTokenService:    &AccessTokenService{store: store, vault: vault},
 		AccessTokenTagService: &AccessTokenTagService{store: store},
 		ProxyService:          &ProxyService{gateway: gateway, vault: vault, store: store},
 		CallLogService:        &CallLogService{store: store},

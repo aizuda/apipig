@@ -123,8 +123,6 @@ func (r *fakeGatewayRepository) AccessTokenCostWindows(_ snowflake.ID, _ int64) 
 	return r.costWindows, r.costWindowErr
 }
 
-func (r *fakeGatewayRepository) UpdateAccessTokenHash(_ snowflake.ID, _ string) error { return nil }
-
 func (r *fakeGatewayRepository) RecordAccessTokenUsage(_ AccessTokenUsageRecord) error { return nil }
 
 func (r *fakeGatewayRepository) LoadRouteConfig() (routeConfig, error) { return r.config, nil }

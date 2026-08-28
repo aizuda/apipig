@@ -19,6 +19,11 @@ type AccessTokenTagUpdateParams struct {
 	TagIDs []snowflake.ID `json:"tagIds"`
 }
 
+// AccessTokenResetParams 定义 API 密钥重置请求。
+type AccessTokenResetParams struct {
+	ID snowflake.ID `json:"id" validate:"required"`
+}
+
 // AccessTokenPageParams 定义访问令牌分页查询条件。
 type AccessTokenPageParams struct {
 	coreReq.PageInfo

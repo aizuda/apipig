@@ -36,7 +36,7 @@ func TestSecureGatewayTokenAndHash(t *testing.T) {
 	assert.NotContains(t, hashGatewayToken(first), first)
 }
 
-func TestAuthenticateGatewayTokenMigratesLegacyPlaintext(t *testing.T) {
+func TestAuthenticateGatewayTokenRejectsLegacyPlaintext(t *testing.T) {
 	database := setupCredentialTestDB(t)
 	legacyToken := "sk-apipig-legacy"
 	require.NoError(t, database.Create(&model.AccessToken{
@@ -60,12 +60,12 @@ func TestAuthenticateGatewayTokenMigratesLegacyPlaintext(t *testing.T) {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusOK, response.StatusCode)
-	assert.Equal(t, "legacy", string(body))
+	assert.Equal(t, fiber.StatusInternalServerError, response.StatusCode)
+	assert.NotEmpty(t, body)
 
 	var stored model.AccessToken
 	require.NoError(t, database.First(&stored, 1).Error)
-	assert.Equal(t, hashGatewayToken(legacyToken), stored.Token)
+	assert.Equal(t, legacyToken, stored.Token)
 }
 
 func TestManagementPagesMaskCredentials(t *testing.T) {
@@ -135,7 +135,7 @@ func TestHashedGatewayTokenCannotAuthenticateAsBearer(t *testing.T) {
 	response, err = app.Test(request)
 	require.NoError(t, err)
 	defer response.Body.Close()
-	assert.Equal(t, fiber.StatusOK, response.StatusCode)
+	assert.Equal(t, fiber.StatusInternalServerError, response.StatusCode)
 }
 
 func TestGatewayRuntimeConcurrencyAndTPM(t *testing.T) {

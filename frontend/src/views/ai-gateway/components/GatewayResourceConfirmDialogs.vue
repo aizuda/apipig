@@ -15,15 +15,19 @@ const props = withDefaults(
   defineProps<{
     deleteTarget?: { name: string } | null
     statusTarget?: { item: { name: string }; targetStatus: number } | null
+    resetTokenTarget?: { name: string } | null
     loading?: boolean
     statusChanging?: boolean
+    tokenResetting?: boolean
     deleteDescription?: string
   }>(),
   {
     deleteTarget: null,
     statusTarget: null,
+    resetTokenTarget: null,
     loading: false,
     statusChanging: false,
+    tokenResetting: false,
     deleteDescription: '删除后无法恢复；存在关联配置时后端会阻止删除并返回原因。',
   },
 )
@@ -33,6 +37,8 @@ const emit = defineEmits<{
   confirmDelete: []
   closeStatus: []
   confirmStatus: []
+  closeTokenReset: []
+  confirmTokenReset: []
 }>()
 
 const statusBusy = computed(() => props.loading || props.statusChanging)
@@ -85,6 +91,33 @@ function statusLabel(status?: number) {
         >
         <Button type="button" :disabled="statusBusy" @click="emit('confirmStatus')">
           确认{{ statusLabel(statusTarget?.targetStatus) }}
+        </Button>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+
+  <AlertDialog
+    :open="Boolean(resetTokenTarget)"
+    @update:open="(open) => !open && !tokenResetting && emit('closeTokenReset')"
+  >
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>确认重置 {{ resetTokenTarget?.name }} 的 API 密钥？</AlertDialogTitle>
+        <AlertDialogDescription>
+          重置后旧密钥将立即失效，使用旧密钥的服务会停止工作。新密钥只展示一次，请及时更新相关服务配置。
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel :disabled="tokenResetting" @click="emit('closeTokenReset')">
+          取消
+        </AlertDialogCancel>
+        <Button
+          type="button"
+          variant="destructive"
+          :disabled="tokenResetting"
+          @click="emit('confirmTokenReset')"
+        >
+          {{ tokenResetting ? '重置中...' : '确认重置' }}
         </Button>
       </AlertDialogFooter>
     </AlertDialogContent>

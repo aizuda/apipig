@@ -13,15 +13,42 @@ import (
 	"apipig/core/api/request"
 	"apipig/core/api/response"
 	"apipig/core/db"
+	"apipig/global"
 	"apipig/toolkit"
 	"apipig/toolkit/snowflake"
 )
 
 // AccessTokenService 负责访问令牌表的数据校验、持久化和查询。
-type AccessTokenService struct{ store AIStore }
+type AccessTokenService struct {
+	store AIStore
+	vault CredentialVault
+}
+
+func (s *AccessTokenService) credentialVault() CredentialVault {
+	if s.vault != nil {
+		return s.vault
+	}
+	return newAESCredentialVault(func() string { return global.CONFIG.AI.EncryptionKey })
+}
 
 func (s *AccessTokenService) persistence() AIStore {
 	return resolveAIStore(s.store)
+}
+
+func (s *AccessTokenService) generateEncryptedToken() (string, string, error) {
+	rawToken, err := generateSecureGatewayToken()
+	if err != nil {
+		return "", "", err
+	}
+	vault := s.credentialVault()
+	if !vault.Enabled() {
+		return "", "", errors.New("APIPIG_AI_ENCRYPTION_KEY is required")
+	}
+	encryptedToken, err := vault.Encrypt(rawToken)
+	if err != nil {
+		return "", "", err
+	}
+	return rawToken, encryptedToken, nil
 }
 
 func (s *AccessTokenService) Authenticate(rawToken string, clientIP string) (model.AccessToken, error) {
@@ -33,9 +60,20 @@ func (s *AccessTokenService) Authenticate(rawToken string, clientIP string) (mod
 		return model.AccessToken{}, errors.New("API Token is invalid or disabled")
 	}
 	var token model.AccessToken
-	err = s.persistence().Query(model.AccessToken{}).
-		Where("token IN ? AND status = ?", candidates, gatewayStatusNormal).
-		First(&token).Error
+	err = errors.New("not found")
+	var records []model.AccessToken
+	if scanErr := s.persistence().Query(model.AccessToken{}).Where("status = ?", gatewayStatusNormal).Find(&records).Error; scanErr == nil {
+		for _, candidate := range records {
+			if !isEncryptedCredential(candidate.Token) {
+				continue
+			}
+			value, decryptErr := s.credentialVault().Decrypt(candidate.Token)
+			if decryptErr == nil && value == candidates[0] {
+				token, err = candidate, nil
+				break
+			}
+		}
+	}
 	if err != nil {
 		return model.AccessToken{}, errors.New("API Token is invalid or disabled")
 	}
@@ -44,13 +82,6 @@ func (s *AccessTokenService) Authenticate(rawToken string, clientIP string) (mod
 	}
 	if !accessTokenAllowsIP(token, clientIP) {
 		return model.AccessToken{}, errors.New("当前 IP 不允许使用此 API 密钥")
-	}
-	if !isHashedGatewayToken(token.Token) {
-		if err := s.persistence().Query(model.AccessToken{}).Where("id = ?", token.ID).
-			UpdateColumn("token", candidates[0]).Error; err != nil {
-			return model.AccessToken{}, errors.New("API Token 安全升级失败")
-		}
-		token.Token = candidates[0]
 	}
 	return token, nil
 }
@@ -89,11 +120,11 @@ func (s *AccessTokenService) Save(params *aiReq.AccessTokenSaveParams) (aiResp.A
 		m.UsedAmount = 0
 		m.UsedMicroUSD = 0
 		m.QuotaMicroUSD = usdToMicroUSD(m.QuotaAmount)
-		rawToken, err := generateSecureGatewayToken()
+		rawToken, encryptedToken, err := s.generateEncryptedToken()
 		if err != nil {
 			return aiResp.AccessTokenSaveResult{}, err
 		}
-		m.Token = hashGatewayToken(rawToken)
+		m.Token = encryptedToken
 		m.MODEL = db.NewModel(params.Ctx)
 		var success bool
 		err = s.persistence().Transaction(func(store AIStore) error {
@@ -132,6 +163,52 @@ func (s *AccessTokenService) Save(params *aiReq.AccessTokenSaveParams) (aiResp.A
 		return replaceAccessTokenTags(store, m.ID, m.TagIDs)
 	})
 	return aiResp.AccessTokenSaveResult{Success: success && err == nil}, err
+}
+
+// GetRawToken returns a decrypted token for an authenticated administrator.
+// Legacy records that only contain a SHA-256 hash cannot be recovered.
+func (s *AccessTokenService) GetRawToken(id snowflake.ID) (aiResp.AccessTokenSecret, error) {
+	if id == 0 {
+		return aiResp.AccessTokenSecret{}, errors.New("API 密钥 ID 无效")
+	}
+	var token model.AccessToken
+	if err := s.persistence().GetByID(&token, id); err != nil {
+		return aiResp.AccessTokenSecret{}, err
+	}
+	if isEncryptedCredential(token.Token) {
+		value, err := s.credentialVault().Decrypt(token.Token)
+		if err != nil {
+			return aiResp.AccessTokenSecret{}, err
+		}
+		return aiResp.AccessTokenSecret{Token: value}, nil
+	}
+	return aiResp.AccessTokenSecret{}, errors.New("该 API 密钥仅保存了不可恢复的哈希，请重新创建密钥")
+}
+
+// ResetToken 轮换 API 密钥；旧密钥在更新成功后立即失效，新密钥仅在响应中返回一次。
+func (s *AccessTokenService) ResetToken(params *aiReq.AccessTokenResetParams) (aiResp.AccessTokenSecret, error) {
+	if params == nil || params.ID == 0 {
+		return aiResp.AccessTokenSecret{}, errors.New("请选择要重置的 API 密钥")
+	}
+	store := s.persistence()
+	var token model.AccessToken
+	if err := store.GetByID(&token, params.ID); err != nil {
+		return aiResp.AccessTokenSecret{}, err
+	}
+	rawToken, encryptedToken, err := s.generateEncryptedToken()
+	if err != nil {
+		return aiResp.AccessTokenSecret{}, err
+	}
+	result := store.Query(model.AccessToken{}).
+		Where("id = ?", token.ID).
+		Update("token", encryptedToken)
+	if result.Error != nil {
+		return aiResp.AccessTokenSecret{}, result.Error
+	}
+	if result.RowsAffected != 1 {
+		return aiResp.AccessTokenSecret{}, errors.New("API 密钥重置失败")
+	}
+	return aiResp.AccessTokenSecret{Token: rawToken}, nil
 }
 
 // ChangeStatus 切换 API 密钥启用、禁用状态。

@@ -129,6 +129,10 @@ export interface AccessTokenSaveResult {
   token?: string
 }
 
+export interface AccessTokenSecret {
+  token: string
+}
+
 export interface AccessTokenStatisticRecord {
   tokenId: string
   tokenName: string
@@ -372,6 +376,9 @@ export const aiGatewayApi = {
 
   tokenPage: (params: GatewayPageParams = { page: 1, pageSize: 100 }) =>
     post<PageResult<AccessToken>>('/ai/gateway/token/page', params),
+  tokenRaw: (id: string) =>
+    get<AccessTokenSecret>(`/ai/gateway/token/raw?id=${encodeURIComponent(id)}`),
+  resetToken: (id: string) => post<AccessTokenSecret>('/ai/gateway/token/reset', { id }),
   tokenStatistics: (params: AccessTokenStatisticsParams = {}) =>
     post<AccessTokenStatistics>('/ai/gateway/token/statistics', params),
   saveToken: (data: AccessToken) => {

@@ -17,6 +17,8 @@ func (r *AccessTokenRouter) InitAccessTokenRouter(router fiber.Router) {
 	rg.Post("change-status", a.ChangeAccessTokenStatus)
 	rg.Post("delete", a.DeleteAccessToken)
 	rg.Get("get", a.GetAccessToken)
+	rg.Get("raw", a.GetRawAccessToken)
+	rg.Post("reset", a.ResetAccessToken)
 	rg.Post("page", a.PageAccessToken)
 	rg.Post("statistics", a.StatisticsAccessToken)
 }

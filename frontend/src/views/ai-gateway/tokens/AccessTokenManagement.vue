@@ -2,13 +2,13 @@
 import { computed, reactive, ref } from 'vue'
 import {
   ChartBarStacked,
-  Check,
   Copy,
   Ellipsis,
   Import as ImportIcon,
   MessageSquareText,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Tags,
   Trash2,
@@ -26,10 +26,6 @@ import {
   DropdownMenuTrigger,
   Input,
   Progress,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   toast,
 } from '@tabtab/ui'
 import {
@@ -67,6 +63,7 @@ type AccessTokenIPRuleForm = { enabled: boolean; whitelist: string; blacklist: s
 type AccessTokenValidityForm = { enabled: boolean; expireAt: string }
 
 const createdToken = ref('')
+const tokenDialogMode = ref<'create' | 'reset'>('create')
 const copiedTokenId = ref('')
 const channels = ref<Channel[]>([])
 const tokenModelTags = ref<string[]>([])
@@ -75,6 +72,9 @@ const tokenTagManagerOpen = ref(false)
 const aiChatOpen = ref(false)
 const tokenStatisticsOpen = ref(false)
 const ccSwitchImportTarget = ref<AccessToken | null>(null)
+const ccSwitchImportToken = ref('')
+const resetTokenTarget = ref<AccessToken | null>(null)
+const tokenResetting = ref(false)
 const tokenTagAssignmentTarget = ref<AccessToken | null>(null)
 const tokenTagAssignmentLoading = ref(false)
 const tokenTagLoading = ref(false)
@@ -360,12 +360,6 @@ async function moveTokenTag(id: string | undefined, direction: -1 | 1) {
   }
 }
 
-function maskSecret(value?: string) {
-  if (!value) return '-'
-  if (value.length <= 10) return '********'
-  return `${value.slice(0, 6)}...${value.slice(-4)}`
-}
-
 function splitModels(value?: string) {
   return (value || '')
     .split(',')
@@ -494,34 +488,46 @@ function formatTime(value?: number) {
   return new Date(value).toLocaleString()
 }
 
-function tokenPreview(item: AccessToken) {
-  return maskSecret(item.token)
-}
-
 function tokenChannelDescription(item: AccessToken) {
   if (!item.channelId) return '未关联'
   if (!item.channelName) return '关联渠道不存在'
   return `${item.providerName || '未知供应商'} / ${item.channelName}`
 }
 
-function canCopyToken(item: AccessToken) {
-  return isUsableAccessToken(item.token)
-}
-
 const ccSwitchImportModels = computed(() =>
   [...new Set(splitModels(ccSwitchImportTarget.value?.models))].filter((model) => model !== '*'),
 )
 
-function openCCSwitchImport(item: AccessToken) {
-  if (!isUsableAccessToken(item.token)) return
+async function fetchRawToken(item: AccessToken) {
+  if (!item.id) throw new Error('API 密钥 ID 无效')
+  const result = await aiGatewayApi.tokenRaw(item.id)
+  const token = result.token?.trim()
+  if (!token || !isUsableAccessToken(token)) throw new Error('后台未返回有效的 API 密钥')
+  return token
+}
+
+async function openCCSwitchImport(item: AccessToken) {
+  try {
+    ccSwitchImportToken.value = await fetchRawToken(item)
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '获取 API 密钥失败')
+    return
+  }
   ccSwitchImportTarget.value = item
 }
 
-function importToCCSwitch(selection: CCSwitchImportSelection) {
+async function importToCCSwitch(selection: CCSwitchImportSelection) {
   const item = ccSwitchImportTarget.value
   if (!item) return
-  const apiKey = item.token?.trim()
-  if (!apiKey || !isUsableAccessToken(apiKey)) return
+  let apiKey = ccSwitchImportToken.value
+  if (!apiKey) {
+    try {
+      apiKey = await fetchRawToken(item)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '获取 API 密钥失败')
+      return
+    }
+  }
 
   const deepLink = buildCCSwitchImportUrl({
     app: selection.app,
@@ -532,14 +538,13 @@ function importToCCSwitch(selection: CCSwitchImportSelection) {
     notes: item.remark?.trim() || undefined,
   })
   ccSwitchImportTarget.value = null
+  ccSwitchImportToken.value = ''
   window.location.href = deepLink
 }
 
 async function copyConnectionInfo(item: AccessToken) {
-  const apiKey = item.token?.trim()
-  if (!apiKey || !isUsableAccessToken(apiKey)) return
-
   try {
+    const apiKey = await fetchRawToken(item)
     await copyText(
       buildApiPigConnectionInfo(apiKey, resolveGatewayEndpoint(apiUrl(''), window.location.href)),
     )
@@ -570,12 +575,6 @@ async function copyCreatedToken(token: string, id = 'created') {
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '复制失败，请手动复制 API 密钥')
   }
-}
-
-async function copyToken(item: AccessToken) {
-  const token = item.token
-  if (!item.id || !token || !canCopyToken(item)) return
-  await copyCreatedToken(token, item.id)
 }
 
 async function loadEditorLookups() {
@@ -632,6 +631,8 @@ async function saveToken() {
   await run(
     async () => {
       const result = await aiGatewayApi.saveToken({ ...tokenForm })
+      tokenDialogMode.value = 'create'
+      copiedTokenId.value = ''
       createdToken.value = result.token || ''
       editorOpen.value = false
       resetTokenForm()
@@ -673,6 +674,33 @@ async function openCreateEditor() {
     resetTokenForm()
     editorOpen.value = true
   })
+}
+
+function requestTokenReset(item: AccessToken) {
+  resetTokenTarget.value = item
+}
+
+async function confirmTokenReset() {
+  const item = resetTokenTarget.value
+  if (!item?.id) {
+    resetTokenTarget.value = null
+    toast.error('API 密钥 ID 无效')
+    return
+  }
+  tokenResetting.value = true
+  try {
+    const result = await aiGatewayApi.resetToken(item.id)
+    const token = result.token?.trim()
+    if (!token || !isUsableAccessToken(token)) throw new Error('后台未返回有效的 API 密钥')
+    resetTokenTarget.value = null
+    tokenDialogMode.value = 'reset'
+    copiedTokenId.value = ''
+    createdToken.value = token
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'API 密钥重置失败')
+  } finally {
+    tokenResetting.value = false
+  }
 }
 
 function requestDelete(_kind: 'token', id: string | undefined, name: string) {
@@ -805,7 +833,6 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                 <tr>
                   <th class="min-w-[128px] px-4 py-3">名称</th>
                   <th class="min-w-[128px] px-4 py-3">标签</th>
-                  <th class="px-4 py-3">API 密钥</th>
                   <th class="px-4 py-3">关联号池</th>
                   <th class="px-4 py-3">模型</th>
                   <th class="px-4 py-3">调用/用量</th>
@@ -856,32 +883,6 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                         {{ '\u70b9\u51fb\u9009\u62e9\u6807\u7b7e' }}
                       </span>
                     </button>
-                  </td>
-                  <td class="px-4 py-3">
-                    <div class="flex items-center gap-1.5 whitespace-nowrap">
-                      <code class="text-xs">{{ tokenPreview(item) }}</code>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger as-child>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-7 w-7 cursor-pointer"
-                              :disabled="!canCopyToken(item)"
-                              aria-label="复制到剪切板"
-                              @click="copyToken(item)"
-                            >
-                              <Check
-                                v-if="copiedTokenId === item.id"
-                                class="h-4 w-4 text-green-600"
-                              />
-                              <Copy v-else class="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">复制到剪切板</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
                   </td>
                   <td class="px-4 py-3 whitespace-nowrap">
                     {{ tokenChannelDescription(item) }}
@@ -1027,18 +1028,21 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
                             编辑
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            class="cursor-pointer text-destructive focus:text-destructive"
+                            @select="requestTokenReset(item)"
+                          >
+                            <RefreshCw />
+                            重置密钥
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             class="cursor-pointer"
-                            :disabled="!canCopyToken(item)"
-                            :title="canCopyToken(item) ? undefined : '当前列表未提供完整 API 密钥'"
-                            @click="openCCSwitchImport(item)"
+                            @select="openCCSwitchImport(item)"
                           >
                             <ImportIcon />
                             导入到 CC Switch
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             class="cursor-pointer"
-                            :disabled="!canCopyToken(item)"
-                            :title="canCopyToken(item) ? undefined : '当前列表未提供完整 API 密钥'"
                             @select="copyConnectionInfo(item)"
                           >
                             <Copy />
@@ -1068,24 +1072,34 @@ function requestStatusChange(_kind: 'token', item: AccessToken) {
       :open="Boolean(ccSwitchImportTarget)"
       :token-name="ccSwitchImportTarget?.name || ''"
       :models="ccSwitchImportModels"
-      @close="ccSwitchImportTarget = null"
+      @close="
+        () => {
+          ccSwitchImportTarget = null
+          ccSwitchImportToken = ''
+        }
+      "
       @confirm="importToCCSwitch"
     />
 
     <GatewayResourceConfirmDialogs
       :delete-target="deleteTarget"
       :status-target="statusTarget"
+      :reset-token-target="resetTokenTarget"
       :loading="loading"
       :status-changing="Boolean(statusChangingKey)"
+      :token-resetting="tokenResetting"
       @close-delete="deleteTarget = null"
       @confirm-delete="confirmDelete"
       @close-status="statusTarget = null"
       @confirm-status="confirmStatusChange"
+      @close-token-reset="resetTokenTarget = null"
+      @confirm-token-reset="confirmTokenReset"
     />
 
     <CreatedTokenDialog
       :token="createdToken"
       :copied="copiedTokenId === 'created'"
+      :mode="tokenDialogMode"
       @close="createdToken = ''"
       @copy="copyCreatedToken"
     />

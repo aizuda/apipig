@@ -14,7 +14,6 @@ import (
 
 const (
 	maskedCredential = "********"
-	tokenHashPrefix  = "sha256:"
 )
 
 var sensitiveHeaderPattern = regexp.MustCompile(`(?i)(authorization\s*[:=]\s*bearer\s+|x-api-key\s*[:=]\s*|api[_-]?key\s*[:=]\s*)[^\s,;]+`)
@@ -29,12 +28,10 @@ func generateSecureGatewayToken() (string, error) {
 
 func hashGatewayToken(raw string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(raw)))
-	return tokenHashPrefix + hex.EncodeToString(sum[:])
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-func isHashedGatewayToken(value string) bool {
-	return strings.HasPrefix(value, tokenHashPrefix)
-}
+func isHashedGatewayToken(value string) bool { return strings.HasPrefix(value, "sha256:") }
 
 // gatewayTokenLookupCandidates 生成数据库查询候选值。
 //
@@ -46,10 +43,7 @@ func gatewayTokenLookupCandidates(raw string) ([]string, error) {
 	if raw == "" {
 		return nil, errors.New("API Token 不能为空")
 	}
-	if isHashedGatewayToken(raw) {
-		return nil, errors.New("API Token 格式无效")
-	}
-	return []string{hashGatewayToken(raw), raw}, nil
+	return []string{raw}, nil
 }
 
 func isMaskedCredential(value string) bool {

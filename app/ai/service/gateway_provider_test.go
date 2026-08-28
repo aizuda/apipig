@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"apipig/app/ai/model"
-	aiReq "apipig/app/ai/model/request"
 	coreAPI "apipig/core/api"
 	"apipig/toolkit/snowflake"
 
@@ -105,7 +104,7 @@ func (r *qwenGatewayRepository) FindAccessToken(_ []string) (model.AccessToken, 
 	return r.token, nil
 }
 
-func TestQwenASROpenAICompatibleProxyPreservesAudioRequest(t *testing.T) {
+func TestQwenASRChatCompletionsPreservesAudioRequest(t *testing.T) {
 	var requestedPath string
 	var requestedKey string
 	var requestedBody map[string]any
@@ -164,15 +163,9 @@ func TestQwenASROpenAICompatibleProxyPreservesAudioRequest(t *testing.T) {
 	})
 
 	app := fiber.New()
-	app.Post("/ai-gateway/openai/chat/completions", func(c *fiber.Ctx) error {
-		return service.ProxyOpenAI(&aiReq.GatewayProxyParams{
-			Ctx:      c,
-			RawBody:  c.Body(),
-			Upstream: "/chat/completions",
-		})
-	})
+	app.Post("/v1/chat/completions", service.ChatCompletions)
 	body := `{"model":"qwen3-asr-flash","messages":[{"role":"user","content":[{"type":"input_audio","input_audio":{"data":"https://example.com/audio.mp3"}}]}],"stream":false,"asr_options":{"language":"zh","enable_itn":true}}`
-	request := httptest.NewRequest(http.MethodPost, "/ai-gateway/openai/chat/completions", strings.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	request.Header.Set("Authorization", "Bearer sk-qwen-test")
 	request.Header.Set("Content-Type", "application/json")
 	response, err := app.Test(request)

@@ -13,7 +13,7 @@ type AccessToken struct {
 	api.MODEL                            // 通用主键、创建更新信息和软删除标记
 	ChannelID             snowflake.ID   `gorm:"type:bigint;index" json:"channelId,omitempty" swaggertype:"string"` // 可选关联渠道号池
 	Name                  string         `gorm:"size:80;not null;index" json:"name"`                                // 令牌名称
-	Token                 string         `gorm:"size:255;not null;uniqueIndex" json:"-"`                            // 单向哈希后的访问令牌，不参与通用 JSON 序列化
+	Token                 string         `gorm:"size:500;not null;uniqueIndex" json:"-"`                            // 加密后的访问令牌，不参与通用 JSON 序列化
 	Models                string         `gorm:"size:1000" json:"models"`                                           // 允许访问的模型，空值表示不限制
 	IpRule                string         `gorm:"type:text" json:"ipRule"`                                           // IP 限制 JSON：enabled、whitelist、blacklist
 	RateLimitRule         string         `gorm:"type:text" json:"rateLimitRule"`                                    // 消费速率限制 JSON：5 小时、1 天、7 天额度

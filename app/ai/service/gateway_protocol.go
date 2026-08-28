@@ -201,6 +201,31 @@ func parseOpenAIContent(raw json.RawMessage) ([]provider.Part, error) {
 	return parts, nil
 }
 
+// isAudioChatRequest identifies OpenAI-compatible multimodal audio requests.
+// It intentionally only checks the message content type; the raw proxy path
+// is responsible for validating the model and forwarding provider-specific
+// fields such as asr_options unchanged.
+func isAudioChatRequest(body []byte) bool {
+	var request struct {
+		Messages []struct {
+			Content []struct {
+				Type string `json:"type"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil {
+		return false
+	}
+	for _, message := range request.Messages {
+		for _, part := range message.Content {
+			if strings.EqualFold(strings.TrimSpace(part.Type), "input_audio") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func parseAnthropicRequest(body []byte) (anthropicMessagesRequest, provider.GenerateParams, error) {
 	var req anthropicMessagesRequest
 	if err := json.Unmarshal(body, &req); err != nil {

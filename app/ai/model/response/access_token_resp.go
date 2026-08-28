@@ -19,6 +19,10 @@ type AccessTokenSaveResult struct {
 	Token   string `json:"token,omitempty"`
 }
 
+type AccessTokenSecret struct {
+	Token string `json:"token"`
+}
+
 // AccessTokenStatistics 汇总指定时间范围内每个 API 密钥的 Token 用量。
 type AccessTokenStatistics struct {
 	StartAt          int64                        `json:"startAt"`

@@ -265,12 +265,7 @@ func (s *GatewayService) authenticateGatewayToken(c *fiber.Ctx) (token model.Acc
 		err = errors.New("网关访问 Token 无效或已禁用")
 		return
 	}
-	if !isHashedGatewayToken(token.Token) {
-		if err = s.gatewayRepository().UpdateAccessTokenHash(token.ID, candidates[0]); err != nil {
-			return token, errors.New("网关访问 Token 安全升级失败")
-		}
-		token.Token = candidates[0]
-	}
+
 	err = validateGatewayTokenAccess(token, c.IP())
 	return
 }

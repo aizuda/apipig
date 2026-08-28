@@ -56,6 +56,18 @@ func (a *AccessTokenApi) GetAccessToken(c *fiber.Ctx) error {
 	return response.Execute(c, a.service.Get, id, err)
 }
 
+func (a *AccessTokenApi) GetRawAccessToken(c *fiber.Ctx) error {
+	id, err := a.IdParser(c)
+	return response.Execute(c, a.service.GetRawToken, id, err)
+}
+
+// ResetAccessToken 生成新密钥并立即废止旧密钥。
+func (a *AccessTokenApi) ResetAccessToken(c *fiber.Ctx) error {
+	params := new(aiReq.AccessTokenResetParams)
+	err := a.BodyParserVerify(c, params, "API 密钥重置")
+	return response.Execute(c, a.service.ResetToken, params, err)
+}
+
 // PageAccessToken 分页查询访问令牌。
 func (a *AccessTokenApi) PageAccessToken(c *fiber.Ctx) error {
 	var params *aiReq.AccessTokenPageParams

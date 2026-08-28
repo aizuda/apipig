@@ -3,10 +3,12 @@ package service
 import (
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"apipig/app/ai/model"
 	aiResp "apipig/app/ai/model/response"
+	"apipig/global"
 	"apipig/toolkit/snowflake"
 
 	"gorm.io/gorm"
@@ -31,7 +33,6 @@ type GatewayRepository interface {
 	FindAccessToken(candidates []string) (model.AccessToken, error)
 	FindAccessTokenByID(id snowflake.ID) (model.AccessToken, error)
 	AccessTokenCostWindows(tokenID snowflake.ID, now int64) (accessTokenCostWindows, error)
-	UpdateAccessTokenHash(id snowflake.ID, hashed string) error
 	RecordAccessTokenUsage(record AccessTokenUsageRecord) error
 	LoadRouteConfig() (routeConfig, error)
 	UpdateChannelAccountAPIKey(id snowflake.ID, encrypted string) error
@@ -42,10 +43,22 @@ type GatewayRepository interface {
 
 type gormGatewayRepository struct {
 	dbProvider func() *gorm.DB
+	vault      CredentialVault
 }
 
-func newGormGatewayRepository(dbProvider func() *gorm.DB) GatewayRepository {
-	return &gormGatewayRepository{dbProvider: dbProvider}
+func newGormGatewayRepository(dbProvider func() *gorm.DB, vault ...CredentialVault) GatewayRepository {
+	var credentialVault CredentialVault
+	if len(vault) > 0 {
+		credentialVault = vault[0]
+	}
+	return &gormGatewayRepository{dbProvider: dbProvider, vault: credentialVault}
+}
+
+func (r *gormGatewayRepository) credentialVault() CredentialVault {
+	if r.vault != nil {
+		return r.vault
+	}
+	return newAESCredentialVault(func() string { return global.CONFIG.AI.EncryptionKey })
 }
 
 func (r *gormGatewayRepository) database() (*gorm.DB, error) {
@@ -240,9 +253,25 @@ func (r *gormGatewayRepository) FindAccessToken(candidates []string) (token mode
 	if err != nil {
 		return token, err
 	}
-	err = database.Model(&model.AccessToken{}).
-		Where("token IN ? AND status = ?", candidates, gatewayStatusNormal).
-		First(&token).Error
+	err = errors.New("not found")
+	if len(candidates) == 0 {
+		return token, err
+	}
+	raw := strings.TrimSpace(candidates[0])
+	var records []model.AccessToken
+	if scanErr := database.Model(&model.AccessToken{}).
+		Where("status = ?", gatewayStatusNormal).Find(&records).Error; scanErr != nil {
+		return token, err
+	}
+	for _, record := range records {
+		if !isEncryptedCredential(record.Token) {
+			continue
+		}
+		value, decryptErr := r.credentialVault().Decrypt(record.Token)
+		if decryptErr == nil && value == raw {
+			return record, nil
+		}
+	}
 	return token, err
 }
 
@@ -274,14 +303,6 @@ func (r *gormGatewayRepository) AccessTokenCostWindows(tokenID snowflake.ID, now
 		Where("access_token_id = ? AND success = ? AND created_at >= ?", tokenID, gatewayStatusNormal, sevenDaysAgo).
 		Scan(&costs).Error
 	return costs, err
-}
-
-func (r *gormGatewayRepository) UpdateAccessTokenHash(id snowflake.ID, hashed string) error {
-	database, err := r.database()
-	if err != nil {
-		return err
-	}
-	return database.Model(&model.AccessToken{}).Where("id = ?", id).UpdateColumn("token", hashed).Error
 }
 
 func (r *gormGatewayRepository) RecordAccessTokenUsage(record AccessTokenUsageRecord) error {

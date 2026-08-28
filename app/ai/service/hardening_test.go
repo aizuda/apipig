@@ -81,7 +81,7 @@ func TestAccessTokenSaveStoresOnlyHash(t *testing.T) {
 		Models: `{"gpt-test":"gpt-test"}`, Status: gatewayStatusNormal,
 	}).Error)
 
-	tokenService := &AccessTokenService{store: newGormAIStore(func() *gorm.DB { return database })}
+	tokenService := &AccessTokenService{store: newGormAIStore(func() *gorm.DB { return database }), vault: newAESCredentialVault(func() string { return "0123456789abcdef0123456789abcdef" })}
 	var saved aiResp.AccessTokenSaveResult
 	app := fiber.New()
 	app.Post("/", func(c *fiber.Ctx) error {
@@ -100,41 +100,66 @@ func TestAccessTokenSaveStoresOnlyHash(t *testing.T) {
 
 	var stored model.AccessToken
 	require.NoError(t, database.First(&stored).Error)
-	require.Equal(t, hashGatewayToken(saved.Token), stored.Token)
+	require.True(t, isEncryptedCredential(stored.Token))
 	require.NotEqual(t, saved.Token, stored.Token)
 	managed, err := tokenService.Get(stored.ID)
 	require.NoError(t, err)
 	require.Empty(t, managed.Token)
 }
 
-func TestMigrateLegacyAccessTokenData(t *testing.T) {
-	database, err := gorm.Open(sqlite.Open("file:token-migration?mode=memory&cache=shared"), &gorm.Config{})
+func TestAccessTokenRawTokenUsesEncryptedStorage(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open("file:token-raw?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, database.AutoMigrate(&model.AccessToken{}))
-	legacy := model.AccessToken{MODEL: coreAPI.MODEL{ID: 351}, Name: "旧密钥", Token: "sk-legacy", QuotaAmount: 10, UsedAmount: 2.5, Status: gatewayStatusNormal}
-	hashed := model.AccessToken{MODEL: coreAPI.MODEL{ID: 352}, Name: "新密钥", Token: hashGatewayToken("sk-current"), Status: gatewayStatusNormal}
-	require.NoError(t, database.Create(&legacy).Error)
-	require.NoError(t, database.Create(&hashed).Error)
+	service := &AccessTokenService{
+		store: newGormAIStore(func() *gorm.DB { return database }),
+		vault: newAESCredentialVault(func() string { return "0123456789abcdef0123456789abcdef" }),
+	}
+	accessToken := model.AccessToken{MODEL: coreAPI.MODEL{ID: 361}, Name: "可导出密钥", Token: ""}
+	require.NoError(t, database.Create(&accessToken).Error)
+	// Simulate the encrypted value produced by Save without exposing it in the model JSON.
+	encrypted, err := service.credentialVault().Encrypt("sk-raw")
+	require.NoError(t, err)
+	require.NoError(t, database.Model(&accessToken).Update("token", encrypted).Error)
 
-	require.NoError(t, MigrateLegacyAccessTokenData(database))
-	var migrated []model.AccessToken
-	require.NoError(t, database.Order("id ASC").Find(&migrated).Error)
-	require.Equal(t, hashGatewayToken("sk-legacy"), migrated[0].Token)
-	require.Equal(t, usdToMicroUSD(10), migrated[0].QuotaMicroUSD)
-	require.Equal(t, usdToMicroUSD(2.5), migrated[0].UsedMicroUSD)
-	require.Equal(t, hashed.Token, migrated[1].Token)
+	secret, err := service.GetRawToken(accessToken.ID)
+	require.NoError(t, err)
+	require.Equal(t, "sk-raw", secret.Token)
+}
 
-	require.NoError(t, database.Model(&model.AccessToken{}).Where("id = ?", legacy.ID).Updates(map[string]any{
-		"used_micro_usd": maxMicroUSDValue - 1_000_000,
-		"used_amount":    maxUSDValue - 1,
-	}).Error)
-	repository := newGormGatewayRepository(func() *gorm.DB { return database })
-	require.NoError(t, repository.RecordAccessTokenUsage(AccessTokenUsageRecord{
-		TokenID: legacy.ID, Success: true, EffectiveCostMicroUSD: 2_000_000,
-	}))
-	require.NoError(t, database.First(&migrated[0], legacy.ID).Error)
-	require.Equal(t, maxMicroUSDValue, migrated[0].UsedMicroUSD)
-	require.Equal(t, maxUSDValue, migrated[0].UsedAmount)
+func TestAccessTokenResetRotatesEncryptedToken(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open("file:token-reset?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, database.AutoMigrate(&model.AccessToken{}))
+	service := &AccessTokenService{
+		store: newGormAIStore(func() *gorm.DB { return database }),
+		vault: newAESCredentialVault(func() string { return "0123456789abcdef0123456789abcdef" }),
+	}
+	oldToken := "sk-old-token"
+	encryptedOldToken, err := service.credentialVault().Encrypt(oldToken)
+	require.NoError(t, err)
+	accessToken := model.AccessToken{
+		MODEL: coreAPI.MODEL{ID: 371}, Name: "待重置密钥", Token: encryptedOldToken,
+		RPM: 60, Status: gatewayStatusNormal,
+	}
+	require.NoError(t, database.Create(&accessToken).Error)
+
+	secret, err := service.ResetToken(&aiReq.AccessTokenResetParams{ID: accessToken.ID})
+	require.NoError(t, err)
+	require.Regexp(t, `^sk-[A-Za-z0-9_-]{43}$`, secret.Token)
+	require.NotEqual(t, oldToken, secret.Token)
+
+	var stored model.AccessToken
+	require.NoError(t, database.First(&stored, accessToken.ID).Error)
+	require.True(t, isEncryptedCredential(stored.Token))
+	decrypted, err := service.credentialVault().Decrypt(stored.Token)
+	require.NoError(t, err)
+	require.Equal(t, secret.Token, decrypted)
+	_, err = service.Authenticate(oldToken, "127.0.0.1")
+	require.Error(t, err)
+	authenticated, err := service.Authenticate(secret.Token, "127.0.0.1")
+	require.NoError(t, err)
+	require.Equal(t, accessToken.ID, authenticated.ID)
 }
 
 func TestForwardToUpstreamDoesNotFollowRedirect(t *testing.T) {

@@ -34,7 +34,7 @@ func main() {
 	fmt.Printf("IOTA - 物联网平台，专业、好用！ http://localhost:%d\n", port)
 	fmt.Printf("SwaggerApi http://localhost:%d/swagger/index.html\n", port)
 
-	global.DB = initialize.Gorm() // gorm连接数据库
+	global.DB = initialize.Gorm() // 连接数据库
 
 	core.RunServer()
 }
