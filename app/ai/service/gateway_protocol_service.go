@@ -32,11 +32,10 @@ func (s *GatewayService) ChatCompletions(c *fiber.Ctx) error {
 	if len(c.Body()) > maxGatewayRequestBodyBytes {
 		return writeGatewayError(c, "openai", fiber.StatusRequestEntityTooLarge, errors.New("请求体超过 8 MiB 限制"))
 	}
-	// Qwen ASR uses the OpenAI endpoint but adds input_audio and asr_options.
-	// Those fields are provider-specific and cannot be represented by the
-	// generic GoAI chat model without losing the audio payload. Preserve the
-	// original JSON for audio requests and let the normal proxy pipeline handle
-	// authentication, routing, model mapping, billing, and response passthrough.
+	// Keep the legacy chat-based ASR request shape working. New clients should
+	// use /v1/audio/transcriptions, which the proxy adapts for Qwen channels.
+	// GoAI's generic chat model cannot retain provider-specific asr_options, so
+	// legacy requests still need raw passthrough.
 	if isAudioChatRequest(c.Body()) {
 		return s.ProxyOpenAI(&aiReq.GatewayProxyParams{
 			Ctx:      c,

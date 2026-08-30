@@ -23,9 +23,10 @@ type AIChatParams struct {
 
 // GatewayProxyParams 封装一次 OpenAI 兼容代理请求所需的运行时上下文。
 type GatewayProxyParams struct {
-	Ctx      *fiber.Ctx `json:"-"` // Fiber 请求上下文
-	RawBody  []byte     `json:"-"` // 未经修改的原始请求体
-	Upstream string     `json:"-"` // 上游相对路径，例如 /chat/completions
+	Ctx          *fiber.Ctx `json:"-"` // Fiber 请求上下文
+	RawBody      []byte     `json:"-"` // 未经修改的原始请求体
+	Upstream     string     `json:"-"` // 上游相对路径，例如 /chat/completions
+	MaxBodyBytes int        `json:"-"` // 可选的端点级请求体上限，零值使用网关默认值
 }
 
 type GatewaySummaryParams struct {

@@ -78,6 +78,31 @@ func (a *GatewayApi) ChatCompletions(c *fiber.Ctx) error {
 	return a.service.ChatCompletions(c)
 }
 
+// Embeddings 处理 OpenAI Embeddings 兼容协议。
+func (a *GatewayApi) Embeddings(c *fiber.Ctx) error {
+	return a.service.Embeddings(c)
+}
+
+// ImageGenerations 处理 OpenAI Images Generations 兼容协议。
+func (a *GatewayApi) ImageGenerations(c *fiber.Ctx) error {
+	return a.service.ImageGenerations(c)
+}
+
+// Rerank 处理 OpenAI 兼容生态中的 Rerank 扩展协议。
+func (a *GatewayApi) Rerank(c *fiber.Ctx) error {
+	return a.service.Rerank(c)
+}
+
+// AudioSpeech 处理 OpenAI Audio Speech 兼容协议。
+func (a *GatewayApi) AudioSpeech(c *fiber.Ctx) error {
+	return a.service.AudioSpeech(c)
+}
+
+// AudioTranscriptions 处理 OpenAI Audio Transcriptions 兼容协议。
+func (a *GatewayApi) AudioTranscriptions(c *fiber.Ctx) error {
+	return a.service.AudioTranscriptions(c)
+}
+
 // Messages 处理 Anthropic Messages 兼容协议。
 func (a *GatewayApi) Messages(c *fiber.Ctx) error {
 	return a.service.Messages(c)

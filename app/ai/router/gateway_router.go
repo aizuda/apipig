@@ -34,6 +34,11 @@ func (r *GatewayRouter) InitGatewayProxyRouter(router fiber.Router) {
 func (r *GatewayRouter) InitProtocolRouter(router fiber.Router) {
 	a := api.AiApi.GatewayApi
 	router.Post("/chat/completions", a.ChatCompletions)
+	router.Post("/embeddings", a.Embeddings)
+	router.Post("/images/generations", a.ImageGenerations)
+	router.Post("/rerank", a.Rerank)
+	router.Post("/audio/speech", a.AudioSpeech)
+	router.Post("/audio/transcriptions", a.AudioTranscriptions)
 	router.Post("/messages", a.Messages)
 	router.Get("/models", a.Models)
 }

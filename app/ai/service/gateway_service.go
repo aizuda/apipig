@@ -85,15 +85,25 @@ type openAIProxyBody struct {
 	Usage struct {
 		PromptTokens        int `json:"prompt_tokens"`
 		CompletionTokens    int `json:"completion_tokens"`
+		InputTokens         int `json:"input_tokens"`
+		OutputTokens        int `json:"output_tokens"`
 		TotalTokens         int `json:"total_tokens"`
 		PromptTokensDetails struct {
 			CachedTokens int `json:"cached_tokens"`
 			ImageTokens  int `json:"image_tokens"`
 		} `json:"prompt_tokens_details"`
+		InputTokensDetails struct {
+			CachedTokens int `json:"cached_tokens"`
+			ImageTokens  int `json:"image_tokens"`
+		} `json:"input_tokens_details"`
 		CompletionTokensDetails struct {
 			ReasoningTokens int `json:"reasoning_tokens"`
 			ImageTokens     int `json:"image_tokens"`
 		} `json:"completion_tokens_details"`
+		OutputTokensDetails struct {
+			ReasoningTokens int `json:"reasoning_tokens"`
+			ImageTokens     int `json:"image_tokens"`
+		} `json:"output_tokens_details"`
 	} `json:"usage"`
 }
 
@@ -138,8 +148,12 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 	c := params.Ctx
 	start := time.Now()
 	body := append([]byte(nil), params.RawBody...)
-	if len(body) > maxGatewayRequestBodyBytes {
-		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "请求体超过 8 MiB 限制")
+	maxBodyBytes := params.MaxBodyBytes
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = maxGatewayRequestBodyBytes
+	}
+	if len(body) > maxBodyBytes {
+		return fiber.NewError(fiber.StatusRequestEntityTooLarge, "请求体超过端点大小限制")
 	}
 	if err := validateGatewayUpstream(params.Upstream); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -151,9 +165,10 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 		return fiber.NewError(fiber.StatusUnauthorized, err.Error())
 	}
 
-	modelName := parseRequestModel(body)
-	if modelName == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "请求体缺少 model 字段")
+	contentType := c.Get(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	modelName, err := parseRequestModelByContentType(body, contentType)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	if !containsModel(token.Models, modelName) {
 		return fiber.NewError(fiber.StatusForbidden, "访问 Token 未授权该模型")
@@ -181,18 +196,31 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 	}
 	providerModel, _ := resolveAccountModel(target.Account.Models, modelName)
 	if providerModel != modelName {
-		body, err = replaceRequestModel(body, providerModel)
+		body, contentType, err = replaceRequestModelByContentType(body, contentType, providerModel)
 		if err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "请求体模型映射失败")
 		}
 	}
+	upstream := params.Upstream
+	qwenTranscriptionResponseFormat := ""
+	if isQwenTranscriptionTarget(target, upstream) {
+		upstream, body, contentType, qwenTranscriptionResponseFormat, err = adaptQwenTranscriptionRequest(body, contentType)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+	}
 
-	statusCode, respBody, headers, err := s.forwardToUpstream(c, target, params.Upstream, body)
+	statusCode, respBody, headers, err := s.forwardToUpstream(c, target, upstream, body, contentType)
+	usageResponseBody := respBody
+	if err == nil && statusCode < 400 && qwenTranscriptionResponseFormat != "" {
+		respBody, headers, err = adaptQwenTranscriptionResponse(respBody, headers, qwenTranscriptionResponseFormat)
+	}
 	latency := time.Since(start).Milliseconds()
 
 	logRecord := buildCallLog(c, requestID, token, target, modelName, params.Upstream, statusCode, latency)
 	if err != nil {
 		safeError := redactSensitiveText(err.Error(), target.Account.APIKey, proxyPassword(target.Proxy))
+		logRecord.StatusCode = fiber.StatusBadGateway
 		logRecord.Success = gatewayStatusDisabled
 		logRecord.ErrorMessage = truncateUTF8(safeError, 1000)
 		applyBillingToLog(&logRecord, BillingUsage{}, BillingResult{Multiplier: normalizedCostMultiplier(target.Channel.CostMultiplier)})
@@ -202,9 +230,9 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 		return fiber.NewError(fiber.StatusBadGateway, safeError)
 	}
 
-	usage := parseUsage(respBody)
+	usage := parseUsage(usageResponseBody)
 	usage.InputImages = countRequestImages(body)
-	usage.OutputImages = countRequestImages(respBody)
+	usage.OutputImages = countResponseImages(respBody)
 	usage = normalizeBillingUsage(usage)
 	totalTokens := sumStoredTokenCounts(usage.InputTokens, usage.OutputTokens, usage.CacheReadTokens, usage.CacheWriteTokens)
 	s.recordRateTokens(fmt.Sprintf("token:%d", token.ID), totalTokens)
@@ -232,7 +260,11 @@ func (s *GatewayService) ProxyOpenAI(params *aiReq.GatewayProxyParams) error {
 		if isBlockedUpstreamResponseHeader(key) {
 			continue
 		}
-		for _, value := range values {
+		for index, value := range values {
+			if index == 0 {
+				c.Set(key, value)
+				continue
+			}
 			c.Append(key, value)
 		}
 	}
@@ -250,7 +282,7 @@ func (s *GatewayService) authenticateGatewayToken(c *fiber.Ctx) (token model.Acc
 		raw = strings.TrimSpace(raw[7:])
 	}
 	if raw == "" {
-		raw = c.Get("X-API-Key")
+		raw = strings.TrimSpace(c.Get("X-API-Key"))
 	}
 	if raw == "" {
 		err = errors.New("缺少网关访问 Token")
@@ -281,7 +313,7 @@ func validateGatewayTokenAccess(token model.AccessToken, clientIP string) error 
 	return nil
 }
 
-func (s *GatewayService) forwardToUpstream(c *fiber.Ctx, target routeTarget, upstream string, body []byte) (int, []byte, http.Header, error) {
+func (s *GatewayService) forwardToUpstream(c *fiber.Ctx, target routeTarget, upstream string, body []byte, contentType string) (int, []byte, http.Header, error) {
 	baseURL := strings.TrimRight(target.Provider.BaseURL, "/")
 	targetURL := baseURL + "/" + strings.TrimLeft(upstream, "/")
 	timeout := time.Duration(target.Provider.TimeoutMs) * time.Millisecond
@@ -296,7 +328,7 @@ func (s *GatewayService) forwardToUpstream(c *fiber.Ctx, target routeTarget, ups
 		return 0, nil, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+target.Account.APIKey)
-	req.Header.Set("Content-Type", c.Get("Content-Type", "application/json"))
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", c.Get("Accept", "application/json"))
 	req.Header.Set("X-AI-Gateway-Channel", target.Channel.Name)
 
@@ -335,16 +367,6 @@ func (s *GatewayService) saveCallLog(logRecord model.CallLog) error {
 	return s.logSink.Enqueue(logRecord)
 }
 
-func parseRequestModel(body []byte) string {
-	var payload struct {
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(payload.Model)
-}
-
 func replaceRequestModel(body []byte, modelName string) ([]byte, error) {
 	var payload map[string]json.RawMessage
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -377,20 +399,44 @@ func parseUsage(body []byte) BillingUsage {
 	var payload openAIProxyBody
 	_ = json.Unmarshal(body, &payload)
 	cacheReadTokens := payload.Usage.PromptTokensDetails.CachedTokens
+	if cacheReadTokens == 0 {
+		cacheReadTokens = payload.Usage.InputTokensDetails.CachedTokens
+	}
 	inputImageTokens := payload.Usage.PromptTokensDetails.ImageTokens
+	if inputImageTokens == 0 {
+		inputImageTokens = payload.Usage.InputTokensDetails.ImageTokens
+	}
 	outputImageTokens := payload.Usage.CompletionTokensDetails.ImageTokens
-	inputTokens := payload.Usage.PromptTokens - cacheReadTokens - inputImageTokens
+	if outputImageTokens == 0 {
+		outputImageTokens = payload.Usage.OutputTokensDetails.ImageTokens
+	}
+	inputTokenTotal := payload.Usage.PromptTokens
+	if inputTokenTotal == 0 {
+		inputTokenTotal = payload.Usage.InputTokens
+	}
+	outputTokenTotal := payload.Usage.CompletionTokens
+	if outputTokenTotal == 0 {
+		outputTokenTotal = payload.Usage.OutputTokens
+	}
+	if inputTokenTotal == 0 && outputTokenTotal == 0 {
+		inputTokenTotal = payload.Usage.TotalTokens
+	}
+	inputTokens := inputTokenTotal - cacheReadTokens - inputImageTokens
 	if inputTokens < 0 {
 		inputTokens = 0
 	}
-	outputTokens := payload.Usage.CompletionTokens - outputImageTokens
+	outputTokens := outputTokenTotal - outputImageTokens
 	if outputTokens < 0 {
 		outputTokens = 0
+	}
+	reasoningTokens := payload.Usage.CompletionTokensDetails.ReasoningTokens
+	if reasoningTokens == 0 {
+		reasoningTokens = payload.Usage.OutputTokensDetails.ReasoningTokens
 	}
 	return BillingUsage{
 		InputTokens:       inputTokens,
 		OutputTokens:      outputTokens,
-		ReasoningTokens:   payload.Usage.CompletionTokensDetails.ReasoningTokens,
+		ReasoningTokens:   reasoningTokens,
 		CacheReadTokens:   cacheReadTokens,
 		InputImageTokens:  inputImageTokens,
 		OutputImageTokens: outputImageTokens,

@@ -27,7 +27,9 @@ import (
 func Routers() *fiber.App {
 	var app = fiber.New(fiber.Config{
 		DisableStartupMessage: true,
-		BodyLimit:             8 << 20,
+		// Audio transcription accepts files up to 25 MiB. Individual gateway
+		// handlers retain stricter endpoint-level limits for JSON requests.
+		BodyLimit: 26 << 20,
 
 		// https://github.com/goccy/go-json
 		JSONEncoder: json.Marshal,

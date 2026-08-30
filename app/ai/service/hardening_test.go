@@ -178,7 +178,7 @@ func TestForwardToUpstreamDoesNotFollowRedirect(t *testing.T) {
 		status, _, _, err := (&GatewayService{}).forwardToUpstream(c, routeTarget{
 			Provider: model.Provider{BaseURL: upstream.URL, TimeoutMs: 5_000},
 			Account:  model.ChannelAccount{APIKey: "secret"},
-		}, "/v1/test", nil)
+		}, "/v1/test", nil, fiber.MIMEApplicationJSON)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusFound, status)
 		return c.SendStatus(fiber.StatusNoContent)

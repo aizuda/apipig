@@ -13,12 +13,14 @@ import (
 )
 
 const (
-	maxGatewayRequestBodyBytes  = 8 << 20
-	maxGatewayResponseBodyBytes = 32 << 20
-	maxGatewayMessages          = 256
-	maxGatewayTools             = 128
-	maxGatewayContentParts      = 256
-	maxModelPricingBytes        = 64 << 10
+	maxGatewayRequestBodyBytes            = 8 << 20
+	maxAudioTranscriptionFileBytes        = 25 << 20
+	maxAudioTranscriptionRequestBodyBytes = maxAudioTranscriptionFileBytes + (1 << 20)
+	maxGatewayResponseBodyBytes           = 32 << 20
+	maxGatewayMessages                    = 256
+	maxGatewayTools                       = 128
+	maxGatewayContentParts                = 256
+	maxModelPricingBytes                  = 64 << 10
 )
 
 func validateProvider(m *model.Provider) error {

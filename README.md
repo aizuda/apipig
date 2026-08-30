@@ -31,19 +31,41 @@ https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/
 
 ## AI 协议网关
 
-项目使用 `github.com/zendev-sh/goai v0.9.0` 作为统一大模型协议层，对外同时提供 OpenAI 与 Anthropic 兼容接口：
+- 支持双协议接入
+
+| 协议 | 端点 | 说明 |
+|------|------|------|
+| **OpenAI** | `POST /v1/chat/completions` | 聊天补全（流式/非流式） |
+| | `POST /v1/embeddings` | 文本嵌入 |
+| | `POST /v1/images/generations` | 图片生成 |
+| | `POST /v1/rerank` | 重排 |
+| | `POST /v1/audio/speech` | 语音合成 |
+| | `POST /v1/audio/transcriptions` | 语音识别 |
+| | `GET /v1/models` | 模型列表 |
+| **Anthropic** | `POST /v1/messages` | Claude 消息（Claude Code 直接接入，流式事件转换） |
+
+项目使用 `github.com/zendev-sh/goai v0.9.8` 作为统一大模型协议层，对外同时提供 OpenAI 与 Anthropic 兼容接口：
 
 - `POST /v1/chat/completions`：OpenAI Chat Completions 协议，支持普通响应、SSE 流式响应、图片输入和工具调用。
+- `POST /v1/embeddings`：OpenAI Embeddings 协议，支持文本或 Token 数组输入。
+- `POST /v1/images/generations`：OpenAI Images Generations 协议，原样透传图片生成参数与响应。
+- `POST /v1/rerank`：OpenAI 兼容生态常用的 Rerank 扩展协议，原样透传查询、文档和排序结果。
+- `POST /v1/audio/speech`：OpenAI Audio Speech 协议，原样透传生成的音频内容与媒体类型。
+- `POST /v1/audio/transcriptions`：OpenAI Audio Transcriptions 协议，支持 multipart 文件上传（文件最大 25 MiB）。
 - `POST /v1/messages`：Anthropic Messages 协议，支持普通响应、SSE 流式响应、图片输入和工具调用。
 - `GET /v1/models`：返回当前访问 Token 有权使用且存在启用渠道的模型。
 - `GET /healthz`：应用与数据库存活检查，不需要网关 Token。
 
-前三个接口使用 AI 网关访问 Token 鉴权，支持以下任一请求头：
+除健康检查外，上述协议接口使用 AI 网关访问 Token 鉴权，支持以下任一请求头：
 
 ```text
 Authorization: Bearer sk-apipig-xxx
 X-API-Key: sk-apipig-xxx
 ```
+
+请求头名称不区分大小写，因此 Anthropic 等 SDK 使用的 `x-api-key` 写法同样支持。如果同时提供两个请求头，优先使用 `Authorization`。
+
+当 `/v1/audio/transcriptions` 选中 `qwen` 或 `dashscope` 渠道时，网关会把 multipart 文件转换为 Qwen ASR 的 `chat/completions + input_audio` 请求，并将聊天结果还原为转写响应。支持标准 `language` 字段，以及可选的 `enable_itn` 和 JSON `asr_options` 扩展字段；Qwen 渠道的 `response_format` 支持 `json`、`text`。旧的 `chat/completions + input_audio` 调用方式继续保留。
 
 供应商的 `protocol` 字段决定 GoAI 上游实现：
 

@@ -10,6 +10,27 @@ func countRequestImages(body []byte) int {
 	return countImageValues(payload)
 }
 
+func countResponseImages(body []byte) int {
+	var payload struct {
+		Data []struct {
+			URL     string `json:"url"`
+			B64JSON string `json:"b64_json"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(body, &payload) == nil && len(payload.Data) > 0 {
+		total := 0
+		for _, image := range payload.Data {
+			if image.URL != "" || image.B64JSON != "" {
+				total++
+			}
+		}
+		if total > 0 {
+			return total
+		}
+	}
+	return countRequestImages(body)
+}
+
 func countImageValues(value any) int {
 	switch item := value.(type) {
 	case []any:
