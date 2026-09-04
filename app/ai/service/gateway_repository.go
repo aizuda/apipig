@@ -330,13 +330,16 @@ func (r *gormGatewayRepository) RecordAccessTokenUsage(record AccessTokenUsageRe
 		updates["cache_write_tokens_total"] = gorm.Expr("cache_write_tokens_total + ?", record.CacheWriteTokens)
 		if record.EffectiveCostMicroUSD > 0 {
 			costUSD := microUSDToUSD(record.EffectiveCostMicroUSD)
+			// 注意：上限与本次费用必须先各自预计算，再作为单个参数参与比较。
+			// 若写成 used_micro_usd >= ? - ?（两侧都是参数占位符），PostgreSQL 因无法推断
+			// 操作符两侧类型会直接报 42725 operator is not unique: unknown - unknown。
 			updates["used_micro_usd"] = gorm.Expr(
-				"CASE WHEN used_micro_usd >= ? - ? THEN ? ELSE used_micro_usd + ? END",
-				maxMicroUSDValue, record.EffectiveCostMicroUSD, maxMicroUSDValue, record.EffectiveCostMicroUSD,
+				"CASE WHEN used_micro_usd >= ? THEN ? ELSE used_micro_usd + ? END",
+				maxMicroUSDValue-record.EffectiveCostMicroUSD, maxMicroUSDValue, record.EffectiveCostMicroUSD,
 			)
 			updates["used_amount"] = gorm.Expr(
-				"CASE WHEN used_amount >= ? - ? THEN ? ELSE used_amount + ? END",
-				maxUSDValue, costUSD, maxUSDValue, costUSD,
+				"CASE WHEN used_amount >= ? THEN ? ELSE used_amount + ? END",
+				maxUSDValue-costUSD, maxUSDValue, costUSD,
 			)
 		}
 	} else {
