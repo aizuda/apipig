@@ -54,6 +54,7 @@ const summary = ref<GatewaySummary>({
   modelDistribution: [],
   tokenTrend: [],
   channelStatistics: [],
+  tokenDailyStatistics: [],
 })
 
 const successRateValue = computed(() =>
@@ -127,6 +128,7 @@ async function loadData() {
         modelDistribution: result.modelDistribution || [],
         tokenTrend: result.tokenTrend || [],
         channelStatistics: result.channelStatistics || [],
+        tokenDailyStatistics: result.tokenDailyStatistics || [],
       }
       hasLoaded.value = true
     }
@@ -230,6 +232,76 @@ function channelTokenPercent(value: number) {
 function formatLatency(value?: number) {
   const latency = value || 0
   return latency >= 1000 ? `${(latency / 1000).toFixed(2)}s` : `${latency}ms`
+}
+
+const tokenColors = [
+  '#6366f1',
+  '#10b981',
+  '#f59e0b',
+  '#f43f5e',
+  '#06b6d4',
+  '#8b5cf6',
+  '#84cc16',
+  '#f97316',
+  '#ec4899',
+  '#14b8a6',
+]
+const dailyMetric = ref<'totalTokens' | 'callCount'>('totalTokens')
+
+interface TokenLegendItem {
+  tokenId: string
+  tokenName: string
+  totalTokens: number
+  callCount: number
+  color: string
+}
+
+const tokenLegend = computed<TokenLegendItem[]>(() => {
+  const map = new Map<string, TokenLegendItem>()
+  for (const day of summary.value.tokenDailyStatistics) {
+    for (const item of day.items) {
+      let legend = map.get(item.tokenId)
+      if (!legend) {
+        legend = {
+          tokenId: item.tokenId,
+          tokenName: item.tokenName,
+          totalTokens: 0,
+          callCount: 0,
+          color: '',
+        }
+        map.set(item.tokenId, legend)
+      }
+      legend.totalTokens += item.totalTokens
+      legend.callCount += item.callCount
+    }
+  }
+  const list = [...map.values()].sort(
+    (left, right) =>
+      right.totalTokens - left.totalTokens || left.tokenName.localeCompare(right.tokenName),
+  )
+  return list.map((item, index) => ({ ...item, color: tokenColors[index % tokenColors.length] }))
+})
+
+const tokenColorMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const item of tokenLegend.value) map.set(item.tokenId, item.color)
+  return map
+})
+
+const tokenDailyStats = computed(() => summary.value.tokenDailyStatistics || [])
+
+const dailyMax = computed(() => {
+  let max = 0
+  for (const day of tokenDailyStats.value) {
+    max = Math.max(max, dailyMetric.value === 'totalTokens' ? day.totalTokens : day.callCount)
+  }
+  return Math.max(1, max)
+})
+
+const dailyLabelStep = computed(() => Math.max(1, Math.ceil(tokenDailyStats.value.length / 15)))
+
+function dailySegmentHeight(value: number) {
+  return `${Math.max(0, (value / dailyMax.value) * 160)}px`
 }
 
 onBeforeUnmount(() => {
@@ -576,6 +648,86 @@ void loadData()
             <Gauge class="size-6 text-amber-600" /></CardContent
         ></Card>
       </div>
+
+      <Card>
+        <CardContent class="p-3">
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-semibold">API 密钥用量</h3>
+              <p class="text-xs text-muted-foreground">
+                按天堆叠展示不同 API 密钥的请求数与 Token 消耗
+              </p>
+            </div>
+            <div class="flex items-center gap-1">
+              <button
+                v-for="metric in ['totalTokens', 'callCount'] as const"
+                :key="metric"
+                type="button"
+                class="h-7 rounded-md border px-2.5 text-xs transition-colors hover:bg-muted"
+                :class="dailyMetric === metric ? 'border-primary bg-primary/10 text-primary' : ''"
+                @click="dailyMetric = metric"
+              >
+                {{ metric === 'totalTokens' ? 'Token' : '请求数' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="tokenDailyStats.length" class="space-y-3">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+              <span
+                v-for="item in tokenLegend"
+                :key="item.tokenId"
+                class="flex items-center gap-1.5"
+              >
+                <i class="size-2.5 rounded-sm" :style="{ backgroundColor: item.color }"></i>
+                {{ item.tokenName }}
+                <span class="text-[10px] text-muted-foreground">
+                  {{
+                    dailyMetric === 'totalTokens' ? formatCompact(item.totalTokens) : item.callCount
+                  }}
+                </span>
+              </span>
+            </div>
+            <div class="flex items-end gap-1.5 overflow-x-auto pb-1">
+              <div
+                v-for="(day, index) in tokenDailyStats"
+                :key="day.date"
+                class="flex min-w-3 flex-1 flex-col items-center gap-1"
+              >
+                <div
+                  class="flex h-40 w-full flex-col-reverse overflow-hidden rounded-sm bg-muted/20"
+                >
+                  <div
+                    v-for="item in day.items"
+                    :key="item.tokenId"
+                    class="w-full transition-[height]"
+                    :style="{
+                      height: dailySegmentHeight(
+                        dailyMetric === 'totalTokens' ? item.totalTokens : item.callCount,
+                      ),
+                      backgroundColor: tokenColorMap.get(item.tokenId) || '#6366f1',
+                    }"
+                    :title="`${item.tokenName}：${dailyMetric === 'totalTokens' ? formatTokens(item.totalTokens) + ' Token' : item.callCount + ' 次'}`"
+                  ></div>
+                </div>
+                <div
+                  v-if="index % dailyLabelStep === 0 || index === tokenDailyStats.length - 1"
+                  class="text-[10px] text-muted-foreground"
+                >
+                  {{ formatDay(day.date) }}
+                </div>
+                <div v-else class="text-[10px]">&nbsp;</div>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else
+            class="flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground"
+          >
+            当前时间范围内暂无 API 密钥调用数据
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent class="p-3">

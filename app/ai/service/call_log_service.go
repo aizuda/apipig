@@ -11,6 +11,7 @@ import (
 	"apipig/core/api/response"
 	"apipig/core/db"
 	"apipig/toolkit"
+	"apipig/toolkit/snowflake"
 )
 
 // CallLogService 负责调用日志表的写入和分页查询。
@@ -31,8 +32,31 @@ func (s *CallLogService) Create(logRecord model.CallLog) error {
 	return err
 }
 
-// Page 按模型、关联对象、调用结果和时间范围分页查询调用日志。
+// Page 按模型、关联对象、调用结果和时间范围分页查询调用日志，并附带访问令牌名称。
 func (s *CallLogService) Page(params *aiReq.CallLogPageParams) (response.PageResult, error) {
+	result, err := s.pageModels(params)
+	if err != nil {
+		return result, err
+	}
+	records, ok := result.Records.([]model.CallLog)
+	if !ok {
+		result.Records = []aiResp.CallLogRecord{}
+		return result, nil
+	}
+	names := s.accessTokenNames(records)
+	visibleRecords := make([]aiResp.CallLogRecord, 0, len(records))
+	for _, record := range records {
+		visibleRecords = append(visibleRecords, aiResp.CallLogRecord{
+			CallLog:         record,
+			AccessTokenName: names[record.AccessTokenID],
+		})
+	}
+	result.Records = visibleRecords
+	return result, nil
+}
+
+// pageModels 返回原始调用日志模型分页结果，供管理面与调用方面共用。
+func (s *CallLogService) pageModels(params *aiReq.CallLogPageParams) (response.PageResult, error) {
 	query := s.persistence().Query(model.CallLog{})
 	if params != nil {
 		if params.Success != 0 && params.Success != gatewayStatusNormal && params.Success != gatewayStatusDisabled {
@@ -77,9 +101,40 @@ func (s *CallLogService) Page(params *aiReq.CallLogPageParams) (response.PageRes
 	return s.persistence().Page(query.Order("created_at DESC"), pageInfo(params), arr)
 }
 
+// accessTokenNames 批量查询调用日志涉及的访问令牌名称映射，令牌已删除或缺失时名称为空。
+func (s *CallLogService) accessTokenNames(records []model.CallLog) map[snowflake.ID]string {
+	names := make(map[snowflake.ID]string)
+	ids := make([]snowflake.ID, 0)
+	seen := make(map[snowflake.ID]struct{})
+	for _, record := range records {
+		if record.AccessTokenID == 0 {
+			continue
+		}
+		if _, ok := seen[record.AccessTokenID]; ok {
+			continue
+		}
+		seen[record.AccessTokenID] = struct{}{}
+		ids = append(ids, record.AccessTokenID)
+	}
+	if len(ids) == 0 {
+		return names
+	}
+	var tokens []model.AccessToken
+	if err := s.persistence().Query(model.AccessToken{}).
+		Select("id, name").
+		Where("id IN ?", ids).
+		Find(&tokens).Error; err != nil {
+		return names
+	}
+	for _, token := range tokens {
+		names[token.ID] = token.Name
+	}
+	return names
+}
+
 // PageForAccessToken 返回 API 密钥授权页所需的精简日志，避免泄露后台路由和计价配置。
 func (s *CallLogService) PageForAccessToken(params *aiReq.CallLogPageParams) (response.PageResult, error) {
-	result, err := s.Page(params)
+	result, err := s.pageModels(params)
 	if err != nil {
 		return result, err
 	}

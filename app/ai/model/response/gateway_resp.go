@@ -23,9 +23,10 @@ type GatewaySummary struct {
 }
 
 type GatewaySummaryAnalytics struct {
-	ModelDistribution []GatewayModelDistribution `json:"modelDistribution"`
-	TokenTrend        []GatewayTokenTrend        `json:"tokenTrend"`
-	ChannelStatistics []GatewayChannelStatistic  `json:"channelStatistics"`
+	ModelDistribution    []GatewayModelDistribution   `json:"modelDistribution"`
+	TokenTrend           []GatewayTokenTrend          `json:"tokenTrend"`
+	ChannelStatistics    []GatewayChannelStatistic    `json:"channelStatistics"`
+	TokenDailyStatistics []GatewayTokenDailyStatistic `json:"tokenDailyStatistics"`
 }
 
 type GatewayChannelStatistic struct {
@@ -52,4 +53,20 @@ type GatewayTokenTrend struct {
 	CompletionTokens int64  `json:"completionTokens"`
 	CacheTokens      int64  `json:"cacheTokens"`
 	TotalTokens      int64  `json:"totalTokens"`
+}
+
+// GatewayTokenDailyStatistic 表示按天、按访问令牌聚合的调用与 Token 用量。
+type GatewayTokenDailyStatistic struct {
+	Date        string                   `json:"date"`        // 日期，格式 2006-01-02
+	CallCount   int64                    `json:"callCount"`   // 当日总请求数
+	TotalTokens int64                    `json:"totalTokens"` // 当日总 token 消耗
+	Items       []GatewayTokenDailyItem  `json:"items"`       // 当日各 API 密钥用量，按 Token 消耗降序
+}
+
+// GatewayTokenDailyItem 表示单个 API 密钥在某天的调用与 Token 用量。
+type GatewayTokenDailyItem struct {
+	TokenID     snowflake.ID `json:"tokenId" swaggertype:"string"` // 访问令牌 ID
+	TokenName   string       `json:"tokenName"`                     // 访问令牌名称
+	CallCount   int64        `json:"callCount"`                     // 当日请求数
+	TotalTokens int64        `json:"totalTokens"`                   // 当日成功调用 token 消耗
 }

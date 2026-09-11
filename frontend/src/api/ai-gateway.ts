@@ -216,6 +216,7 @@ export interface CallLog {
   id: string
   requestId: string
   accessTokenId: string
+  accessTokenName?: string
   providerId: string
   channelId: string
   model: string
@@ -265,6 +266,7 @@ export interface GatewaySummary {
   modelDistribution: GatewayModelDistribution[]
   tokenTrend: GatewayTokenTrend[]
   channelStatistics: GatewayChannelStatistic[]
+  tokenDailyStatistics: GatewayTokenDailyStatistic[]
 }
 
 export interface GatewayChannelStatistic {
@@ -296,6 +298,20 @@ export interface GatewayTokenTrend {
   completionTokens: number
   cacheTokens: number
   totalTokens: number
+}
+
+export interface GatewayTokenDailyItem {
+  tokenId: string
+  tokenName: string
+  callCount: number
+  totalTokens: number
+}
+
+export interface GatewayTokenDailyStatistic {
+  date: string
+  callCount: number
+  totalTokens: number
+  items: GatewayTokenDailyItem[]
 }
 
 export interface AIChatMessage {

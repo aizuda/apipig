@@ -128,7 +128,7 @@ func (r *gormGatewayRepository) Summary(startAt, endAt int64) (summary aiResp.Ga
 	}
 	var trendLogs []model.CallLog
 	if err = database.Model(&model.CallLog{}).
-		Select("created_at, channel_id, success, prompt_tokens, completion_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost, latency_ms").
+		Select("created_at, access_token_id, channel_id, success, prompt_tokens, completion_tokens, cache_read_tokens, cache_write_tokens, total_tokens, cost, latency_ms").
 		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
 		Find(&trendLogs).Error; err != nil {
 		return summary, err
@@ -136,15 +136,21 @@ func (r *gormGatewayRepository) Summary(startAt, endAt int64) (summary aiResp.Ga
 	summary.TokenTrend = aggregateTokenTrend(trendLogs, time.UnixMilli(startAt), time.UnixMilli(endAt))
 	channelIDs := make([]snowflake.ID, 0)
 	seenChannelIDs := make(map[snowflake.ID]struct{})
+	tokenIDs := make([]snowflake.ID, 0)
+	seenTokenIDs := make(map[snowflake.ID]struct{})
 	for _, logRecord := range trendLogs {
-		if logRecord.ChannelID == 0 {
-			continue
+		if logRecord.ChannelID != 0 {
+			if _, exists := seenChannelIDs[logRecord.ChannelID]; !exists {
+				seenChannelIDs[logRecord.ChannelID] = struct{}{}
+				channelIDs = append(channelIDs, logRecord.ChannelID)
+			}
 		}
-		if _, exists := seenChannelIDs[logRecord.ChannelID]; exists {
-			continue
+		if logRecord.AccessTokenID != 0 {
+			if _, exists := seenTokenIDs[logRecord.AccessTokenID]; !exists {
+				seenTokenIDs[logRecord.AccessTokenID] = struct{}{}
+				tokenIDs = append(tokenIDs, logRecord.AccessTokenID)
+			}
 		}
-		seenChannelIDs[logRecord.ChannelID] = struct{}{}
-		channelIDs = append(channelIDs, logRecord.ChannelID)
 	}
 	var channels []model.Channel
 	if len(channelIDs) > 0 {
@@ -153,6 +159,13 @@ func (r *gormGatewayRepository) Summary(startAt, endAt int64) (summary aiResp.Ga
 		}
 	}
 	summary.ChannelStatistics = aggregateChannelStatistics(trendLogs, channels)
+	var tokens []model.AccessToken
+	if len(tokenIDs) > 0 {
+		if err = database.Unscoped().Where("id IN ?", tokenIDs).Find(&tokens).Error; err != nil {
+			return summary, err
+		}
+	}
+	summary.TokenDailyStatistics = aggregateTokenDailyStatistics(trendLogs, tokens, time.UnixMilli(startAt), time.UnixMilli(endAt))
 	return summary, nil
 }
 
@@ -239,6 +252,77 @@ func aggregateChannelStatistics(logs []model.CallLog, channels []model.Channel) 
 	})
 	if len(result) > 10 {
 		result = result[:10]
+	}
+	return result
+}
+
+func aggregateTokenDailyStatistics(logs []model.CallLog, tokens []model.AccessToken, start, end time.Time) []aiResp.GatewayTokenDailyStatistic {
+	names := make(map[snowflake.ID]string, len(tokens))
+	for _, token := range tokens {
+		names[token.ID] = token.Name
+	}
+	start = startOfLocalDay(start)
+	end = startOfLocalDay(end)
+	days := int(end.Sub(start).Hours()/24) + 1
+	if days < 1 {
+		days = 1
+	}
+	result := make([]aiResp.GatewayTokenDailyStatistic, days)
+	indexByDate := make(map[string]int, days)
+	type accumulator struct {
+		callCount   int64
+		totalTokens int64
+	}
+	accByDateToken := make(map[string]map[snowflake.ID]*accumulator, days)
+	for index := range result {
+		date := start.AddDate(0, 0, index).Format("2006-01-02")
+		result[index].Date = date
+		result[index].Items = []aiResp.GatewayTokenDailyItem{}
+		indexByDate[date] = index
+		accByDateToken[date] = make(map[snowflake.ID]*accumulator)
+	}
+	for _, logRecord := range logs {
+		date := time.UnixMilli(logRecord.CreatedAt).In(start.Location()).Format("2006-01-02")
+		if _, ok := indexByDate[date]; !ok {
+			continue
+		}
+		if logRecord.AccessTokenID == 0 {
+			continue
+		}
+		dayMap := accByDateToken[date]
+		acc := dayMap[logRecord.AccessTokenID]
+		if acc == nil {
+			acc = &accumulator{}
+			dayMap[logRecord.AccessTokenID] = acc
+		}
+		acc.callCount++
+		if logRecord.Success == gatewayStatusNormal {
+			acc.totalTokens += int64(logRecord.TotalTokens)
+		}
+	}
+	for index := range result {
+		date := result[index].Date
+		dayMap := accByDateToken[date]
+		items := make([]aiResp.GatewayTokenDailyItem, 0, len(dayMap))
+		for tokenID, acc := range dayMap {
+			name := names[tokenID]
+			if name == "" {
+				name = tokenID.String()
+			}
+			items = append(items, aiResp.GatewayTokenDailyItem{
+				TokenID: tokenID, TokenName: name,
+				CallCount: acc.callCount, TotalTokens: acc.totalTokens,
+			})
+			result[index].CallCount += acc.callCount
+			result[index].TotalTokens += acc.totalTokens
+		}
+		sort.Slice(items, func(left, right int) bool {
+			if items[left].TotalTokens == items[right].TotalTokens {
+				return items[left].TokenName < items[right].TokenName
+			}
+			return items[left].TotalTokens > items[right].TotalTokens
+		})
+		result[index].Items = items
 	}
 	return result
 }

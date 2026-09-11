@@ -45,6 +45,7 @@ const summary = ref<GatewaySummary>({
   modelDistribution: [],
   tokenTrend: [],
   channelStatistics: [],
+  tokenDailyStatistics: [],
 })
 
 const dateRange = computed(() => {
@@ -217,6 +218,7 @@ async function loadDashboard() {
       modelDistribution: result.modelDistribution || [],
       tokenTrend: result.tokenTrend || [],
       channelStatistics: result.channelStatistics || [],
+      tokenDailyStatistics: result.tokenDailyStatistics || [],
     }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('dashboard.loadFailed')
@@ -277,9 +279,7 @@ onMounted(loadDashboard)
           <div
             class="rounded-lg border border-blue-200/70 bg-white/70 px-3 py-2 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:shadow-none"
           >
-            <p
-              class="text-[11px] uppercase tracking-[0.18em] text-blue-600/80 dark:text-slate-400"
-            >
+            <p class="text-[11px] uppercase tracking-[0.18em] text-blue-600/80 dark:text-slate-400">
               {{ t('dashboard.dataRange') }}
             </p>
             <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ dateRange }}</p>

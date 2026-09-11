@@ -138,6 +138,7 @@ loadData()
               <tr>
                 <th class="px-4 py-3">时间</th>
                 <th class="px-4 py-3">模型</th>
+                <th class="px-4 py-3">API 密钥</th>
                 <th class="px-4 py-3">路径</th>
                 <th class="px-4 py-3">状态</th>
                 <th class="px-4 py-3">Token</th>
@@ -148,7 +149,7 @@ loadData()
             </thead>
             <tbody>
               <tr v-if="!loading && logs.length === 0">
-                <td colspan="8" class="px-4 py-10 text-center text-muted-foreground">
+                <td colspan="9" class="px-4 py-10 text-center text-muted-foreground">
                   暂无调用日志
                 </td>
               </tr>
@@ -161,6 +162,9 @@ loadData()
                 <td class="px-4 py-3">
                   <div class="font-medium">{{ item.model }}</div>
                   <div class="text-xs text-muted-foreground">{{ item.requestId }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="font-medium">{{ item.accessTokenName || '-' }}</div>
                 </td>
                 <td class="px-4 py-3">{{ item.method }} {{ item.path }}</td>
                 <td class="px-4 py-3">
@@ -240,6 +244,10 @@ loadData()
               }}</Badge>
             </div>
             <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <div>
+                <div class="text-xs text-muted-foreground">API 密钥</div>
+                <div class="mt-0.5">{{ item.accessTokenName || '-' }}</div>
+              </div>
               <div>
                 <div class="text-xs text-muted-foreground">时间</div>
                 <div class="mt-0.5">{{ formatTime(item.createdAt) }}</div>
