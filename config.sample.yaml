@@ -1,0 +1,32 @@
+system:
+  port: 8090
+jwt:
+  signing-key: "jC1ruWCOt29eyJhbGci3iJIUzI"
+  expires-time: 30
+ai:
+  # 生产环境通过 APIPIG_AI_ENCRYPTION_KEY 注入至少 32 字符的独立主密钥。
+  encryption-key: "Xs7fK2pQ3wRz5vYmNx8cHt3bJgLs6dA3"
+  log-queue-size: 2048
+  log-batch-size: 100
+  log-flush-interval-ms: 1000
+code-review:
+  worker-count: 2
+  queue-size: 128
+  workspace-root: ""
+  git-timeout-sec: 120
+  ai-timeout-sec: 180
+  max-diff-bytes: 524288
+  max-changed-files: 200
+database:
+  # sqlite mysql postgresql
+  db-type: "sqlite"
+  host: "localhost"
+  port: 5432
+  config: "sslmode=disable TimeZone=Asia/Shanghai"
+  db-name: "apipig"
+  username: "postgres"
+  password: "123456"
+  #  max-idle-conns: 10
+  #  max-open-conns: 100
+  # silent error warn info
+#  log-mode: error
