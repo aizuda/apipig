@@ -1,3 +1,103 @@
+# apipig
+
+free ai gateway 免费 ai 网关，企业级内部 AI 中转服务（ai中转站）。
+
+> [APIPIG AI 网关 https://apipig.aizuda.com/](https://apipig.aizuda.com/)
+
+> APIPIG 把多模型接入、账号池、API Key 托管、路由策略、权限控制和调用审计收进同一套 AI 网关与控制台。业务系统只对接一个入口，上游模型切换、渠道调整和安全治理都在平台侧完成。
+
+- 统一 OpenAI 兼容协议入口
+- 路由策略、权限校验、限流熔断
+- 上游模型适配、通道切换、失败回退
+- 请求日志、异常追踪、审计留痕
+
+> ⭕本项目采用 `AGPL-3.0` 协议开源 `完全开放` 任何人可免费使用，必须遵守开源协议使用规范。
+
+> 🔴附加协议：`不允许删除源码注释申明`，`不允许山寨换皮商用`，否则视为侵权`（索赔100万）`。
+
+> 使用必须遵守国家法律法规，⛔不允许非法项目使用，后果自负❗
+
+[企业版💎演示地址](https://aizuda.com)
+
+> 打开官方开发文档 [国外](https://doc.flowlong.com)  [国内](https://flowlong.aizuda.com)
+
+[点击设计器在线演示](https://flowlong-desginer.pages.dev)
+
+[点击设计器源码下载](https://gitee.com/flowlong/flowlong-designer)
+
+# 💎特别用户
+
+<p>
+  <a href="http://boot.aizuda.com/?from=flowlong" target="_blank">
+   <img alt="AiZuDa-Logo" src="https://foruda.gitee.com/images/1715955628416785121/954c16ef_12260.png" width="220px" height="80px">
+  </a>
+  <a href="http://apipig.aizuda.com/?from=flowlong" target="_blank">
+   <img alt="AiZuDa-Logo" src="https://foruda.gitee.com/images/1780817190825464732/410b4c54_12260.png" width="220px" height="80px">
+  </a>
+</p>
+
+## 模型接入与协议统一
+> OpenAI、Gemini、Qwen、DeepSeek、Ollama 等上游接口统一收口，业务只维护一个网关入口。
+
+## 账号池与密钥托管
+>集中管理 API Key、组织账号和渠道配置，让高风险凭证留在平台侧而不是散落到服务和脚本里。
+
+## 权限策略与调用审计
+> 对访问主体、模型权限、路由命中、异常响应和调用日志统一留痕，方便排障、归因和合规复核。
+
+# 可视化功能界面
+
+> 展示相关功能演示效果图
+
+## 登录页
+
+<img src="./images/login.png">
+
+## 仪表盘
+
+<img src="./images/dashboard.png">
+
+## 总览
+
+<img src="./images/ag-overview.png">
+
+## 供应商管理
+
+<img src="./images/ag-providers.png">
+
+## 渠道管理
+
+<img src="./images/ag-channels.png">
+
+## 渠道账号管理
+
+<img src="./images/ag-channel-accounts.png">
+
+
+## Token 管理
+
+<img src="./images/ag-tokens.png">
+
+## 代码审查
+
+<img src="./images/ag-code-review.png">
+
+## 菜单
+
+<img src="./images/menus.png">
+
+## Token 用量统计
+
+<img src="./images/ag-tokens-statistics.png">
+
+## API Token 登录页
+
+<img src="./images/login2.png">
+
+## API Token 用量统计
+
+<img src="./images/ag-tokens-statistics2.png">
+
 
 ## 打包发布
 
@@ -21,13 +121,6 @@ goreleaser release --snapshot --clean
 - 页面支持 SQLite、MySQL 和 PostgreSQL，可配置服务端口、数据库连接、管理员账号密码及 Swagger 等开关。
 - 提交后程序会校验数据库连接、执行建表和基础数据初始化，自动生成缺失或为空的 `logger.json`，原子写入配置文件，然后自动切换到正式服务；已有非空日志配置不会被覆盖。
 - 配置文件路径遵循 `-c` 参数、`CONFIG` 环境变量、默认 `config.yaml` 的优先级；已有非空配置不会被初始化流程覆盖。
-
-## 其它
-[TDengine服务端](https://www.taosdata.com/assets-download/3.0/TDengine-server-3.2.0.0-Linux-x64.tar.gz)
-
-https://github.com/gocolly/colly
-https://github.com/Maicarons/azhot/blob/main/app/douyin.go
-https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/
 
 ## AI 协议网关
 
