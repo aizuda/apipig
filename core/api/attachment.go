@@ -4,6 +4,7 @@ import (
 	"apipig/toolkit/snowflake"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 )
 
 type Attachments []Attachment
@@ -14,7 +15,28 @@ func (a Attachments) Value() (driver.Value, error) {
 }
 
 func (a *Attachments) Scan(src any) error {
-	return json.Unmarshal(src.([]byte), a)
+	if a == nil {
+		return fmt.Errorf("attachments: nil destination")
+	}
+	switch value := src.(type) {
+	case nil:
+		*a = nil
+		return nil
+	case []byte:
+		if len(value) == 0 {
+			*a = nil
+			return nil
+		}
+		return json.Unmarshal(value, a)
+	case string:
+		if value == "" {
+			*a = nil
+			return nil
+		}
+		return json.Unmarshal([]byte(value), a)
+	default:
+		return fmt.Errorf("attachments: unsupported database value %T", src)
+	}
 }
 
 type Attachment struct {

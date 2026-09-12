@@ -2,6 +2,13 @@ package request
 
 import "apipig/toolkit/snowflake"
 
+const (
+	DefaultPage     = 1
+	DefaultPageSize = 10
+	MaxPage         = 1_000_000
+	MaxPageSize     = 1_000
+)
+
 // PageInfo Paging common input parameter structure
 type PageInfo struct {
 	SearchCount int `json:"searchCount,omitempty"` // 查询总数 0，是 1，否
@@ -10,13 +17,20 @@ type PageInfo struct {
 }
 
 func (p *PageInfo) PageOffset() (int, int, int) {
+	if p == nil {
+		return DefaultPage, DefaultPageSize, 0
+	}
 	page := p.Page
 	if page <= 0 {
-		page = 1
+		page = DefaultPage
+	} else if page > MaxPage {
+		page = MaxPage
 	}
 	pageSize := p.PageSize
 	if pageSize <= 0 {
-		pageSize = 10
+		pageSize = DefaultPageSize
+	} else if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
 	}
 	return page, pageSize, pageSize * (page - 1)
 }

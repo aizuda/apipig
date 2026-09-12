@@ -104,10 +104,15 @@ func IsAllow(c *fiber.Ctx) string {
 
 	method := c.Method()
 	tc := GetTokenClaims(c)
+	if tc == nil {
+		return "no"
+	}
 	key := fmt.Sprintf("%s_%s_%s", url, method, tc.ID)
-	_flag, err := cache.RbacCache.Get(key)
-	if err == nil {
-		return string(_flag)
+	if cache.RbacCache != nil {
+		_flag, err := cache.RbacCache.Get(key)
+		if err == nil {
+			return string(_flag)
+		}
 	}
 
 	// 数据库查询验证权限
@@ -117,7 +122,9 @@ JOIN apipig_role r ON c.role_id=r.id JOIN apipig_user_role u ON r.id=u.role_id W
 	if global.DB.Raw(sql, url, method, tc.ID).Count(&ct).Error != nil || ct == 0 {
 		flag = "no"
 	}
-	_ = cache.RbacCache.Set(key, []byte(flag))
+	if cache.RbacCache != nil {
+		_ = cache.RbacCache.Set(key, []byte(flag))
+	}
 	return flag
 }
 

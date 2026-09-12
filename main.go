@@ -12,7 +12,7 @@ import (
 //go:generate go mod tidy
 //go:generate go mod download
 
-// @title iota api
+// @title apipig
 // @version dev
 // @description artificial intelligence message push service
 // @securityDefinitions.apikey ApiKeyAuth
@@ -31,7 +31,7 @@ func main() {
 	core.Zap()             // 初始化 Zap 日志库
 
 	var port = global.CONFIG.System.Port
-	fmt.Printf("IOTA - 物联网平台，专业、好用！ http://localhost:%d\n", port)
+	fmt.Printf("ApiPig - 企业级AI网关，专业、好用！ http://localhost:%d\n", port)
 	fmt.Printf("SwaggerApi http://localhost:%d/swagger/index.html\n", port)
 
 	global.DB = initialize.Gorm() // 连接数据库

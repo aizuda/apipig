@@ -32,9 +32,9 @@ type Conversation struct {
 	api.MODEL
 	AgentID          snowflake.ID `gorm:"type:bigint;not null;index" json:"agentId" swaggertype:"string"`
 	Title            string       `gorm:"size:200;not null;index" json:"title"`
-	CLIType          string       `gorm:"size:20;not null" json:"cliType"`
+	CLIType          string       `gorm:"size:20;not null;default:CODEX" json:"cliType"`
 	PermissionMode   string       `gorm:"size:20;not null;default:FULL_ACCESS" json:"permissionMode"`
-	WorkingDirectory string       `gorm:"size:500;not null" json:"workingDirectory"`
+	WorkingDirectory string       `gorm:"size:500;not null;default:/" json:"workingDirectory"`
 	Status           string       `gorm:"size:20;not null;index" json:"status"`
 	Pinned           bool         `gorm:"not null;default:false;index" json:"pinned"`
 	PinnedAt         int64        `gorm:"type:bigint;not null;default:0;index" json:"pinnedAt"`

@@ -13,6 +13,11 @@ import (
 type API struct {
 }
 
+func init() {
+	// 本地化规则只需注册一次，避免每个请求重复修改全局校验器状态。
+	zhcn.RegisterGlobal()
+}
+
 func (a *API) IdParser(c *fiber.Ctx) (snowflake.ID, error) {
 	id, err := snowflake.ParseString(c.Query("id"))
 	if err != nil {
@@ -24,7 +29,7 @@ func (a *API) IdParser(c *fiber.Ctx) (snowflake.ID, error) {
 func (a *API) KeyParser(c *fiber.Ctx, key string) (snowflake.ID, error) {
 	id, err := snowflake.ParseString(c.Query(key))
 	if err != nil {
-		err = errors.New(fmt.Sprintf("参数%s解析失败", key))
+		err = fmt.Errorf("参数%s解析失败", key)
 	}
 	return id, err
 }
@@ -52,7 +57,6 @@ func (a *API) BodyParserVerifyAddRules(c *fiber.Ctx, params interface{}, addRule
 	}
 
 	// 表单验证 https://gookit.github.io/validate/#/README.zh-CN
-	zhcn.RegisterGlobal()
 	v := validate.Struct(params)
 	if addRules != nil {
 		addRules(v)

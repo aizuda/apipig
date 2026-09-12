@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-项目：**apipig**（运行输出中自称「IOTA - 物联网平台」）
+项目：**apipig**（运行输出中自称「ApiPig - 企业级AI网关」）
 仓库：`/code/project/apipig`（Go module `apipig`，主分支 `master`）
 
 一个 Go 语言单体服务 + Vue 3 管理后台。核心能力：

@@ -5,7 +5,6 @@ import (
 	"apipig/app/sys/service"
 	"apipig/core/api"
 	"apipig/core/api/response"
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -96,6 +95,5 @@ func (a *WebApi) RefreshToken(c *fiber.Ctx) error {
 // @Success 200 {string} string "{"success":true,"data":{},"msg":"刷新Token成功"}"
 // @Router /v1/test-http-push [post]
 func (a *WebApi) TestHttpPush(c *fiber.Ctx) error {
-	fmt.Println("推送内容：" + string(c.BodyRaw()))
 	return response.Ok(c, "ok")
 }

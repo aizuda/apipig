@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue'
 import type { MenuItem } from '@tabtab/ui'
+import type { TabItem } from '@/stores/tabs'
 
 export interface HeaderActionsOptions {
   visibleMenuItems: ComputedRef<MenuItem[]>
@@ -12,7 +13,7 @@ export interface LayoutTabsOptions {
     tabsFixed: Ref<boolean>
   }
   tabsStore: {
-    tabs: Ref<any[]>
+    tabs: Ref<TabItem[]>
     activeKey: Ref<string>
   }
 }

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -10,14 +13,25 @@ const TimeFormat = "2006-01-02 15:04:05"
 type LocalTime time.Time
 
 func (t *LocalTime) UnmarshalJSON(data []byte) (err error) {
-	if len(data) == 2 {
+	if t == nil {
+		return fmt.Errorf("local time: nil destination")
+	}
+	data = bytes.TrimSpace(data)
+	if bytes.Equal(data, []byte("null")) || bytes.Equal(data, []byte(`""`)) {
 		*t = LocalTime(time.Time{})
 		return
 	}
 
-	now, err := time.Parse(`"`+TimeFormat+`"`, string(data))
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return fmt.Errorf("local time: %w", err)
+	}
+	now, err := time.Parse(TimeFormat, value)
+	if err != nil {
+		return fmt.Errorf("local time: %w", err)
+	}
 	*t = LocalTime(now)
-	return
+	return nil
 }
 
 func (t LocalTime) MarshalJSON() ([]byte, error) {
@@ -36,8 +50,35 @@ func (t LocalTime) Value() (driver.Value, error) {
 }
 
 func (t *LocalTime) Scan(v interface{}) error {
-	tTime, _ := time.Parse("2006-01-02 15:04:05 +0800 CST", v.(time.Time).String())
-	*t = LocalTime(tTime)
+	if t == nil {
+		return fmt.Errorf("local time: nil destination")
+	}
+	switch value := v.(type) {
+	case nil:
+		*t = LocalTime(time.Time{})
+		return nil
+	case time.Time:
+		*t = LocalTime(value)
+		return nil
+	case []byte:
+		return t.parseDatabaseString(string(value))
+	case string:
+		return t.parseDatabaseString(value)
+	default:
+		return fmt.Errorf("local time: unsupported database value %T", v)
+	}
+}
+
+func (t *LocalTime) parseDatabaseString(value string) error {
+	if value == "" {
+		*t = LocalTime(time.Time{})
+		return nil
+	}
+	parsed, err := time.ParseInLocation(TimeFormat, value, time.Local)
+	if err != nil {
+		return fmt.Errorf("local time: %w", err)
+	}
+	*t = LocalTime(parsed)
 	return nil
 }
 

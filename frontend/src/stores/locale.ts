@@ -66,20 +66,15 @@ export const useLocaleStore = defineStore(
      * 设置语言
      */
     async function changeLocale(locale: SupportedLocale): Promise<boolean> {
-      console.log('[locale store] changeLocale called with:', locale)
-      console.log('[locale store] currentLocale.value:', currentLocale.value)
 
       if (locale === currentLocale.value) return true
 
       const result = await executeAsync(async () => {
-        console.log('[locale store] calling setI18nLocale...')
         const success = await setI18nLocale(locale)
-        console.log('[locale store] setI18nLocale result:', success)
         if (success) afterLocaleChange(locale)
         return success
       }, '切换语言失败')
 
-      console.log('[locale store] changeLocale result:', result)
       return result ?? false
     }
 

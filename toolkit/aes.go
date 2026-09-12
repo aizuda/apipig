@@ -21,10 +21,22 @@ func pad(data []byte, blockSize int) []byte {
 	return append(data, padText...)
 }
 
-func unPad(data []byte) ([]byte, error) {
+func unPad(data []byte, blockSizes ...int) ([]byte, error) {
+	blockSize := aes.BlockSize
+	if len(blockSizes) > 0 {
+		blockSize = blockSizes[0]
+	}
+	if len(data) == 0 || blockSize <= 0 || len(data)%blockSize != 0 {
+		return nil, fmt.Errorf("invalid padded data")
+	}
 	padding := data[len(data)-1]
-	if int(padding) > len(data) {
+	if padding == 0 || int(padding) > blockSize || int(padding) > len(data) {
 		return nil, fmt.Errorf("padding size error")
+	}
+	for _, value := range data[len(data)-int(padding):] {
+		if value != padding {
+			return nil, fmt.Errorf("padding content error")
+		}
 	}
 	return data[:len(data)-int(padding)], nil
 }
@@ -85,9 +97,15 @@ func (a *AES) Decrypt(ciphertext []byte) ([]byte, error) {
 
 	iv := ciphertext[:aes.BlockSize]
 	ciphertext = ciphertext[aes.BlockSize:]
+	if len(ciphertext) == 0 || len(ciphertext)%aes.BlockSize != 0 {
+		return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
+	}
+	// CBC 解密会原地写入，复制密文避免修改调用方持有的缓冲区。
+	plaintext := make([]byte, len(ciphertext))
+	copy(plaintext, ciphertext)
 
 	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(ciphertext, ciphertext)
+	mode.CryptBlocks(plaintext, plaintext)
 
-	return unPad(ciphertext)
+	return unPad(plaintext, aes.BlockSize)
 }

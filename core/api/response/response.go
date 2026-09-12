@@ -60,13 +60,16 @@ func Execute[T any, R any](c *fiber.Ctx, callback func(params T) (R, error), par
 }
 
 func ParseResponse(jsonStr string) (*Response, error) {
-	var resp *Response
+	var resp Response
 	err := json.Unmarshal([]byte(jsonStr), &resp)
 	if err != nil {
 		return nil, err
 	}
+	if resp.Code == "" {
+		return nil, errors.New("invalid response: missing code")
+	}
 	if resp.Code != Success {
 		return nil, errors.New(resp.Msg)
 	}
-	return resp, nil
+	return &resp, nil
 }
